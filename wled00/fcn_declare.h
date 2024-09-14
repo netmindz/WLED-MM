@@ -335,7 +335,7 @@ class Usermod {
     }
     virtual bool readFromConfig(JsonObject& obj) {                           // Note as of 2021-06 readFromConfig() now needs to return a bool, see usermod_v2_example.h
       JsonObject top = obj[FPSTR(_name)];                                    // WLEDMM: get enabled and _name
-      return !top.isNull() && getJsonValue(top[FPSTR("enabled")], enabled); 
+      return !top.isNull() && getJsonValue(top[FPSTR("enabled")], enabled);
     }
     virtual void onMqttConnect(bool sessionPresent) {}                       // fired when MQTT connection is established (so usermod can subscribe)
     virtual bool onMqttMessage(char* topic, char* payload) { return false; } // fired upon MQTT message received (wled topic)
@@ -349,32 +349,34 @@ class UsermodManager {
     Usermod* ums[WLED_MAX_USERMODS];
     unsigned numMods = 0;
 
-  public:
-    void loop();
-    void loop2();   // WLEDMM loop just before drawing effects (presets and everything already handled)
-    void handleOverlayDraw();
-    bool handleButton(uint8_t b);
-    bool getUMData(um_data_t **um_data, uint8_t mod_id = USERMOD_ID_RESERVED); // USERMOD_ID_RESERVED will poll all usermods
-    void setup();
-    void connected();
-    // void appendConfigData(); //WLEDMM not used
-    void addToJsonState(JsonObject& obj);
-    void addToJsonInfo(JsonObject& obj);
-    void readFromJsonState(JsonObject& obj);
-    void addToConfig(JsonObject& obj);
-    bool readFromConfig(JsonObject& obj);
-    void onMqttConnect(bool sessionPresent);
-    bool onMqttMessage(char* topic, char* payload);
-    void onUpdateBegin(bool);
-    void onStateChange(uint8_t);
-    bool add(Usermod* um);
-    Usermod* lookup(uint16_t mod_id);
-    Usermod* lookupName(const char *mod_name); //WLEDMM
-    byte getModCount() {return numMods;};
+namespace UsermodManager {
+  void loop();
+  void handleOverlayDraw();
+  bool handleButton(uint8_t b);
+  bool getUMData(um_data_t **um_data, uint8_t mod_id = USERMOD_ID_RESERVED); // USERMOD_ID_RESERVED will poll all usermods
+  void setup();
+  void connected();
+  void appendConfigData(Print&);
+  void addToJsonState(JsonObject& obj);
+  void addToJsonInfo(JsonObject& obj);
+  void readFromJsonState(JsonObject& obj);
+  void addToConfig(JsonObject& obj);
+  bool readFromConfig(JsonObject& obj);
+#ifndef WLED_DISABLE_MQTT
+  void onMqttConnect(bool sessionPresent);
+  bool onMqttMessage(char* topic, char* payload);
+#endif
+#ifndef WLED_DISABLE_ESPNOW
+  bool onEspNowMessage(uint8_t* sender, uint8_t* payload, uint8_t len);
+#endif
+  void onUpdateBegin(bool);
+  void onStateChange(uint8_t);
+  Usermod* lookup(uint16_t mod_id);
+  size_t getModCount();
 };
 
-//usermods_list.cpp
-void registerUsermods();
+// Register usermods by building a static list via a linker section
+#define REGISTER_USERMOD(x) Usermod* const um_##x __attribute__((__section__(".dtors.tbl.usermods.1"), used)) = &x
 
 //usermod.cpp
 void userSetup();

@@ -136,7 +136,7 @@ void WLED::loop()
   #endif
     handleNotifications();
     handleTransitions();
-  #if defined(ARDUINO_ARCH_ESP32) && defined(WLEDMM_PROTECT_SERVICE)  // WLEDMM end 
+  #if defined(ARDUINO_ARCH_ESP32) && defined(WLEDMM_PROTECT_SERVICE)  // WLEDMM end
   }
   #endif
 
@@ -170,7 +170,7 @@ void WLED::loop()
   yield();
 
   // https://github.com/Makuna/NeoPixelBus/wiki/ESP32-and-RTOS-Tasks
-  // On ESP32, when the CPU is loaded, asynchronous WiFi libraries (like ESPAsyncWebServer or async-mqtt-client) may interfere with interrupts used to control the LEDs (I2S mode is less affected by this), 
+  // On ESP32, when the CPU is loaded, asynchronous WiFi libraries (like ESPAsyncWebServer or async-mqtt-client) may interfere with interrupts used to control the LEDs (I2S mode is less affected by this),
   // which causes flickering of LEDs.
   #if defined(ARDUINO_ARCH_ESP32) && (defined(WLEDMM_FASTPATH) || defined(WLEDMM_PROTECT_SERVICE))  // WLEDMM experimental: avoid strip flickering
   #define FILEWRITE_MAX_WAIT_MS 30  // max time for waiting - aligned with 33 fps
@@ -182,10 +182,10 @@ void WLED::loop()
   #endif
 
   if (doSerializeConfig)
-  {   
+  {
     serializeConfig();
-  } 
-    
+  }
+
 
   if (doReboot && !doInitBusses) // if busses have to be inited & saved, wait until next iteration
     reset();
@@ -230,7 +230,7 @@ void WLED::loop()
     unsigned long stripMillis = millis();
     #endif
     if (!offMode || strip.isOffRefreshRequired()) {
-#if defined(ARDUINO_ARCH_ESP32) && defined(WLEDMM_PROTECT_SERVICE)  // WLEDMM experimental 
+#if defined(ARDUINO_ARCH_ESP32) && defined(WLEDMM_PROTECT_SERVICE)  // WLEDMM experimental
       static unsigned long lastTimeService = 0; // WLEDMM needed to remove stale lock
       if (!suspendStripService && !doInitBusses && !loadLedmap) { // WLEDMM prevent effect drawing while strip or segments are being updated
 #endif
@@ -388,7 +388,7 @@ void WLED::loop()
 #if INCLUDE_xTaskGetHandle
     DEBUG_PRINT(F("   TCP min free stack: ")); DEBUG_PRINT(wledmm_get_tcp_stacksize());
 #endif
-    DEBUG_PRINTLN(F(" ***"));    
+    DEBUG_PRINTLN(F(" ***"));
     debugTime = millis();
   }
 #endif        // WLED_DEBUG_HEAP
@@ -565,7 +565,7 @@ void WLED::setup()
   }
   #endif
   USER_PRINT(F(", speed ")); USER_PRINT(ESP.getFlashChipSpeed()/1000000);USER_PRINTLN(F("MHz."));
-  
+
   #if defined(WLED_DEBUG) && defined(ARDUINO_ARCH_ESP32)
   showRealSpeed();
   #endif
@@ -682,10 +682,6 @@ void WLED::setup()
     digitalWrite(NEOPIXEL_I2C_POWER, HIGH);
   #endif
 #endif
-
-  USER_PRINTLN();
-  DEBUG_PRINTLN(F("Registering usermods ..."));
-  registerUsermods();
 
   DEBUG_PRINT(F("heap ")); DEBUG_PRINTLN(ESP.getFreeHeap());
   #ifdef ARDUINO_ARCH_ESP32
@@ -824,7 +820,7 @@ void WLED::setup()
   #if defined(ARDUINO_ARCH_ESP32) && defined(WLED_DISABLE_BROWNOUT_DET)
   WRITE_PERI_REG(RTC_CNTL_BROWN_OUT_REG, 1); //enable brownout detector
   #endif
-  
+
   #ifdef ARDUINO_ARCH_ESP32
   #ifdef ARDUINO_RUNNING_CORE
     DEBUG_PRINTF("Arduino core=%d (loop is now on core #%d)\n", int(ARDUINO_RUNNING_CORE), int(xPortGetCoreID()));
@@ -854,9 +850,9 @@ void WLED::setup()
       USER_PRINT(pinManager.isPinPWM(pinNr) ? " P": "  ");
       USER_PRINT(pinManager.isPinINT(pinNr) ? "I ": "  ");
 #endif
-      USER_PRINTF("%s  %2d\t  %-17s %s\t  %s\n", 
-          (is_inOut?"i/o":"in "), 
-          pinNr, 
+      USER_PRINTF("%s  %2d\t  %-17s %s\t  %s\n",
+          (is_inOut?"i/o":"in "),
+          pinNr,
           pinManager.getPinOwnerText(pinNr).c_str(),
           pinManager.getPinConflicts(pinNr).c_str(),
           pinManager.getPinSpecialText(pinNr).c_str()
@@ -868,7 +864,7 @@ void WLED::setup()
 #if 0 // for testing
   USER_PRINTLN(F("\n"));
   USER_PRINTF("ADC1-0 = %d, ADC1-3 = %d, ADC1-7 = %d, ADC2-0 = %d, ADC2-1 = %d, ADC2-8 = %d, ADC2-10 = %d\n",
-    pinManager.getADCPin(PM_ADC1, 0), pinManager.getADCPin(PM_ADC1, 3), pinManager.getADCPin(PM_ADC1, 7), 
+    pinManager.getADCPin(PM_ADC1, 0), pinManager.getADCPin(PM_ADC1, 3), pinManager.getADCPin(PM_ADC1, 7),
     pinManager.getADCPin(PM_ADC2, 0), pinManager.getADCPin(PM_ADC2, 1), pinManager.getADCPin(PM_ADC2, 8),
     pinManager.getADCPin(PM_ADC2, 10)
   );
@@ -1180,7 +1176,7 @@ void WLED::initInterfaces()
       netDebugPrintIP[2] = ndIpAddress[2];
     }
   }
-  if (netDebugPrintPort == 0) 
+  if (netDebugPrintPort == 0)
     #ifdef WLED_DEBUG_PORT
       netDebugPrintPort = WLED_DEBUG_PORT;
     #else
@@ -1257,7 +1253,7 @@ void WLED::handleConnection()
   }
 
   static unsigned retryCount = 0;  // WLEDMM
-  #ifdef ARDUINO_ARCH_ESP32 
+  #ifdef ARDUINO_ARCH_ESP32
   // reconnect WiFi to clear stale allocations if heap gets too low
   if ((!strip.isUpdating()) && (now - heapTime > 5000)) { // WLEDMM: updated with better logic for small heap available by block, not total. // WLEDMM trying to use a moment when the strip is idle
 #if defined(ARDUINO_ARCH_ESP32S2) || defined(WLED_ENABLE_HUB75MATRIX)
@@ -1278,7 +1274,7 @@ void WLED::handleConnection()
       errorFlag = ERR_LOW_MEM;
     } else if (heap < MIN_HEAP_SIZE) {
       USER_PRINT(F("Heap too low! (step 1, flush unread UDP): "));
-      USER_PRINTLN(heap);      
+      USER_PRINTLN(heap);
       strip.purgeSegments();
       notifierUdp.flush();
       rgbUdp.flush();
@@ -1307,7 +1303,7 @@ void WLED::handleConnection()
       }
     } else if (heap < MIN_HEAP_SIZE) {
       USER_PRINT(F("Heap too low! (step 1, purge segments): "));
-      USER_PRINTLN(heap);      
+      USER_PRINTLN(heap);
       strip.purgeSegments();
       // WLEDMM
       errorFlag = ERR_LOW_MEM;
@@ -1317,7 +1313,7 @@ void WLED::handleConnection()
     heapTime = now;
   }
   #endif
-  
+
   byte stac = 0;
   if (apActive) {
 #ifdef ESP8266
