@@ -2,24 +2,6 @@
   WS2812FX.h - Library for WS2812 LED effects.
   Harm Aldick - 2016
   www.aldick.org
-  LICENSE
-  The MIT License (MIT)
-  Copyright (c) 2016  Harm Aldick
-  Permission is hereby granted, free of charge, to any person obtaining a copy
-  of this software and associated documentation files (the "Software"), to deal
-  in the Software without restriction, including without limitation the rights
-  to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-  copies of the Software, and to permit persons to whom the Software is
-  furnished to do so, subject to the following conditions:
-  The above copyright notice and this permission notice shall be included in
-  all copies or substantial portions of the Software.
-  THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-  IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-  FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-  AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-  LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-  OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
-  THE SOFTWARE.
 
   Modified for WLED
 */
@@ -61,20 +43,24 @@ bool strip_uses_global_leds(void) __attribute__((pure));  // WLEDMM implemented 
 #endif
 
 /* Not used in all effects yet */
+#define FPS_UNLIMITED    250
+#define FPS_UNLIMITED_AC 0   // WLEDMM upstream uses "0 fps" for unlimited. We support both ways
 #if defined(ARDUINO_ARCH_ESP32) && defined(WLEDMM_FASTPATH)   // WLEDMM go faster on ESP32
-#define WLED_FPS         120
-#define FRAMETIME_FIXED  (strip.getFrameTime() < 10 ? 12 : 24)
-#define WLED_FPS_SLOW         60
-#define FRAMETIME_FIXED_SLOW  (15)    // = 66 FPS => 1000/66
-//#define FRAMETIME        _frametime
 #define FRAMETIME        strip.getFrameTime()
+#define MIN_SHOW_DELAY   (max(2, (_frametime*5)/8))    // WLEDMM support higher framerates (up to 250fps) -- 5/8 = 62%
+#define WLED_FPS         120
+#define WLED_FPS_SLOW    60
+#define FRAMETIME_FIXED  24                                // used in Blurz, Freqmap, Scrolling text, Colortwinkles, Candle
+//#define FRAMETIME_FIXED  (strip.getFrameTime() < 10 ? 12 : 24)
+#define FRAMETIME_FIXED_SLOW  (15)    // = 66 FPS => 1000/66 // used in Solid
 #else
 #define WLED_FPS         42
 #define FRAMETIME_FIXED  (1000/WLED_FPS)
-#define WLED_FPS_SLOW         42
+#define WLED_FPS_SLOW    42
 #define FRAMETIME_FIXED_SLOW  (1000/WLED_FPS_SLOW)
-//#define FRAMETIME        _frametime
 #define FRAMETIME        strip.getFrameTime()
+//#define MIN_SHOW_DELAY   (_frametime < 16 ? 8 : 15)  // Upstream legacy
+#define MIN_SHOW_DELAY   (_frametime < 16 ? (_frametime <8? (_frametime <7? (_frametime <6 ? 2 :3) :4) : 8) : 15)    // WLEDMM support higher framerates (up to 250fps)
 #endif
 
 /* each segment uses 52 bytes of SRAM memory, so if you're application fails because of
@@ -99,8 +85,6 @@ bool strip_uses_global_leds(void) __attribute__((pure));  // WLEDMM implemented 
 /* How much data bytes each segment should max allocate to leave enough space for other segments,
   assuming each segment uses the same amount of data. 256 for ESP8266, 640 for ESP32. */
 #define FAIR_DATA_PER_SEG (MAX_SEGMENT_DATA / strip.getMaxSegments())
-
-#define MIN_SHOW_DELAY   (_frametime < 16 ? (_frametime <8? (_frametime <7? (_frametime <6 ? 2 :3) :4) : 8) : 15)    // WLEDMM support higher framerates (up to 250fps)
 
 #define NUM_COLORS       3 /* number of colors per segment */
 #define SEGMENT          strip._segments[strip.getCurrSegmentId()]
@@ -396,6 +380,7 @@ typedef struct Segment {
     };
     uint8_t  grouping, spacing;
     uint8_t  opacity;
+    bool needsBlank;              // WLEDMM indicates that Segment needs to be blanked (due to change of mirror / reverse / transpose / spacing)
     uint32_t colors[NUM_COLORS];
     uint8_t  cct;                 //0==1900K, 255==10091K
     uint8_t  custom1, custom2;    // custom FX parameters/sliders
@@ -405,8 +390,8 @@ typedef struct Segment {
       bool    check2  : 1;        // checkmark 2
       bool    check3  : 1;        // checkmark 3
     };
-    uint8_t startY;  // start Y coodrinate 2D (top); there should be no more than 255 rows
-    uint8_t stopY;   // stop Y coordinate 2D (bottom); there should be no more than 255 rows
+    uint16_t startY;  // start Y coodrinate 2D (top); there should be no more than 255 rows, but we cannot be sure.
+    uint16_t stopY;   // stop Y coordinate 2D (bottom); there should be no more than 255 rows, but we cannot be sure.
     char *name = nullptr; // WLEDMM initialize to nullptr
 
     // runtime data
@@ -446,6 +431,7 @@ typedef struct Segment {
     bool _firstFill = true;  // dirty HACK support
     uint16_t _2dWidth = 0;  // virtualWidth
     uint16_t _2dHeight = 0; // virtualHeight
+    uint16_t _virtuallength = 0; // virtualLength
 
     void setPixelColorXY_slow(int x, int y, uint32_t c); // set relative pixel within segment with color - full slow version
 #else
@@ -504,6 +490,7 @@ typedef struct Segment {
       grouping(1),
       spacing(0),
       opacity(255),
+      needsBlank(false),
       colors{DEFAULT_COLOR,BLACK,BLACK},
       cct(127),
       custom1(DEFAULT_C1),
@@ -578,9 +565,9 @@ typedef struct Segment {
     inline bool     hasRGB(void)         const { return _isRGB; }
     inline bool     hasWhite(void)       const { return _hasW; }
     inline bool     isCCT(void)          const { return _isCCT; }
-    inline uint16_t width(void)          const { return isActive() ? (stop - start) : 0; }         // segment width in physical pixels (length if 1D)
+    inline uint16_t width(void)          const { return (stop  > start)  ?  (stop - start)  : 0; } // segment width in physical pixels (length if 1D)
     inline uint16_t height(void)         const { return (stopY > startY) ? (stopY - startY) : 0; } // segment height (if 2D) in physical pixels // WLEDMM make sure its always > 0
-    inline uint16_t length(void)         const { return width() * height(); }     // segment length (count) in physical pixels
+    inline uint16_t length(void)         const { return width() * height(); }     // segment length (count) in physical pixels // WLEDMM fishy ... need to double-check if this is correct
     inline uint16_t groupLength(void)    const { return max(1, grouping + spacing); } // WLEDMM length = 0 could lead to div/0 in virtualWidth() and virtualHeight()
     inline uint8_t  getLightCapabilities(void) const { return _capabilities; }
 
@@ -613,6 +600,7 @@ typedef struct Segment {
       * Safe to call from interrupts and network requests.
       */
     inline void markForReset(void) { reset = true; }  // setOption(SEG_OPTION_RESET, true)
+    inline void markForBlank(void) { needsBlank = true; } // WLEDMM serialize "blank" requests, avoid parallel drawing from different task
     void setUpLeds(void);   // set up leds[] array for loseless getPixelColor()
 
     // transition functions
@@ -637,7 +625,12 @@ typedef struct Segment {
     void     setCurrentPalette(void);
 
     // 1D strip
-    uint16_t virtualLength(void) const;
+    uint16_t calc_virtualLength(void) const;
+#ifndef WLEDMM_FASTPATH
+    inline uint16_t virtualLength(void) const {return calc_virtualLength();}
+#else
+    inline uint16_t virtualLength(void) const {return _virtuallength;}
+#endif
     void setPixelColor(int n, uint32_t c); // set relative pixel within segment with color
     inline void setPixelColor(int n, byte r, byte g, byte b, byte w = 0) { setPixelColor(n, RGBW32(r,g,b,w)); } // automatically inline
     inline void setPixelColor(int n, CRGB c)                             { setPixelColor(n, RGBW32(c.r,c.g,c.b,0)); } // automatically inline
@@ -678,12 +671,14 @@ typedef struct Segment {
       if (mirror) vWidth = (vWidth + 1) /2;  // divide by 2 if mirror, leave at least a single LED
       return vWidth;
     }
+    inline uint16_t calc_virtualWidth() const { return virtualWidth();}
     inline uint16_t virtualHeight() const {  // WLEDMM use fast types, and make function inline
       uint_fast16_t groupLen = groupLength();
       uint_fast16_t vHeight = ((transpose ? width() : height()) + groupLen - 1) / groupLen;
       if (mirror_y) vHeight = (vHeight + 1) /2;  // divide by 2 if mirror, leave at least a single LED
       return vHeight;
     }
+    inline uint16_t calc_virtualHeight() const { return virtualHeight();}
 #else
     inline uint16_t virtualWidth() const  { return(_2dWidth);}  // WLEDMM get pre-calculated virtualWidth
     inline uint16_t virtualHeight() const { return(_2dHeight);} // WLEDMM get pre-calculated virtualHeight
@@ -862,6 +857,7 @@ class WS2812FX {  // 96 bytes
       customMappingTableSize(0), //WLEDMM
       customMappingSize(0),
       _lastShow(0),
+      _lastServiceShow(0),
       _segment_index(0),
       _mainSegment(0)
     {
@@ -905,7 +901,7 @@ class WS2812FX {  // 96 bytes
       purgeSegments(bool force = false),
       setSegment(uint8_t n, uint16_t start, uint16_t stop, uint8_t grouping = 1, uint8_t spacing = 0, uint16_t offset = UINT16_MAX, uint16_t startY=0, uint16_t stopY=1),
       setMainSegmentId(uint8_t n),
-      restartRuntime(),
+      restartRuntime(bool doReset=true),
       resetSegments(bool boundsOnly = false), //WLEDMM add boundsOnly
       makeAutoSegments(bool forceReset = false),
       fixInvalidSegments(),
@@ -1021,10 +1017,10 @@ class WS2812FX {  // 96 bytes
     } panelO; //panelOrientation
 
     typedef struct panel_t {
-      uint8_t xOffset; // x offset relative to the top left of matrix in LEDs. WLEDMM 8 bits/256 is enough
-      uint8_t yOffset; // y offset relative to the top left of matrix in LEDs. WLEDMM 8 bits/256 is enough
-      uint8_t  width;   // width of the panel
-      uint8_t  height;  // height of the panel
+      uint16_t xOffset; // x offset relative to the top left of matrix in LEDs.
+      uint16_t yOffset; // y offset relative to the top left of matrix in LEDs.
+      uint16_t  width;   // width of the panel
+      uint16_t  height;  // height of the panel
       union {
         uint8_t options;
         struct {
@@ -1066,6 +1062,9 @@ class WS2812FX {  // 96 bytes
     // and color transitions
     uint32_t _colors_t[3]; // color used for effect (includes transition)
     uint16_t _virtualSegmentLength;
+#ifdef WLEDMM_FASTPATH
+    segment* _currentSeg = nullptr;  // WLEDMM speed up SEGMENT access
+#endif
 
     std::vector<segment> _segments;
     friend class Segment;
@@ -1104,6 +1103,7 @@ class WS2812FX {  // 96 bytes
     uint16_t  customMappingSize;
 
     /*uint32_t*/ unsigned long _lastShow; // WLEDMM avoid losing precision
+    unsigned long _lastServiceShow;       // WLEDMM last call of strip.show (timestamp)
 
     uint8_t _segment_index;
     uint8_t _mainSegment;
