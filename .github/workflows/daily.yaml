@@ -1,0 +1,11 @@
+name: 'Daily build'
+on:
+  schedule:
+    - cron: '0 12 * * *'
+  workflow_dispatch: # TODO: remove before merge
+
+
+jobs:
+
+  wled_build:
+    uses: ./.github/workflows/build.yml
