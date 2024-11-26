@@ -2,8 +2,6 @@ name: 'Daily build'
 on:
   schedule:
     - cron: '0 22 * * *'
-  workflow_dispatch: # TODO: remove before merge
-
 
 jobs:
 
@@ -13,6 +11,10 @@ jobs:
   nightly:
     name: Deploy nightly
     steps:
+      - uses: actions/download-artifact@v4
+        with:
+          merge-multiple: true
+          
       - name: Deploy release
         uses: WebFreak001/deploy-nightly@v3.1.0
         with:
