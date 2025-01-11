@@ -482,3 +482,5 @@ class AnimartrixUsermod : public Usermod {
 #endif
 #endif
 
+static AnimartrixUsermod animartrix_module("Animartrix", false);
+REGISTER_USERMOD(animartrix_module);

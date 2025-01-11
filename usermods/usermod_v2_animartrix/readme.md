@@ -1,10 +1,10 @@
-# Usermods API v2 example usermod
+# ANIMartRIX
 
-In this usermod file you can find the documentation on how to take advantage of the new version 2 usermods!
+Addes the effects from ANIMartRIX to WLED
+
+CC BY-NC 3.0 licensed effects by Stefan Petrick, include this usermod only if you accept the terms!
 
 ## Installation 
 
-Copy `usermod_v2_animartrix.h` to the wled00 directory.  
-Uncomment the corresponding lines in `usermods_list.cpp` and compile!  
-_(You shouldn't need to actually install this, it does nothing useful)_
+Add 'animartrix' to 'custom_usermods' in your platformio_override.ini.
 
