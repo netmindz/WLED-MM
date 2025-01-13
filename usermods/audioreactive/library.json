@@ -1,8 +1,5 @@
 {
   "name": "audioreactive",
-  "build": {
-    "extraScript": "override_sqrt.py"
-  },
   "dependencies": [
     {
       "owner": "kosme",      
