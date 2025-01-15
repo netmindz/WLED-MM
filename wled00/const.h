@@ -23,6 +23,9 @@
 #ifndef WLED_PRODUCT_NAME
   #define WLED_PRODUCT_NAME "FOSS"
 #endif
+#ifndef WLED_OTA_REPO
+  #define WLED_OTA_REPO "AirCoookie/WLED"
+#endif  
 
 //Defaults
 #define DEFAULT_CLIENT_SSID "Your_Network"
