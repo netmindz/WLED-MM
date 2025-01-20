@@ -588,6 +588,7 @@ float fmod_t(float num, float denom);
 #define cos_t cosf
 #define tan_t tanf
 */
+uint32_t sqrt32_bw(uint32_t x);
 
 //wled_serial.cpp
 void handleSerial();
