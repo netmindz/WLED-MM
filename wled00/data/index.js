@@ -2011,8 +2011,20 @@ function readState(s,command=false)
 		case 37:
 			errstr = "no memory for LEDs buffer.";
 		  break;
+		case 90:
+			errstr = "Unexpected Restart. Check serial monitor.";
+		  break;
+		case 91:
+			errstr = "Brownout Restart.";
+		  break;
+		case 98:
+			errstr = "Please reboot WLED to activate changed settings.";
+		  break;
+		case 99:
+			errstr = "Please switch your device off and back on.";
+		  break;
 		}
-	  showToast('Error ' + s.error + ": " + errstr, true);
+	  showToast(((s.error < 33)?'Error ':'Warning ') + s.error + ": " + errstr, (s.error < 35)||(s.error > 90));
 	}
 
 	selectedPal = i.pal;
@@ -2357,7 +2369,7 @@ function makeSeg()
 	});
 	var cn = `<div class="seg lstI expanded">`+
 		`<div class="segin">`+
-			`<input type="text" id="seg${lu}t" autocomplete="off" maxlength=32 value="" placeholder="New segment ${lu}"/>`+
+			`<input class="ptxt show" type="text" id="seg${lu}t" autocomplete="off" maxlength=32 value="" placeholder="New segment ${lu}"/>`+
 			`<table class="segt">`+
 				`<tr>`+
 					`<td width="38%">${isM?'Start X':'Start LED'}</td>`+
@@ -2383,7 +2395,7 @@ function makeSeg()
 
 function resetUtil(off=false)
 {
-	gId('segutil').innerHTML = `<div class="seg btn btn-s${off?' off':''}" style="padding:0;">`
+	gId('segutil').innerHTML = `<div class="seg btn btn-s${off?' off':''}" style="padding:0;margin-bottom:12px;">`
 	+ '<label class="check schkl"><input type="checkbox" id="selall" onchange="selSegAll(this)"><span class="checkmark"></span></label>'
 	+ `<div class="segname" ${off?'':'onclick="makeSeg()"'}><i class="icons btn-icon">&#xe18a;</i>Add segment</div>`
 	+ '<div class="pop hide" onclick="event.stopPropagation();">'
