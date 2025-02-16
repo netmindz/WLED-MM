@@ -1190,12 +1190,8 @@ void BusHub75Matrix::cleanup() {
 
   _valid = false;
   deallocatePins();
-<<<<<<< HEAD
-  //if (virtualDisp != nullptr) delete virtualDisp;  // warning: deleting object of polymorphic class type 'VirtualMatrixPanel' which has non-virtual destructor might cause undefined behavior
-=======
   _len = 0;
-  //if (fourScanPanel != nullptr) delete fourScanPanel;  // warning: deleting object of polymorphic class type 'VirtualMatrixPanel' which has non-virtual destructor might cause undefined behavior
->>>>>>> mdev
+  //if (virtualDisp != nullptr) delete fourScanPanel;  // warning: deleting object of polymorphic class type 'VirtualMatrixPanel' which has non-virtual destructor might cause undefined behavior
 #if !defined(CONFIG_IDF_TARGET_ESP32S3) // S3: don't delete, as we want to re-use the driver later
   if (display) delete display;
   activeDisplay = nullptr;
