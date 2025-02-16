@@ -1159,16 +1159,16 @@ class AudioReactive : public Usermod {
 #endif
     // new "V2" audiosync struct - 44 Bytes
     struct __attribute__ ((packed)) audioSyncPacket {  // WLEDMM "packed" ensures that there are no additional gaps
-      char    header[6];      //  06 Bytes  offset 0
+      char    header[6];      //  06 Bytes  offset 0 - "00002" for protocol version 2 ( includes \0 for c-style string termination) 
       uint8_t pressure[2];    //  02 Bytes, offset 6  - sound pressure as fixed point (8bit integer,  8bit fraction) 
       float   sampleRaw;      //  04 Bytes  offset 8  - either "sampleRaw" or "rawSampleAgc" depending on soundAgc setting
       float   sampleSmth;     //  04 Bytes  offset 12 - either "sampleAvg" or "sampleAgc" depending on soundAgc setting
       uint8_t samplePeak;     //  01 Bytes  offset 16 - 0 no peak; >=1 peak detected. In future, this will also provide peak Magnitude
-      uint8_t frameCounter;   //  01 Bytes  offset 17 - track duplicate/out of order packets
-      uint8_t fftResult[16];  //  16 Bytes  offset 18
-      uint16_t zeroCrossingCount; // 02 Bytes, offset 34
-      float  FFT_Magnitude;   //  04 Bytes  offset 36
-      float  FFT_MajorPeak;   //  04 Bytes  offset 40
+      uint8_t frameCounter;   //  01 Bytes  offset 17 - rolling counter to track duplicate/out of order packets
+      uint8_t fftResult[16];  //  16 Bytes  offset 18 - 16 GEQ channels, each channel has one byte (uint8_t)
+      uint16_t zeroCrossingCount; // 02 Bytes, offset 34 - number of zero crossings seen in 23ms
+      float  FFT_Magnitude;   //  04 Bytes  offset 36 - largest FFT result from a single run (raw value, can go up to 4096)
+      float  FFT_MajorPeak;   //  04 Bytes  offset 40 - frequency (Hz) of largest FFT result
     };
 
     // old "V1" audiosync struct - 83 Bytes payload, 88 bytes total - for backwards compatibility
@@ -2056,7 +2056,16 @@ class AudioReactive : public Usermod {
           if ((sclPin >= 0) && (i2c_scl < 0)) i2c_scl = sclPin;
           if (i2c_sda >= 0) sdaPin = -1;                        // -1 = use global
           if (i2c_scl >= 0) sclPin = -1;
-
+        case 9:
+          DEBUGSR_PRINTLN(F("AR: ES8311 Source (Mic)"));
+          audioSource = new ES8311Source(SAMPLE_RATE, BLOCK_SIZE, 1.0f);
+          //useInputFilter = 0; // to disable low-cut software filtering and restore previous behaviour
+          delay(100);
+          // WLEDMM align global pins
+          if ((sdaPin >= 0) && (i2c_sda < 0)) i2c_sda = sdaPin; // copy usermod prefs into globals (if globals not defined)
+          if ((sclPin >= 0) && (i2c_scl < 0)) i2c_scl = sclPin;
+          if (i2c_sda >= 0) sdaPin = -1;                        // -1 = use global
+          if (i2c_scl >= 0) sclPin = -1;
           if (audioSource) audioSource->initialize(i2swsPin, i2ssdPin, i2sckPin, mclkPin);
           break;
 
@@ -3001,6 +3010,11 @@ class AudioReactive : public Usermod {
         oappend(SET_F("addOption(dd,'AC101 ☾ (⎌)',8);"));
       #else
         oappend(SET_F("addOption(dd,'AC101 ☾',8);"));
+      #endif
+      #if SR_DMTYPE==9
+        oappend(SET_F("addOption(dd,'ES8311 ☾ (⎌)',9);"));
+      #else
+        oappend(SET_F("addOption(dd,'ES8311 ☾',9);"));
       #endif
       #ifdef SR_SQUELCH
         oappend(SET_F("addInfo(ux+':config:squelch',1,'<i>&#9100; ")); oappendi(SR_SQUELCH); oappend("</i>');");  // 0 is field type, 1 is actual field
