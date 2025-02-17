@@ -324,8 +324,38 @@ bool strip_uses_global_leds(void) __attribute__((pure));  // WLEDMM implemented 
 #define FX_MODE_WAVESINS               184
 #define FX_MODE_ROCKTAVES              185
 #define FX_MODE_2DAKEMI                186
-#define FX_MODE_ARTIFX                 187 //WLEDMM ARTIFX
-#define FX_MODE_PARTYJERK              188
+#define FX_MODE_PARTICLEVOLCANO        187
+#define FX_MODE_PARTICLEFIRE           188
+#define FX_MODE_PARTICLEFIREWORKS      189
+#define FX_MODE_PARTICLEVORTEX         190
+#define FX_MODE_PARTICLEPERLIN         191
+#define FX_MODE_PARTICLEPIT            192
+#define FX_MODE_PARTICLEBOX            193
+#define FX_MODE_PARTICLEATTRACTOR      194
+#define FX_MODE_PARTICLEIMPACT         195
+#define FX_MODE_PARTICLEWATERFALL      196
+#define FX_MODE_PARTICLESPRAY          197
+#define FX_MODE_PARTICLESGEQ           198
+#define FX_MODE_PARTICLECENTERGEQ      199
+#define FX_MODE_PARTICLEGHOSTRIDER     200
+#define FX_MODE_PARTICLEBLOBS          201
+#define FX_MODE_PSDRIP                 202
+#define FX_MODE_PSPINBALL              203
+#define FX_MODE_PSDANCINGSHADOWS       204
+#define FX_MODE_PSFIREWORKS1D          205
+#define FX_MODE_PSSPARKLER             206
+#define FX_MODE_PSHOURGLASS            207
+#define FX_MODE_PS1DSPRAY              208
+#define FX_MODE_PSBALANCE              209
+#define FX_MODE_PSCHASE                210
+#define FX_MODE_PSSTARBURST            211
+#define FX_MODE_PS1DGEQ                212
+#define FX_MODE_PSFIRE1D               213
+#define FX_MODE_PS1DSONICSTREAM        214
+#define FX_MODE_ARTIFX                 215 //WLEDMM ARTIFX
+#define FX_MODE_PARTYJERK              216
+
+#define MODE_COUNT                     217
 
 // Experimental Audioresponsive modes from WLED-SR
 // #define FX_MODE_3DSphereMove           189 // experimental WLED-SR "cube" mode
@@ -403,7 +433,7 @@ typedef struct Segment {
     uint16_t aux1;  // custom var
     byte* data = nullptr;     // effect data pointer // WLEDMM initialize to nullptr
     CRGB* ledsrgb = nullptr;     // local leds[] array (may be a pointer to global) //WLEDMM rename to ledsrgb to search on them (temp?), and initialize to nullptr
-    size_t ledsrgbSize; //WLEDMM 
+    size_t ledsrgbSize; //WLEDMM
     static CRGB *_globalLeds;             // global leds[] array
     static uint16_t maxWidth, maxHeight;  // these define matrix width & height (max. segment dimensions)
     void *jMap = nullptr; //WLEDMM jMap
@@ -663,11 +693,11 @@ typedef struct Segment {
     // 2D Blur: shortcuts for bluring columns or rows only (50% faster than full 2D blur)
     inline void blurCols(fract8 blur_amount, bool smear = false) { // blur all columns
       const unsigned cols = virtualWidth();
-      for (unsigned k = 0; k < cols; k++) blurCol(k, blur_amount, smear); 
+      for (unsigned k = 0; k < cols; k++) blurCol(k, blur_amount, smear);
     }
     inline void blurRows(fract8 blur_amount, bool smear = false) { // blur all rows
       const unsigned rows = virtualHeight();
-      for ( unsigned i = 0; i < rows; i++) blurRow(i, blur_amount, smear); 
+      for ( unsigned i = 0; i < rows; i++) blurRow(i, blur_amount, smear);
     }
 
     // 2D matrix
@@ -707,7 +737,7 @@ typedef struct Segment {
     uint16_t nrOfVStrips(void) const;
     void createjMap(); //WLEDMM jMap
     void deletejMap(); //WLEDMM jMap
-  
+
   #ifndef WLED_DISABLE_2D
     [[gnu::hot]] inline uint16_t XY(uint_fast16_t x, uint_fast16_t y)  const  { // support function to get relative index within segment (for leds[]) // WLEDMM inline for speed
       uint_fast16_t width  = max(uint16_t(1), virtualWidth());   // segment width in logical pixels  -- softhack007 avoid div/0
@@ -716,7 +746,7 @@ typedef struct Segment {
     }
 
 #ifdef WLEDMM_FASTPATH
-    // WLEDMM this is a "gateway" function - we either call _fast or fall back to "slow" 
+    // WLEDMM this is a "gateway" function - we either call _fast or fall back to "slow"
     [[gnu::hot]] inline void setPixelColorXY(int x, int y, uint32_t col) {
       if (!_isSimpleSegment) { // slow path
         setPixelColorXY_slow(x, y, col);
