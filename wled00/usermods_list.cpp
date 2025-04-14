@@ -209,6 +209,9 @@
 #ifdef USERMOD_AUTO_PLAYLIST
 #include "../usermods/usermod_v2_auto_playlist/usermod_v2_auto_playlist.h"
 #endif
+#ifdef USERMOD_SPOTIFY
+#include "../usermods/Spotify/usermod_spotify.h"
+#endif
 
 void registerUsermods()
 {
@@ -413,6 +416,10 @@ void registerUsermods()
 
 #ifdef USERMOD_AUTO_PLAYLIST
   usermods.add(new AutoPlaylistUsermod(false));
+#endif
+
+#ifdef USERMOD_SPOTIFY
+  usermods.add(new SpotifyUsermod(false));
 #endif
 
 

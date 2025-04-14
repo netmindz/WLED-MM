@@ -12,7 +12,7 @@
 */
 #ifndef ASYNC_JSON_H_
 #define ASYNC_JSON_H_
-#include "ArduinoJson-v6.h"
+#include <ArduinoJson.h>
 #include <Print.h>
 
 #ifdef ESP8266

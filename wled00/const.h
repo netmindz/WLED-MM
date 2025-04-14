@@ -143,6 +143,7 @@
 #define USERMOD_ID_GAMES                 92     //Usermod "usermod_v2_games.h"
 #define USERMOD_ID_ANIMARTRIX               93     //Usermod "usermod_v2_animartrix.h"
 #define USERMOD_ID_AUTOPLAYLIST          94     // Usermod usermod_v2_auto_playlist.h
+#define USERMOD_ID_SPOTIFY               95     // Usermod usermod_spotify.h
 
 #define USERMOD_ID_241RINGS             101     //Usermod "usermod_v2_241_rings.h"
 
