@@ -3270,18 +3270,23 @@ function genPresets()
 		if (!playlistTrans[m]) playlistTrans[m] = "";
 		if (!playlistSep[m]) playlistSep[m] = "";
 		playlistPS[m] += playlistSep[m] + `${id}`;
-		playlistDur[m] += playlistSep[m] + "100";
-		playlistTrans[m] += playlistSep[m] + "7";
+		playlistDur[m] += playlistSep[m] + "600";
+		playlistTrans[m] += playlistSep[m] + "20";
 		playlistSep[m] = ",";
 		if(ql) playlistQL[m] = `${ql}`;
 	}
-	var seq=230; //Playlist start here
+	var seq=0; //Playlist start here
 	for (let ef of effects) {
 		if (ef.name.indexOf("RSVD") < 0) {
 			if (Array.isArray(fxdata) && fxdata.length>ef.id) {
 				let fd = fxdata[ef.id];
 				let eP = (fd == '')?[]:fd.split(";"); // effect parameters
 				let m = (eP.length<4 || eP[3]==='')?'1':eP[3]; // flags
+				console.log(ef.id, ef.name, m);
+				if(m === '1' || m === '01') {
+					console.log("skip", ef.name);
+					continue;
+				}
 				// console.log(ef, eP);
 				//transform key values in json format
 				var defaultString = "";
@@ -3320,7 +3325,7 @@ function genPresets()
 					addToPlaylist(m, ef.id);
 				}
 				addToPlaylist("All", ef.id, "ALL");
-				if(ef.name.startsWith("Y💡")) addToPlaylist("AnimARTrix", ef.id, "AM");
+				if(ef.name.startsWith("Y💡")) addToPlaylist("AnimARTrix", ef.id, "AA");
 				if (m.includes("1")) addToPlaylist("All 1D", ef.id, "1D");
 				if (m.includes("2")) addToPlaylist("All 2D", ef.id, "2D");
 
@@ -3330,6 +3335,7 @@ function genPresets()
 	} //all effects
 
 	// console.log(playlistPS, playlistDur, playlistTrans);
+	seq = 101;
 	for (const m in playlistPS) {
 		if(!playlistQL[m]) playlistQL[m] = seq;
 		let playListString = `\n,"${seq}":{"n":"${m} Playlist","ql":"${playlistQL[m]}","on":true,"playlist":{"ps":[${playlistPS[m]}],"dur":[${playlistDur[m]}],"transition":[${playlistTrans[m]}],"repeat":0,"end":0,"r":1}}`;
