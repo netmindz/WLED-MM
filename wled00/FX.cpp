@@ -5088,7 +5088,7 @@ static const char _data_FX_MODE_WAVESINS[] PROGMEM = "Wavesins@!,Brightness vari
 //////////////////////////////
 //     Flow Stripe          //
 //////////////////////////////
-// By: ldirko  https://editor.soulmatelights.com/gallery/392-flow-led-stripe , modifed by: Andrew Tuline
+// By: ldirko  https://editor.soulmatelights.com/gallery/392-flow-led-stripe , modifed by: Andrew Tuline, fixed by @DedeHai
 uint16_t mode_FlowStripe(void) {
 
   const uint16_t hl = SEGLEN * 10 / 13;
@@ -5096,16 +5096,16 @@ uint16_t mode_FlowStripe(void) {
   uint32_t t = strip.now / (SEGMENT.intensity/8+1);
 
   for (int i = 0; i < SEGLEN; i++) {
-    int c = (abs(i - hl) / hl) * 127;
+    int c = ((abs((int)i - hl) * 127) / hl);
     c = sin8_t(c);
     c = sin8_t(c / 2 + t);
     byte b = sin8_t(c + t/8);
-    SEGMENT.setPixelColor(i, CHSV(b + hue, 255, 255));
+    SEGMENT.setPixelColor(i, SEGMENT.color_from_palette(b + hue, false, true, 3));
   }
 
   return FRAMETIME;
 } // mode_FlowStripe()
-static const char _data_FX_MODE_FLOWSTRIPE[] PROGMEM = "Flow Stripe@Hue speed,Effect speed;;";
+static const char _data_FX_MODE_FLOWSTRIPE[] PROGMEM = "Flow Stripe@Hue speed,Effect speed;;!;pal=11";
 
 /*
   Shimmer effect: moves a gradient with optional modulators across the strip at a given interval, up to 60 seconds
