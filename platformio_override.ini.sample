@@ -4,6 +4,7 @@
 # ------------------------------------------------------------------------------
 # Please visit documentation: https://docs.platformio.org/page/projectconf.html
 
+
 [platformio]
 default_envs = WLED_tasmota_1M
 

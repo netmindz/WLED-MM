@@ -9,6 +9,11 @@
 #ifdef WLED_ENABLE_PIXART
   #include "html_pixart.h"
 #endif
+#ifdef WLED_ENABLE_GIF
+  #ifndef WLED_DISABLE_GIFPLAYER
+    #include "html_gifplayer.h"
+  #endif
+#endif
 #include "html_cpal.h"
 
 /*
@@ -409,6 +414,20 @@ void initServer()
     request->send(response);
   });
   #endif
+
+#ifdef WLED_ENABLE_GIF
+  #ifndef WLED_DISABLE_GIFPLAYER
+  static const char _gifplayer_htm[] PROGMEM = "/gifplayer.htm";
+  server.on(_gifplayer_htm, HTTP_GET, [](AsyncWebServerRequest *request) {
+    if (handleFileRead(request, _gifplayer_htm)) return;
+    if (handleIfNoneMatchCacheHeader(request)) return;
+    AsyncWebServerResponse *response = request->beginResponse_P(200, "text/html", PAGE_gifplayer, PAGE_gifplayer_L);
+    response->addHeader(FPSTR(s_content_enc),"gzip");
+    setStaticContentCacheHeaders(response);
+    request->send(response);
+  });
+  #endif
+#endif
 
   server.on("/cpal.htm", HTTP_GET, [](AsyncWebServerRequest *request){
     if (handleFileRead(request, "/cpal.htm")) return;

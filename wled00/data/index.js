@@ -205,7 +205,9 @@ function loadSkinCSS(cId)
 		h.appendChild(l);
 	}
 }
-
+function getURL(path) {
+	return (loc ? locproto + "//" + locip : "") + path;
+}
 function onLoad()
 {
 	if (window.location.protocol == "file:") {
@@ -3273,18 +3275,27 @@ function genPresets()
 		if (!playlistTrans[m]) playlistTrans[m] = "";
 		if (!playlistSep[m]) playlistSep[m] = "";
 		playlistPS[m] += playlistSep[m] + `${id}`;
-		playlistDur[m] += playlistSep[m] + "100";
-		playlistTrans[m] += playlistSep[m] + "7";
+		playlistDur[m] += playlistSep[m] + "600";
+		playlistTrans[m] += playlistSep[m] + "20";
 		playlistSep[m] = ",";
 		if(ql) playlistQL[m] = `${ql}`;
 	}
-	var seq=230; //Playlist start here
+	var seq=0; //Playlist start here
 	for (let ef of effects) {
 		if (ef.name.indexOf("RSVD") < 0) {
 			if (Array.isArray(fxdata) && fxdata.length>ef.id) {
 				let fd = fxdata[ef.id];
 				let eP = (fd == '')?[]:fd.split(";"); // effect parameters
 				let m = (eP.length<4 || eP[3]==='')?'1':eP[3]; // flags
+				console.log(ef.id, ef.name, m);
+				if(m === '1' || m === '01') {
+					console.log("skip", ef.name);
+					continue;
+				}
+				if(ef.id == 53) {
+					console.log("skip", ef.name); // Skip image
+					continue;
+				}
 				// console.log(ef, eP);
 				//transform key values in json format
 				var defaultString = "";
@@ -3323,9 +3334,11 @@ function genPresets()
 					addToPlaylist(m, ef.id);
 				}
 				addToPlaylist("All", ef.id, "ALL");
-				if(ef.name.startsWith("Y💡")) addToPlaylist("AnimARTrix", ef.id, "AM");
+				if(ef.name.startsWith("Y💡")) addToPlaylist("AnimARTrix", ef.id, "AA");
+				if(ef.name.startsWith("Y💡") || m == "2") addToPlaylist("Ambient", ef.id, "A");
 				if (m.includes("1")) addToPlaylist("All 1D", ef.id, "1D");
 				if (m.includes("2")) addToPlaylist("All 2D", ef.id, "2D");
+				if (m.includes("f")) addToPlaylist("Music", ef.id, "MU");
 
 				seq = Math.max(seq, (parseInt(ef.id) + 1));
 			} //fxdata is array
@@ -3333,9 +3346,17 @@ function genPresets()
 	} //all effects
 
 	// console.log(playlistPS, playlistDur, playlistTrans);
+	seq = 101;
 	for (const m in playlistPS) {
+		var id = seq;
+		if(playlistQL[m] == "A") {
+			id = "1";
+		}
+		else if(playlistQL[m] == "MU") {
+			id = "2";
+		}
 		if(!playlistQL[m]) playlistQL[m] = seq;
-		let playListString = `\n,"${seq}":{"n":"${m} Playlist","ql":"${playlistQL[m]}","on":true,"playlist":{"ps":[${playlistPS[m]}],"dur":[${playlistDur[m]}],"transition":[${playlistTrans[m]}],"repeat":0,"end":0,"r":1}}`;
+		let playListString = `\n,"${id}":{"n":"${m} Playlist","ql":"${playlistQL[m]}","on":true,"playlist":{"ps":[${playlistPS[m]}],"dur":[${playlistDur[m]}],"transition":[${playlistTrans[m]}],"repeat":0,"end":0,"r":1}}`;
 		// console.log(playListString);
 		result += playListString;
 		seq++;

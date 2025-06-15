@@ -224,6 +224,8 @@ writeHtmlGzipped("wled00/data/simple.htm", "wled00/html_simple.h", 'simple');
 writeHtmlGzipped("wled00/data/pixart/pixart.htm", "wled00/html_pixart.h", 'pixart');
 writeHtmlGzipped("wled00/data/cpal/cpal.htm", "wled00/html_cpal.h", 'cpal');
 writeHtmlGzipped("wled00/data/pxmagic/pxmagic.htm", "wled00/html_pxmagic.h", 'pxmagic');
+writeHtmlGzipped("wled00/data/gifplayer/gifplayer.htm", "wled00/html_gifplayer.h", 'gifplayer');
+
 /*
 writeChunks(
   "wled00/data",
@@ -247,7 +249,8 @@ writeChunks(
       filter: "html-minify-ui",
     }
   ],
-  "wled00/html_simplex.h"
+  "wled00/html_simplex.h",
+  "wled00/html_gifplayer.h"
 );
 */
 writeChunks(
