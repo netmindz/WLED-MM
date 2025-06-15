@@ -9024,7 +9024,7 @@ void WS2812FX::setupEffectData() {
   _modeData.push_back(_data_FX_MODE_STATIC);
   _modeCount = 255;
   // fill reserved word in case there will be any gaps in the array
-  for (size_t i=1; i<255; i++) {
+  for (size_t i=1; i<_modeCount; i++) {
     _mode.push_back(&mode_static);
     _modeData.push_back(_data_RESERVED);
   }
