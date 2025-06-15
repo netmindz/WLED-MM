@@ -3292,6 +3292,10 @@ function genPresets()
 					console.log("skip", ef.name);
 					continue;
 				}
+				if(ef.id == 53) {
+					console.log("skip", ef.name); // Skip image
+					continue;
+				}
 				// console.log(ef, eP);
 				//transform key values in json format
 				var defaultString = "";
