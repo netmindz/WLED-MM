@@ -9004,6 +9004,7 @@ void WS2812FX::setupEffectData() {
   // Solid must be first! (assuming vector is empty upon call to setup)
   _mode.push_back(&mode_static);
   _modeData.push_back(_data_FX_MODE_STATIC);
+  _modeCount = 255;
   // fill reserved word in case there will be any gaps in the array
   for (size_t i=1; i<255; i++) {
     _mode.push_back(&mode_static);
