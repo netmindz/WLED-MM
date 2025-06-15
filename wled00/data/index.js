@@ -205,7 +205,9 @@ function loadSkinCSS(cId)
 		h.appendChild(l);
 	}
 }
-
+function getURL(path) {
+	return (loc ? locproto + "//" + locip : "") + path;
+}
 function onLoad()
 {
 	if (window.location.protocol == "file:") {
