@@ -222,7 +222,7 @@
 					}
 					gId("rf"+n).onclick = (t == 31) ? (()=>{return false}) : (()=>{});  // prevent change for TM1814
 					gRGBW |= isRGBW = ((t > 17 && t < 22) || (t > 28 && t < 32) || (t > 40 && t < 46 && t != 43) || t == 88); // RGBW checkbox, TYPE_xxxx values from const.h
-					gId("co"+n).style.display = ((t >= 80 && t < 96) || (t >= 40 && t < 48)||(t >= 100 && t < 110)) ? "none":"inline";  // hide color order for PWM
+					gId("co"+n).style.display = ((t >= 83 && t < 96) || (t >= 40 && t < 48)||(t >= 100 && t < 110)) ? "none":"inline";  // hide color order for PWM
 					gId("dig"+n+"w").style.display = (t > 28 && t < 32) ? "inline":"none";  // show swap channels dropdown
 					gId("dig"+n+"O").style.display = (t == 82 || t == 83) ? "inline":"none";  // show Art-Net output number
 					gId("dig"+n+"L").style.display = (t == 82 || t == 83) ? "inline":"none";  // show Art-Net LEDs per output
@@ -246,11 +246,12 @@
 							gId("dig"+n+"W").innerHTML = "<br />You need at least 1 output!";
 						}
 						if (outputs > 1 && fps_limit > 33333/leds_per_output) gId("dig"+n+"W").innerHTML += "<br />FPS limit may be too high for WS281x pixels.";
-						if (outputs*leds_per_output != total_leds) gId("dig"+n+"W").innerHTML += "<br />Total LEDs doesn't match outputs * LEDs per output.";
+						if (outputs*leds_per_output != total_leds) gId("dig"+n+"W").innerHTML += "<br />Length ("+total_leds+") doesn't match Number of Outputs * LEDs Per Output ("+outputs*leds_per_output+").";
 						if (last_octet == 255) {
 							if (total_leds <= 1024) gId("dig"+n+"W").innerHTML += "<br />Art-Net is in broadcast mode.";
 							if (total_leds  > 1024) gId("dig"+n+"W").innerHTML += "<br />You are sending a lot of broadcast data. Be cautious.";
 						}
+						gId("dig"+n+"W").innerHTML += "<br />Art-Net starting universe is "+d.e131Universe+". Change this in <a href='/settings/sync'>Sync Interfaces</a>.";
 					}
 					if (!(t > 28 && t < 32)) d.getElementsByName("WO"+n)[0].value = 0; // reset swapping
 					gId("dig"+n+"c").style.display = ((t >= 40 && t < 48)||(t >= 100 && t < 110)) ? "none":"inline";  // hide count for analog and HUB75
@@ -422,6 +423,7 @@ ${i+1}:
 <option value="80">DDP RGB (network)</option>
 <!--option value="81">E1.31 RGB (network)</option-->
 <option value="82">Art-Net RGB (network)</option>
+<option value="83">Art-Net RGBW (network)</option>
 <option value="88">DDP RGBW (network)</option>
 <option value="101">Hub75Matrix 32x32</option>
 <option value="102">Hub75Matrix 64x32</option>
@@ -741,7 +743,7 @@ Length: <input type="number" name="XC${i}" id="xc${i}" class="l" min="1" max="65
 		Use Gamma value: <input name="GV" type="number" class="m" placeholder="2.8" min="1" max="3" step="0.1" required><br><br>
 		Brightness factor: <input name="BF" type="number" class="m" min="1" max="255" required> %
 		<h3>Transitions</h3>
-		Crossfade: <input type="checkbox" name="TF"><br>
+		Cross-fade: <input type="checkbox" name="TF"><br>
 		Transition Time: <input name="TD" type="number" class="xl" min="0" max="65500"> ms<br>
 		Enable Palette transitions: <input type="checkbox" name="PF"><br>
 		<i>Random Cycle</i> Palette Time: <input name="TP" type="number" class="m" min="1" max="255"> s<br>

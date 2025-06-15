@@ -68,7 +68,7 @@ void WS2812FX::setUpMatrix() {
       if (!needLedMap) size = 0;                                                        // softhack007
       USER_PRINTF("setupmatrix customMappingTable alloc %d from %d\n", size, customMappingTableSize);
       //if (customMappingTable != nullptr) delete[] customMappingTable;
-      //customMappingTable = new uint16_t[size];
+      //customMappingTable = new(std::nothrow) uint16_t[size];
 
       // don't use new / delete
       if ((size > 0) && (customMappingTable != nullptr)) {  // resize
@@ -118,7 +118,7 @@ void WS2812FX::setUpMatrix() {
           JsonArray map = doc.as<JsonArray>();
           gapSize = map.size();
           if (!map.isNull() && (gapSize > 0) && gapSize >= customMappingSize) { // not an empty map //softhack also check gapSize>0 
-            gapTable = new int8_t[gapSize];
+            gapTable = new(std::nothrow) int8_t[gapSize];
             if (gapTable) for (size_t i = 0; i < gapSize; i++) {
               gapTable[i] = constrain(map[i], -1, 1);
             }
@@ -259,9 +259,6 @@ void Segment::startFrame(void) {
   _2dHeight   = calc_virtualHeight();
   _2dWidth    = _isValid2D ? calc_virtualWidth() : calc_virtualLength();
   _virtuallength = calc_virtualLength();
-  #if 0 && defined(WLED_ENABLE_HUB75MATRIX)
-    _firstFill = true; // dirty HACK
-  #endif
 #endif
 }
 // WLEDMM end
@@ -402,7 +399,7 @@ void Segment::setPixelColorXY(float x, float y, uint32_t col, bool aa, bool fast
   if (Segment::maxHeight==1) return; // not a matrix set-up
   if (x<0.0f || x>1.0f || y<0.0f || y>1.0f) return; // not normalized
 
-#if 0 // depricated
+#if 0 // deprecated
   const uint_fast16_t cols = virtualWidth();
   const uint_fast16_t rows = virtualHeight();
 
@@ -454,8 +451,18 @@ void Segment::setPixelColorXY(float x, float y, uint32_t col, bool aa, bool fast
 #endif
 }
 
-// returns RGBW values of pixel
-uint32_t IRAM_ATTR_YN Segment::getPixelColorXY(int x, int y) const {
+// WLEDMM this function is only called by getPixelColorXY, in case we don't have the ledsrgb buffer!
+uint32_t IRAM_ATTR_YN Segment::getPixelColorXY_part2(int x, int y, int cols, int rows) const {
+  if (reverse  ) x = cols - x - 1;
+  if (reverse_y) y = rows - y - 1;
+  if (transpose) std::swap(x,y); // swap X & Y if segment transposed
+  const uint_fast16_t groupLength_ = groupLength(); // WLEDMM small optimization
+  x *= groupLength_; // expand to physical pixels
+  y *= groupLength_; // expand to physical pixels
+  return strip.getPixelColorXYRestored(start + x, startY + y);
+}
+
+uint32_t IRAM_ATTR_YN Segment::getPixelColorXY_slow(int x, int y) const { // WLEDMM fallback for non-fastpath builds
   if (x<0 || y<0 || !isActive()) return 0; // not active or out-of range
   if (ledsrgb) {
     int i = XY(x,y);
