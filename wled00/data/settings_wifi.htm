@@ -132,6 +132,10 @@
 			let url = (loc?`http://${locip}`:'') + '/settings/s.js?p=1';
 			loadJS(url, false);	// If we set async false, file is loaded and executed, then next statement is processed
 		}
+		function showStaticIP() {
+			document.getElementById("wifi-advanced-reveal").style.display = "none"
+			document.getElementById("wifi-advanced-details").style.display = "block"
+		}
 	</script>
 	<style>@import url("style.css");</style>
 </head>
@@ -147,7 +151,8 @@
 		Network name (SSID, empty to not connect):<br>
 		<input type="text" id="CS" name="CS" maxlength="32"><br>
 		Network password: <br> <input type="password" name="CP" maxlength="63"><br>
-		Static IP (leave at 0.0.0.0 for DHCP):<br>
+		<div id="wifi-advanced-reveal"><button onclick="showStaticIP()">Show Advanced</button><br></div>
+		<div id="wifi-advanced-details" style="display: none">Static IP: (leave at 0.0.0.0 for DHCP)<br>
 		<input name="I0" type="number" class="s" min="0" max="255" required> .
 		<input name="I1" type="number" class="s" min="0" max="255" required> .
 		<input name="I2" type="number" class="s" min="0" max="255" required> .
@@ -182,6 +187,7 @@
 		Disable Wi-Fi sleep: <input type="checkbox" name="WS"><br>
 		<i>Can help with connectivity issues.<br>
 		Do not enable if Wi-Fi is working correctly, increases power consumption.</i>
+		</div>
 
 		<div id="remd">
 			<h3>Wireless Remote</h3>
