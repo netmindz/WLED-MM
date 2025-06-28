@@ -1347,7 +1347,7 @@ void WLED::handleConnection()
     wasConnected = false;
     return;
   }
-  if (!Network.isConnected()) {
+  if (!WLEDNetwork.isConnected()) {
     if (interfacesInited) {
       USER_PRINTLN(F("Disconnected!"));
       interfacesInited = false;
@@ -1370,8 +1370,8 @@ void WLED::handleConnection()
   } else if (!interfacesInited) { //newly connected
     USER_PRINTLN("");
     USER_PRINT(F("Connected! IP address: http://"));
-    USER_PRINT(Network.localIP());
-    if (Network.isEthernet()) {
+    USER_PRINT(WLEDNetwork.localIP());
+    if (WLEDNetwork.isEthernet()) {
      #if ESP32
      USER_PRINTLN(" via Ethernet (disabling WiFi)");
      WiFi.disconnect(true);

@@ -1196,9 +1196,9 @@ void serializeInfo(JsonObject root)
   root[F("product")] = F(WLED_PRODUCT_NAME); //WLEDMM + Moustachauve/Wled-Native
   root["mac"] = escapedMac;
   char s[16] = "";
-  if (Network.isConnected())
+  if (WLEDNetwork.isConnected())
   {
-    IPAddress localIP = Network.localIP();
+    IPAddress localIP = WLEDNetwork.localIP();
     sprintf(s, "%d.%d.%d.%d", localIP[0], localIP[1], localIP[2], localIP[3]);
   }
   root["ip"] = s;

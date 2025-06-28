@@ -88,4 +88,4 @@ bool NetworkClass::isEthernet()
   return false;
 }
 
-NetworkClass Network;
+NetworkClass WLEDNetwork;

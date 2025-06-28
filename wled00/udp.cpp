@@ -139,7 +139,7 @@ void notify(byte callMode, bool followUp)
   //next value to be added has index: udpOut[offs + 0]
 
   IPAddress broadcastIp;
-  broadcastIp = ~uint32_t(Network.subnetMask()) | uint32_t(Network.gatewayIP());
+  broadcastIp = ~uint32_t(WLEDNetwork.subnetMask()) | uint32_t(WLEDNetwork.gatewayIP());
 
   if (0 != notifierUdp.beginPacket(broadcastIp, udpPort)) { // WLEDMM beginPacket == 0 --> error
     notifierUdp.write(udpOut, WLEDPACKETSIZE);
@@ -319,7 +319,7 @@ void handleNotifications()
   if (!(receiveNotifications || receiveDirect)) {return;}
 #endif
 
-  localIP = Network.localIP();
+  localIP = WLEDNetwork.localIP();
   //notifier and UDP realtime
 #ifdef ARDUINO_ARCH_ESP32
   if (!packetSize || packetSize > UDP_IN_MAXSIZE) {notifierUdp.flush(); notifier2Udp.flush(); return;}
@@ -697,7 +697,7 @@ void sendSysInfoUDP()
 {
   if (!udp2Connected) return;
 
-  IPAddress ip = Network.localIP();
+  IPAddress ip = WLEDNetwork.localIP();
   if (!ip || ip == IPAddress(255,255,255,255)) ip = IPAddress(4,3,2,1);
 
   // TODO: make a nice struct of it and clean up

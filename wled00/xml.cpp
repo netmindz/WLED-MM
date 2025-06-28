@@ -82,7 +82,7 @@ void URL_response(AsyncWebServerRequest *request)
 
   char s[16];
   oappend(SET_F("http://"));
-  IPAddress localIP = Network.localIP();
+  IPAddress localIP = WLEDNetwork.localIP();
   sprintf(s, "%d.%d.%d.%d", localIP[0], localIP[1], localIP[2], localIP[3]);
   oappend(s);
 
@@ -359,10 +359,10 @@ void getSettingsJS(AsyncWebServerRequest* request, byte subPage, char* dest) //W
     oappend(SET_F("document.getElementById('ethd').style.display='none';"));
     #endif
 
-    if (Network.isConnected()) //is connected
+    if (WLEDNetwork.isConnected()) //is connected
     {
       char s[32];
-      IPAddress localIP = Network.localIP();
+      IPAddress localIP = WLEDNetwork.localIP();
       sprintf(s, "%d.%d.%d.%d", localIP[0], localIP[1], localIP[2], localIP[3]);
 
       #if defined(ARDUINO_ARCH_ESP32) && defined(WLED_USE_ETHERNET)

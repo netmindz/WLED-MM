@@ -19,6 +19,6 @@ public:
   bool isEthernet();
 };
 
-extern NetworkClass Network;
+extern NetworkClass WLEDNetwork;
 
 #endif

@@ -178,10 +178,10 @@ void sendImprovRPCResult(ImprovRPCType type, uint8_t n_strings, const char **str
 }
 
 void sendImprovIPRPCResult(ImprovRPCType type) {
-  if (Network.isConnected())
+  if (WLEDNetwork.isConnected())
   {
     char urlStr[64];
-    IPAddress localIP = Network.localIP();
+    IPAddress localIP = WLEDNetwork.localIP();
     uint8_t len = sprintf(urlStr, "http://%d.%d.%d.%d", localIP[0], localIP[1], localIP[2], localIP[3]);
     if (len > 24) return; //sprintf fail?
     const char *str[1] = {urlStr};
