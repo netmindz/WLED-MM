@@ -10,7 +10,7 @@ ajsonrpc==1.2.0
     # via platformio
 anyio==3.6.2
     # via starlette
-bottle==0.12.25
+bottle==0.13.*
     # via platformio
 certifi==2023.7.22
     # via requests
