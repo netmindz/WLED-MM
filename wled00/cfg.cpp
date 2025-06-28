@@ -93,7 +93,7 @@ bool deserializeConfig(JsonObject doc, bool fromFS) {
   // WLEDMM: before changing strip, make sure our strip is _not_ servicing effects in parallel
   suspendStripService = true; // temporarily lock out strip updates
 #ifdef ARDUINO_ARCH_ESP32
-  if (strip.isServicing() && (strncmp(pcTaskGetTaskName(NULL), "loopTask", 8) != 0)) { // if we are in looptask (arduino loop), its safe to proceed without waiting
+  if (strip.isServicing() && (strncmp(pcTaskGetName(NULL), "loopTask", 8) != 0)) { // if we are in looptask (arduino loop), its safe to proceed without waiting
     if (fromFS) {
       USER_PRINTLN(F("deserializeConfig(fromFS): strip is still drawing effects."));
     } else {
