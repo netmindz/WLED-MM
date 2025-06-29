@@ -337,7 +337,40 @@ bool strip_uses_global_leds(void) __attribute__((pure));  // WLEDMM implemented 
 #define FX_MODE_GEQLASER               195 // WLED-MM GEQ Laser
 #define FX_MODE_2DPAINTBRUSH           196 // WLED-MM Paintbrush
 #define FX_MODE_2DSNOWFALL             197 // WLED-MM Snowfall
-#define MODE_COUNT                     198
+
+// Particle FX
+#define FX_MODE_PARTICLEVOLCANO        198
+#define FX_MODE_PARTICLEFIRE           199
+#define FX_MODE_PARTICLEFIREWORKS      200
+#define FX_MODE_PARTICLEVORTEX         201
+#define FX_MODE_PARTICLEPERLIN         202
+#define FX_MODE_PARTICLEPIT            203
+#define FX_MODE_PARTICLEBOX            204
+#define FX_MODE_PARTICLEATTRACTOR      205
+#define FX_MODE_PARTICLEIMPACT         206
+#define FX_MODE_PARTICLEWATERFALL      207
+#define FX_MODE_PARTICLESPRAY          208
+#define FX_MODE_PARTICLESGEQ           209
+#define FX_MODE_PARTICLECENTERGEQ      210
+#define FX_MODE_PARTICLEGHOSTRIDER     211
+#define FX_MODE_PARTICLEBLOBS          212
+#define FX_MODE_PSDRIP                 213
+#define FX_MODE_PSPINBALL              214
+#define FX_MODE_PSDANCINGSHADOWS       215
+#define FX_MODE_PSFIREWORKS1D          216
+#define FX_MODE_PSSPARKLER             217
+#define FX_MODE_PSHOURGLASS            218
+#define FX_MODE_PS1DSPRAY              219
+#define FX_MODE_PSBALANCE              220
+#define FX_MODE_PSCHASE                221
+#define FX_MODE_PSSTARBURST            222
+#define FX_MODE_PS1DGEQ                223
+#define FX_MODE_PSFIRE1D               224
+#define FX_MODE_PS1DSONICSTREAM        225
+#define FX_MODE_PS1DSONICBOOM          226
+#define FX_MODE_PS1DSPRINGY            227
+
+#define MODE_COUNT                     228
 
 typedef enum mapping1D2D {
   M12_Pixels = 0,
