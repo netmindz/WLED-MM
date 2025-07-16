@@ -278,6 +278,9 @@ void Segment::resetIfRequired() {
     reset = false; // setOption(SEG_OPTION_RESET, false);
     startFrame();   // WLEDMM update cached propoerties
     if (isActive() && !freeze) { fill(BLACK); needsBlank = false; } // WLEDMM start clean
+    #ifdef WLED_ENABLE_GIF
+    endImagePlayback(this);
+    #endif
     DEBUG_PRINTLN("Segment reset");
   } else if (needsBlank) {
     startFrame();   // WLEDMM update cached propoerties
