@@ -590,7 +590,7 @@ void ParticleSystem2D::render() {
     }
     else {
       brightness = min((particles[i].ttl << 1), (int)255);
-      baseRGB = ColorFromPalette(SEGPALETTE, particles[i].hue, blend);
+      baseRGB = ColorFromPalette(SEGPALETTE, particles[i].hue, 255, blend);
       if (particles[i].sat < 255) {
         CHSV baseHSV = rgb2hsv_approximate(baseRGB); // convert to HSV
         baseHSV.s = particles[i].sat; // set the saturation
@@ -1452,7 +1452,7 @@ void ParticleSystem1D::render() {
 
     // generate RGB values for particle
     brightness = min(particles[i].ttl << 1, (int)255);
-    baseRGB = ColorFromPalette(SEGPALETTE, particles[i].hue, blend);
+    baseRGB = ColorFromPalette(SEGPALETTE, particles[i].hue, 255, blend);
 
     if (advPartProps) { //saturation is advanced property in 1D system
       if (advPartProps[i].sat < 255) {
