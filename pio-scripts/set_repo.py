@@ -3,7 +3,12 @@ import subprocess
 import re
 
 def get_github_repo():
-    """Extract GitHub repository name from git remote URL."""
+    """Extract GitHub repository name from git remote URL.
+    
+    Returns:
+        str: Repository name in 'owner/repo' format for GitHub repos,
+             'unknown' for non-GitHub repos, missing git CLI, or any errors.
+    """
     try:
         # Get the remote URL for origin
         result = subprocess.run(['git', 'remote', 'get-url', 'origin'], 
@@ -35,8 +40,14 @@ def get_github_repo():
         
         return 'unknown'
         
-    except (subprocess.CalledProcessError, FileNotFoundError, Exception):
-        # Git command failed or git is not available
+    except FileNotFoundError:
+        # Git CLI is not installed or not in PATH
+        return 'unknown'
+    except subprocess.CalledProcessError:
+        # Git command failed (e.g., not a git repo, no remote, etc.)
+        return 'unknown'
+    except Exception:
+        # Any other unexpected error
         return 'unknown'
 
 repo = get_github_repo()
