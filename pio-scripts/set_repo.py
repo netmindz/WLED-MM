@@ -51,4 +51,4 @@ def get_github_repo():
         return 'unknown'
 
 repo = get_github_repo()
-env.Append(BUILD_FLAGS=[f'-DWLED_REPO="{repo}"'])
+env.Append(BUILD_FLAGS=[f'-DWLED_REPO=\\"{repo}\\"'])
