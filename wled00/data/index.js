@@ -684,18 +684,20 @@ function populateInfo(i)
 				urows += inforow(k,val);
 		}
 	}
-	var vcn = "Kuuhaku";
-	if (i.ver.startsWith("0.14.")) vcn = "Hoshi";
+	var vcn = "Small Step";  // WLED-MM 14.5.0, release Dec 2024
+//	if (i.ver.startsWith("0.14.")) vcn = "Hoshi";
 //	if (i.ver.includes("-bl")) vcn = "Supāku";
 	if (i.cn) vcn = i.cn;
 
 	//WLEDMM: add total heap and total PSRAM, and build number, add bin name
-	if (i.ver.includes("0.14.0")) vcn = "Lupo";          // check for MM versioning scheme
-	if (i.ver.includes("0.14.0-b15")) vcn = "Sitting Ducks"; // late easter egg
-	if (i.ver.includes("0.14.0-b2")) vcn = "This is the way"; // recently watched The Mandalorian? I have spoken ;-)
-	if (i.ver.includes("0.14.0-b15.22")) vcn = "Lupo";
-	if (i.ver.includes("0.14.1-b3")) vcn = "Fried Chicken";  // final line of "One Vision" by Queen
+	//if (i.ver.includes("0.14.0")) vcn = "Lupo";          // check for MM versioning scheme
+	//if (i.ver.includes("0.14.0-b15")) vcn = "Sitting Ducks"; // late easter egg
+	//if (i.ver.includes("0.14.0-b2")) vcn = "This is the way"; // recently watched The Mandalorian? I have spoken ;-)
+	//if (i.ver.includes("0.14.0-b15.22")) vcn = "Lupo";
+	//if (i.ver.includes("0.14.1-b")) vcn = "Fried Chicken";  // final line of "One Vision" by Queen
 	if (i.ver.includes("0.14.3-b")) vcn = "Fried Chicken";
+	if (i.ver.includes("14.5.")) vcn = "Small Step";
+
 	cn += `v${i.ver} &nbsp;<i>"${vcn}"</i><p>(WLEDMM ${i.rel}.bin)</p><p><em>build ${i.vid}</em></p><table>
 ${urows}
 ${urows===""?'':'<tr><td colspan=2><hr style="height:1px;border-width:0;color:SeaGreen;background-color:Seagreen"></td></tr>'}
@@ -717,7 +719,7 @@ ${i.psram?inforow("PSRAM ☾",((i.tpram-i.psram)/1024).toFixed(0)+"/"+(i.tpram/1
 ${i.psusedram?inforow("Max used PSRAM ☾",((i.tpram-i.psusedram)/1024).toFixed(0)+" kB",", "+((i.tpram-i.psusedram)*100.0/i.tpram).toFixed(1)+"%"):""} 
 ${i.freestack?inforow("Free stack ☾",(i.freestack/1000).toFixed(3)," kB"):""} <!--WLEDMM-->
 <tr><td colspan=2><hr style="height:1px;border-width:0;color:SeaGreen;background-color:SeaGreen"></td></tr>
-${i.tpram?inforow("PSRAM " + (i.psrmode?"("+i.psrmode+" mode) ":"") + " ☾",(i.tpram/1024/1024).toFixed(0)," MB"):""}
+${i.tpram?inforow("PSRAM " + (i.psrmode?"("+i.psrmode+" mode) ":"") + " ☾",(i.tpram/1024/1024).toFixed(0)," MB"):inforow("NO PSRAM found.", "")}
 ${i.e32flash?inforow("Flash mode "+i.e32flashmode+i.e32flashtext + " ☾",i.e32flash+" MB, "+i.e32flashspeed," Mhz"):""}
 ${i.e32model?inforow(i.e32model + " ☾",i.e32cores +" core(s),"," "+i.e32speed+" Mhz"):""}
 ${inforow("Environment",i.arch + " " + i.core + " (" + i.lwip + ")")}
@@ -3214,6 +3216,7 @@ setInterval(()=>{
 	if (hc==144) hc+=36;
 	if (hc==108) hc+=18;
 	gId('heart').style.color = `hsl(${hc}, 100%, 50%)`;
+	gId('heartMM').style.color = `hsl(${hc}, 100%, 50%)`;
 }, 910);
 
 function openGH() { window.open("https://github.com/Aircoookie/WLED/wiki"); }
@@ -3321,6 +3324,8 @@ function genPresets()
 				}
 				addToPlaylist("All", ef.id, "ALL");
 				if(ef.name.startsWith("Y💡")) addToPlaylist("AnimARTrix", ef.id, "AM");
+				if(ef.name.startsWith("PS ")) addToPlaylist("Particle System", ef.id, "PS");
+
 				if (m.includes("1")) addToPlaylist("All 1D", ef.id, "1D");
 				if (m.includes("2")) addToPlaylist("All 2D", ef.id, "2D");
 

@@ -93,9 +93,9 @@ Segment::Segment(const Segment &orig) {
   _dataLen = 0;
   _t = nullptr;
   if (ledsrgb && !Segment::_globalLeds) {ledsrgb = nullptr; ledsrgbSize = 0;}  // WLEDMM
-  if (orig.name) { name = new char[strlen(orig.name)+1]; if (name) strcpy(name, orig.name); }
+  if (orig.name) { name = new(std::nothrow) char[strlen(orig.name)+1]; if (name) strcpy(name, orig.name); }
   if (orig.data) { if (allocateData(orig._dataLen)) memcpy(data, orig.data, orig._dataLen); }
-  //if (orig._t)   { _t = new Transition(orig._t->_dur, orig._t->_briT, orig._t->_cctT, orig._t->_colorT); }
+  //if (orig._t)   { _t = new(std::nothrow) Transition(orig._t->_dur, orig._t->_briT, orig._t->_cctT, orig._t->_colorT); }
   //else markForReset(); // WLEDMM
   // if (orig.ledsrgb && !Segment::_globalLeds) { allocLeds(); if (ledsrgb) memcpy(ledsrgb, orig.ledsrgb, sizeof(CRGB)*length()); } // WLEDMM
   jMap = nullptr; //WLEDMM jMap
@@ -178,9 +178,9 @@ Segment& Segment::operator= (const Segment &orig) {
     //if (!Segment::_globalLeds) {ledsrgb = oldLeds; ledsrgbSize = oldLedsSize;}; // WLEDMM reuse leds instead of ledsrgb = nullptr;
     if (!Segment::_globalLeds) {ledsrgb = nullptr; ledsrgbSize = 0;};             // WLEDMM copy has no buffers (yet)
     // copy source data
-    if (orig.name) { name = new char[strlen(orig.name)+1]; if (name) strcpy(name, orig.name); }
+    if (orig.name) { name = new(std::nothrow) char[strlen(orig.name)+1]; if (name) strcpy(name, orig.name); }
     if (orig.data) { if (allocateData(orig._dataLen)) memcpy(data, orig.data, orig._dataLen); }
-    //if (orig._t)   { _t = new Transition(orig._t->_dur, orig._t->_briT, orig._t->_cctT, orig._t->_colorT); }
+    //if (orig._t)   { _t = new(std::nothrow) Transition(orig._t->_dur, orig._t->_briT, orig._t->_cctT, orig._t->_colorT); }
     //else markForReset(); // WLEDMM
     //if (orig.ledsrgb && !Segment::_globalLeds) { allocLeds(); if (ledsrgb) memcpy(ledsrgb, orig.ledsrgb, sizeof(CRGB)*length()); } // WLEDMM don't copy old buffer
     jMap = nullptr; //WLEDMM jMap
@@ -277,7 +277,10 @@ void Segment::resetIfRequired() {
     next_time = 0; step = 0; call = 0; aux0 = 0; aux1 = 0;
     reset = false; // setOption(SEG_OPTION_RESET, false);
     startFrame();   // WLEDMM update cached propoerties
-    if (isActive() && !freeze) fill(BLACK); // WLEDMM start clean
+    if (isActive() && !freeze) { fill(BLACK); needsBlank = false; } // WLEDMM start clean
+    #ifdef WLED_ENABLE_GIF
+    endImagePlayback(this);
+    #endif
     DEBUG_PRINTLN("Segment reset");
   } else if (needsBlank) {
     startFrame();   // WLEDMM update cached propoerties
@@ -311,7 +314,7 @@ void Segment::setUpLeds() {
   }
 }
 
-CRGBPalette16 &Segment::loadPalette(CRGBPalette16 &targetPalette, uint8_t pal) {
+CRGBPalette16 &Segment::loadPalette(CRGBPalette16 &targetPalette, uint8_t pal) const {
   static unsigned long _lastPaletteChange = millis() - 990000; // perhaps it should be per segment //WLEDMM changed init value to avoid pure orange after startup
   static CRGBPalette16 randomPalette = CRGBPalette16(DEFAULT_COLOR);
   static CRGBPalette16 prevRandomPalette = CRGBPalette16(CRGB(BLACK));
@@ -441,7 +444,7 @@ void Segment::startTransition(uint16_t dur) {
   uint32_t _colorT[NUM_COLORS];
   for (size_t i=0; i<NUM_COLORS; i++) _colorT[i] = currentColor(i, colors[i]);
 
-  if (!_t) _t = new Transition(dur); // no previous transition running
+  if (!_t) _t = new(std::nothrow) Transition(dur); // no previous transition running
   if (!_t) return; // failed to allocate data
   _t->_briT  = _briT;
   _t->_cctT  = _cctT;
@@ -451,17 +454,20 @@ void Segment::startTransition(uint16_t dur) {
   transitional = true; // setOption(SEG_OPTION_TRANSITIONAL, true);
 }
 
+// WLEDMM Segment::progress() is declared inline, see FX.h
+#if 0
 // transition progression between 0-65535
-uint16_t IRAM_ATTR_YN Segment::progress() {
+uint16_t IRAM_ATTR_YN Segment::progress() const {
   if (!transitional || !_t) return 0xFFFFU;
   unsigned long timeNow = millis();
   if (timeNow - _t->_start > _t->_dur || _t->_dur == 0) return 0xFFFFU;
   return (timeNow - _t->_start) * 0xFFFFU / _t->_dur;
 }
+#endif
 
 // WLEDMM Segment::currentBri() is declared inline, see FX.h
 #if 0
-uint8_t IRAM_ATTR_YN Segment::currentBri(uint8_t briNew, bool useCct) {
+uint8_t IRAM_ATTR_YN Segment::currentBri(uint8_t briNew, bool useCct) const {
   uint32_t prog = (transitional && _t) ? progress() : 0xFFFFU;
   if (transitional && _t && prog < 0xFFFFU) {
     if (useCct) return ((briNew * prog) + _t->_cctT * (0xFFFFU - prog)) >> 16;
@@ -473,7 +479,7 @@ uint8_t IRAM_ATTR_YN Segment::currentBri(uint8_t briNew, bool useCct) {
 #endif
 
 uint8_t Segment::currentMode(uint8_t newMode) {
-  return (progress()>32767U) ? newMode : _t->_modeP; // change effect in the middle of transition
+  return (progress()>32767U) ? newMode : (_t ? _t->_modeP : newMode); // change effect in the middle of transition
 }
 
 uint32_t Segment::currentColor(uint8_t slot, uint32_t colorNew) {
@@ -494,12 +500,12 @@ void Segment::setCurrentPalette() {
 }
 
 void Segment::handleTransition() {
-  if (!transitional) return;
+  if (!transitional || !_t) return;  // Early exit if no transition active
   unsigned long maxWait = millis() + 20;
   if (mode == FX_MODE_STATIC && next_time > maxWait) next_time = maxWait;
   if (progress() == 0xFFFFU) {
     if (_t) {
-      if (_t->_modeP != mode) markForReset();
+      //if (_t->_modeP != mode) markForReset();  // WLEDMM effect transition disabled as it does not work (flashes due to double effect restart)
       delete _t;
       _t = nullptr;
     }
@@ -551,7 +557,7 @@ bool Segment::setColor(uint8_t slot, uint32_t c) { //returns true if changed
     if (slot == 0 && c == BLACK) return false; // on/off segment cannot have primary color black
     if (slot == 1 && c != BLACK) return false; // on/off segment cannot have secondary color non black
   }
-  if (fadeTransition) startTransition(strip.getTransition()); // start transition prior to change
+  if (fadeTransition && on) startTransition(strip.getTransition()); // start transition prior to change // WLEDMM only on real change
   colors[slot] = c;
   stateChanged = true; // send UDP/WS broadcast
   return true;
@@ -564,7 +570,7 @@ void Segment::setCCT(uint16_t k) {
     k = (k - 1900) >> 5;
   }
   if (cct == k) return;
-  if (fadeTransition) startTransition(strip.getTransition()); // start transition prior to change
+  if (fadeTransition && on) startTransition(strip.getTransition()); // start transition prior to change
   cct = k;
   stateChanged = true; // send UDP/WS broadcast
 }
@@ -618,7 +624,7 @@ void Segment::setMode(uint8_t fx, bool loadDefaults, bool sliderDefaultsOnly) {
           sOpt = extractModeDefaults(fx, "pal");  if (sOpt >= 0) {if (oldPalette==-1) oldPalette = palette; setPalette(sOpt);} else {if (oldPalette!=-1) setPalette(oldPalette); oldPalette = -1;}
         }
       }
-      if (!fadeTransition) markForReset(); // WLEDMM quickfix for effect "double startup" bug. -> only works when "Crossfade" is disabled (led settings)
+      /*if (!fadeTransition)*/ markForReset(); // WLEDMM quickfix for effect "double startup" bug.
       stateChanged = true; // send UDP/WS broadcast
     }
   }
@@ -628,7 +634,7 @@ void Segment::setPalette(uint8_t pal) {
   if (pal < 245 && pal > GRADIENT_PALETTE_COUNT+13) pal = 0; // built in palettes
   if (pal > 245 && (strip.customPalettes.size() == 0 || 255U-pal > strip.customPalettes.size()-1)) pal = 0; // custom palettes
   if (pal != palette) {
-    if (strip.paletteFade) startTransition(strip.getTransition());
+    if (strip.paletteFade && on) startTransition(strip.getTransition());
     palette = pal;
     stateChanged = true; // send UDP/WS broadcast
   }
@@ -755,7 +761,7 @@ class JMapC {
             ArrayAndSize arrayAndSize;
             arrayAndSize.size = 0;
             if (arrayChunk[0].is<JsonArray>()) { //if array of arrays
-              arrayAndSize.array = new XandY[arrayChunk.size()];
+              arrayAndSize.array = new(std::nothrow) XandY[arrayChunk.size()];
               for (JsonVariant arrayElement: arrayChunk) {
                 maxWidth = max((uint16_t)maxWidth, arrayElement[0].as<uint16_t>());       // WLEDMM use native min/max
                 maxHeight = max((uint16_t)maxHeight, arrayElement[1].as<uint16_t>());     // WLEDMM
@@ -766,7 +772,7 @@ class JMapC {
               }
             }
             else { // if array (of x and y)
-              arrayAndSize.array = new XandY[1];
+              arrayAndSize.array = new(std::nothrow) XandY[1];
               maxWidth = max((uint16_t)maxWidth, arrayChunk[0].as<uint16_t>());         // WLEDMM use native min/max
               maxHeight = max((uint16_t)maxHeight, arrayChunk[1].as<uint16_t>());       // WLEDMM
               arrayAndSize.array[arrayAndSize.size].x = arrayChunk[0].as<uint8_t>();
@@ -798,7 +804,7 @@ class JMapC {
 void Segment::createjMap() {
   if (!jMap) {
     DEBUG_PRINTLN("createjMap");
-    jMap = new JMapC();
+    jMap = new(std::nothrow) JMapC();
   }
 }
 
@@ -873,8 +879,11 @@ uint16_t Segment::calc_virtualLength() const {
         vLen = max(vW,vH); // get the longest dimension
         break;
       case M12_pArc:
-        vLen = sqrt16(vW * vW + vH * vH);
-        if (vW != vH) vLen++; // round up
+        { unsigned vLen2 = vW * vW + vH * vH;            // length ^2
+          if (vLen2 < UINT16_MAX) vLen = sqrt16(vLen2);  // use faster function for 16bit values
+          else vLen = sqrtf(vLen2);                      // fall-back to float if bigger
+          if (vW != vH) vLen++; // round up
+        }
         break;
       case M12_jMap: //WLEDMM jMap
         if (jMap)
@@ -888,7 +897,7 @@ uint16_t Segment::calc_virtualLength() const {
         if (nrOfVStrips()>1)
           vLen = max(vW,vH) * 4;//0.5; // get the longest dimension
         else 
-          vLen = max(vW,vH) * 0.5; // get the longest dimension
+          vLen = max(vW,vH) * 0.5f; // get the longest dimension
         break;
       case M12_sPinwheel:
         vLen = getPinwheelLength(vW, vH);
@@ -906,23 +915,23 @@ uint16_t Segment::calc_virtualLength() const {
 //WLEDMM used for M12_sBlock
 static void xyFromBlock(uint16_t &x,uint16_t &y, uint16_t i, uint16_t vW, uint16_t vH, uint16_t vStrip) {
   float i2;
-  if (i<=SEGLEN*0.25) { //top, left to right
-    i2 = i/(SEGLEN*0.25);
+  if (i<=SEGLEN*0.25f) { //top, left to right
+    i2 = i/(SEGLEN*0.25f);
     x = vW / 2 - vStrip - 1 + i2 * vStrip * 2;
     y = vH / 2 - vStrip - 1;
   }
-  else if (i <= SEGLEN * 0.5) { //right, top to bottom
-    i2 = (i-SEGLEN*0.25)/(SEGLEN*0.25);
+  else if (i <= SEGLEN * 0.5f) { //right, top to bottom
+    i2 = (i-SEGLEN*0.25f)/(SEGLEN*0.25f);
     x = vW / 2 + vStrip;
     y = vH / 2 - vStrip - 1 + i2 * vStrip * 2;
   }
-  else if (i <= SEGLEN * 0.75) { //bottom, right to left
-    i2 = (i-SEGLEN*0.5)/(SEGLEN*0.25);
+  else if (i <= SEGLEN * 0.75f) { //bottom, right to left
+    i2 = (i-SEGLEN*0.5f)/(SEGLEN*0.25f);
     x = vW / 2 + vStrip - i2 * vStrip * 2;
     y = vH / 2 + vStrip;
   }
   else if (i <= SEGLEN) { //left, bottom to top
-    i2 = (i-SEGLEN*0.75)/(SEGLEN*0.25);
+    i2 = (i-SEGLEN*0.75f)/(SEGLEN*0.25f);
     x = vW / 2 - vStrip - 1;
     y = vH / 2 + vStrip - i2 * vStrip * 2;
   }
@@ -1396,17 +1405,6 @@ void Segment::refreshLightCapabilities() {
  */
 void __attribute__((hot)) Segment::fill(uint32_t c) {
   if (!isActive()) return; // not active
-  
-  #if 0 && defined(WLED_ENABLE_HUB75MATRIX) && defined(WLEDMM_FASTPATH)
-  // DIRTY HACK - this ignores the first fill(black) in each frame, knowing that HUB75 has already blanked out the display.
-  if (_firstFill) {
-    _firstFill = false;
-    if (c == BLACK) {
-      if (ledsrgb && ledsrgbSize > 0) memset(ledsrgb, 0, ledsrgbSize);
-      return;
-    }
-  }
-  #endif
 
   const uint_fast16_t cols = is2D() ? virtualWidth() : virtualLength();             // WLEDMM use fast int types
   const uint_fast16_t rows = virtualHeight(); // will be 1 for 1D
@@ -1712,14 +1710,14 @@ void WS2812FX::enumerateLedmaps() {
           if (len > 0 && len < 33) {
             (void) cleanUpName(name);
             len = strlen(name);
-            ledmapNames[i-1] = new char[len+1]; // +1 to include terminating \0 
+            ledmapNames[i-1] = new(std::nothrow) char[len+1]; // +1 to include terminating \0 
             if (ledmapNames[i-1]) strlcpy(ledmapNames[i-1], name, 33);
           }
           if (!ledmapNames[i-1]) {
             char tmp[33];
             snprintf_P(tmp, 32, PSTR("ledmap%d.json"), i);
             len = strlen(tmp);
-            ledmapNames[i-1] = new char[len+1];
+            ledmapNames[i-1] = new(std::nothrow) char[len+1];
             if (ledmapNames[i-1]) strlcpy(ledmapNames[i-1], tmp, 33);
           }
 
@@ -1910,12 +1908,13 @@ void WS2812FX::service() {
     seg.resetIfRequired();
 
     if (!seg.isActive()) continue;
+    if (!seg.on && !seg.transitional) continue;    // WLEDMM skip disabled segments, unless a crossfade is ongoing
 
     // last condition ensures all solid segments are updated at the same time
     if(nowUp >= seg.next_time || _triggered || (doShow && seg.mode == FX_MODE_STATIC))  // WLEDMM ">=" instead of ">"
     {
       if (seg.grouping == 0) seg.grouping = 1; //sanity check
-      doShow = true;
+      if (!seg.freeze) doShow = true;
       uint16_t frameDelay = FRAMETIME;    // WLEDMM avoid name clash with "delay" function
 
       if (!seg.freeze) { //only run effect function if not frozen
@@ -1931,6 +1930,7 @@ void WS2812FX::service() {
         now = millis() + timebase;
 #endif
         seg.startFrame();   // WLEDMM
+        if (!_triggered && (seg.currentBri(seg.opacity) == 0) && (seg.lastBri == 0)) continue; // WLEDMM skip totally black segments
         // effect blending (execute previous effect)
         // actual code may be a bit more involved as effects have runtime data including allocated memory
         //if (seg.transitional && seg._modeP) (*_mode[seg._modeP])(progress());
@@ -1938,8 +1938,11 @@ void WS2812FX::service() {
 
         if (frameDelay < speedLimit) frameDelay = FRAMETIME;                    // WLEDMM limit effects that want to go faster than target FPS
         if (seg.mode != FX_MODE_HALLOWEEN_EYES) seg.call++;
-        if (seg.transitional && frameDelay > FRAMETIME) frameDelay = FRAMETIME; // force faster updates during transition
 
+        if (seg.transitional && frameDelay > max(int(FRAMETIME), int(FRAMETIME_FIXED))) 
+          frameDelay = max(int(FRAMETIME), int(FRAMETIME_FIXED)); // force faster updates during transition // WLEDMM only if effect requested very slow updates
+
+        seg.lastBri = seg.currentBri(seg.on ? seg.opacity:0);                   // WLEDMM remember for next time
         seg.handleTransition();
       }
 
@@ -2643,7 +2646,7 @@ bool WS2812FX::deserializeMap(uint8_t n) {
     size_t size = max(ledmapMaxSize, size_t(Segment::maxWidth * Segment::maxHeight)); // TroyHacks
     USER_PRINTF("deserializemap customMappingTable alloc %u from %u\n", size, customMappingTableSize);
     //if (customMappingTable != nullptr) delete[] customMappingTable;
-    //customMappingTable = new uint16_t[size];
+    //customMappingTable = new(std::nothrow) uint16_t[size];
 
     // don't use new / delete
     if ((size > 0) && (customMappingTable != nullptr)) {

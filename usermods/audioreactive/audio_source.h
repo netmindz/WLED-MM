@@ -651,6 +651,104 @@ class ES8388Source : public I2SSource {
 
 };
 
+/* ES8311 Sound Module
+   This is an I2S sound processing unit that requires initialization over
+   I2C before I2S data can be received. 
+*/
+class ES8311Source : public I2SSource {
+  private:
+    // I2C initialization functions for es8311
+    void _es8311I2cBegin() {
+      Wire.setClock(100000);
+    }
+
+    void _es8311I2cWrite(uint8_t reg, uint8_t val) {
+      #ifndef ES8311_ADDR
+        #define ES8311_ADDR 0x18   // default address is... foggy
+      #endif
+      Wire.beginTransmission(ES8311_ADDR);
+      Wire.write((uint8_t)reg);
+      Wire.write((uint8_t)val);
+      uint8_t i2cErr = Wire.endTransmission();  // i2cErr == 0 means OK
+      if (i2cErr != 0) {
+        DEBUGSR_PRINTF("AR: ES8311 I2C write failed with error=%d  (addr=0x%X, reg 0x%X, val 0x%X).\n", i2cErr, ES8311_ADDR, reg, val);
+      }
+    }
+
+    void _es8311InitAdc() {
+      // 
+      // Currently only tested with the ESP32-P4 boards with the onboard mic.
+      // Datasheet with I2C commands: https://dl.xkwy2018.com/downloads/RK3588/01_Official%20Release/04_Product%20Line%20Branch_NVR/02_Key%20Device%20Specifications/ES8311%20DS.pdf
+      // If making changes, make sure to completely power off the board - sometimes settings are kept until the board is powered off!
+      //
+      _es8311I2cBegin(); 
+      _es8311I2cWrite(0x00, 0b00011111); // RESET, default value
+      _es8311I2cWrite(0x45, 0b00000000); // GP, default value
+      _es8311I2cWrite(0x01, 0b00111010); // CLOCK MANAGER (MCLK enable?)
+
+      _es8311I2cWrite(0x02, 0b00000000); // 22050hz calculated
+      _es8311I2cWrite(0x05, 0b00000000); // 22050hz calculated
+      _es8311I2cWrite(0x03, 0b00010000); // 22050hz calculated
+      _es8311I2cWrite(0x04, 0b00010000); // 22050hz calculated
+      _es8311I2cWrite(0x07, 0b00000000); // 22050hz calculated
+      _es8311I2cWrite(0x08, 0b11111111); // 22050hz calculated
+      _es8311I2cWrite(0x06, 0b11100011); // 22050hz calculated
+
+      _es8311I2cWrite(0x16, 0b00100100); // ADC synchronize filter counter with "standard" LRCK and ADC RAM clear when lrck/adc_mclk active
+      _es8311I2cWrite(0x0B, 0b00000000); // SYSTEM at default
+      _es8311I2cWrite(0x0C, 0b00100000); // SYSTEM power up things
+      _es8311I2cWrite(0x10, 0b00010011); // SYSTEM internal things
+      _es8311I2cWrite(0x11, 0b01111100); // *** SYSTEM undocumented bits, seems to be important
+      _es8311I2cWrite(0x01, 0b00111010); // *** CLOCK MANAGER
+      _es8311I2cWrite(0x14, 0b00010000); // *** SYSTEM PGA gain
+      _es8311I2cWrite(0x0A, 0b00001000); // *** SDP OUT = I2S 32-bit
+      _es8311I2cWrite(0x0E, 0b00000010); // *** SYSTEM undocumented bits, seems to be important
+      _es8311I2cWrite(0x0F, 0b01000100); // SYSTEM enable LPPGA and LPDACVRP in low power mode. No idea.
+      _es8311I2cWrite(0x15, 0b00010000); // ADC soft ramp
+      _es8311I2cWrite(0x1B, 0b00000101); // ADC soft-mute enabled
+      _es8311I2cWrite(0x1C, 0b11100101); // ADC dynamic HPF enabled
+      _es8311I2cWrite(0x17, 0b10111111); // ADC volume = 0db (max gain)
+      _es8311I2cWrite(0x18, 0b11001000); // ADC ALC enabled and AutoMute enabled
+      _es8311I2cWrite(0x19, 0b11110000); // ADC ALC max (-6dB) and min (-30dB)
+      _es8311I2cWrite(0x00, 0b10000000); // *** RESET (This is very required! Thanks to ESPHome for the hint!)
+    }
+
+  public:
+    ES8311Source(SRate_t sampleRate, int blockSize, float sampleScale = 1.0f, bool i2sMaster=true) :
+      I2SSource(sampleRate, blockSize, sampleScale, i2sMaster) {
+      _config.channel_format = I2S_CHANNEL_FMT_ONLY_LEFT;
+    };
+
+    void initialize(int8_t i2swsPin, int8_t i2ssdPin, int8_t i2sckPin, int8_t mclkPin) {
+      DEBUGSR_PRINTLN("es8311Source:: initialize();");
+
+      // if ((i2sckPin < 0) || (mclkPin < 0)) { // WLEDMM not sure if this check is needed here, too
+      //    ERRORSR_PRINTF("\nAR: invalid I2S es8311 pin: SCK=%d, MCLK=%d\n", i2sckPin, mclkPin); 
+      //    return;
+      // }
+      // BUG: "use global I2C pins" are valid as -1, and -1 is seen as invalid here.
+      // Workaround: Set I2C pins here, which will also set them globally.
+      // Bug also exists in ES7243.
+       if ((i2c_sda < 0) || (i2c_scl < 0)) {  // check that global I2C pins are not "undefined"
+        ERRORSR_PRINTF("\nAR: invalid es8311 global I2C pins: SDA=%d, SCL=%d\n", i2c_sda, i2c_scl); 
+        return;
+      }
+      if (!pinManager.joinWire(i2c_sda, i2c_scl)) {    // WLEDMM specific: start I2C with globally defined pins
+        ERRORSR_PRINTF("\nAR: failed to join I2C bus with SDA=%d, SCL=%d\n", i2c_sda, i2c_scl); 
+        return;
+      }
+
+      // First route mclk, then configure ADC over I2C, then configure I2S
+      _es8311InitAdc();
+      I2SSource::initialize(i2swsPin, i2ssdPin, i2sckPin, mclkPin);
+    }
+
+    void deinitialize() {
+      I2SSource::deinitialize();
+    }
+
+};
+
 class WM8978Source : public I2SSource {
   private:
     // I2C initialization functions for WM8978

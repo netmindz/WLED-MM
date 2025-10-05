@@ -12,16 +12,16 @@
 // WLEDMM functions to get/set bits in an array - based on functions created by Brandon for GOL
 //  toDo : make this a class that's completely defined in a header file
 inline bool getBitFromArray(const uint8_t* byteArray, size_t position) { // get bit value
-    size_t byteIndex = position / 8;
-    unsigned bitIndex = position % 8;
+    size_t byteIndex = position >> 3;      // same as "position/8"
+    unsigned bitIndex = position & 0x0007; // last 3 bits
     uint8_t byteValue = byteArray[byteIndex];
     return (byteValue >> bitIndex) & 1;
 }
 
 inline void setBitInArray(uint8_t* byteArray, size_t position, bool value) {  // set bit - with error handling for nullptr
     //if (byteArray == nullptr) return;
-    size_t byteIndex = position / 8;
-    unsigned bitIndex = position % 8;
+    size_t byteIndex = position >> 3;
+    unsigned bitIndex = position & 0x0007; // last 3 bits
     if (value)
         byteArray[byteIndex] |= (1 << bitIndex); 
     else
@@ -448,7 +448,7 @@ uint8_t BusOnOff::getPins(uint8_t* pinArray) const {
 }
 
 
-BusNetwork::BusNetwork(BusConfig &bc) : Bus(bc.type, bc.start, bc.autoWhite) {
+BusNetwork::BusNetwork(BusConfig &bc, const ColorOrderMap &com) : Bus(bc.type, bc.start, bc.autoWhite), _colorOrderMap(com) {
   _valid = false;
   USER_PRINT("[");
   switch (bc.type) {
@@ -456,6 +456,11 @@ BusNetwork::BusNetwork(BusConfig &bc) : Bus(bc.type, bc.start, bc.autoWhite) {
       _rgbw = false;
       _UDPtype = 2;
       USER_PRINT("NET_ARTNET_RGB");
+      break;
+    case TYPE_NET_ARTNET_RGBW:
+      _rgbw = true;
+      _UDPtype = 2;
+      USER_PRINT("NET_ARTNET_RGBW");
       break;
     case TYPE_NET_E131_RGB:
       _rgbw = false;
@@ -469,37 +474,84 @@ BusNetwork::BusNetwork(BusConfig &bc) : Bus(bc.type, bc.start, bc.autoWhite) {
       break;
   }
   _UDPchannels = _rgbw ? 4 : 3;
-  _data = (byte *)malloc(bc.count * _UDPchannels);
+  #ifdef ESP32
+  _data = (byte*) heap_caps_calloc_prefer((bc.count * _UDPchannels)+15, sizeof(byte), 3, MALLOC_CAP_DEFAULT, MALLOC_CAP_SPIRAM);
+  #else
+  _data = (byte*) calloc((bc.count * _UDPchannels)+15, sizeof(byte));
+  #endif
   if (_data == nullptr) return;
-  memset(_data, 0, bc.count * _UDPchannels);
   _len = bc.count;
+  _colorOrder = bc.colorOrder;
   _client = IPAddress(bc.pins[0],bc.pins[1],bc.pins[2],bc.pins[3]);
   _broadcastLock = false;
   _valid = true;
-  USER_PRINTF(" %u.%u.%u.%u] \n", bc.pins[0],bc.pins[1],bc.pins[2],bc.pins[3]);
+  _artnet_outputs = bc.artnet_outputs;
+  _artnet_leds_per_output = bc.artnet_leds_per_output;
+  _artnet_fps_limit = max(uint8_t(1), bc.artnet_fps_limit);
+  USER_PRINTF(" %u.%u.%u.%u]\n", bc.pins[0],bc.pins[1],bc.pins[2],bc.pins[3]);
 }
 
-void BusNetwork::setPixelColor(uint16_t pix, uint32_t c) {
-  if (!_valid || pix >= _len) return;
-  if (hasWhite()) c = autoWhiteCalc(c);
-  if (_cct >= 1900) c = colorBalanceFromKelvin(_cct, c); //color correction from CCT
-  uint16_t offset = pix * _UDPchannels;
-  _data[offset]   = R(c);
-  _data[offset+1] = G(c);
-  _data[offset+2] = B(c);
-  if (_rgbw) _data[offset+3] = W(c);
+void IRAM_ATTR_YN BusNetwork::setPixelColor(uint16_t pix, uint32_t c) {
+    if (pix >= _len) return;
+    if (_rgbw) c = autoWhiteCalc(c);
+    if (_cct >= 1900) c = colorBalanceFromKelvin(_cct, c); // color correction from CCT
+
+    uint16_t offset = pix * _UDPchannels;
+    uint8_t co = _colorOrderMap.getPixelColorOrder(pix + _start, _colorOrder);
+
+    if (_colorOrder != co || _colorOrder != COL_ORDER_RGB) {
+        switch (co) {
+            case COL_ORDER_GRB:
+                _data[offset] = G(c); _data[offset+1] = R(c); _data[offset+2] = B(c);
+                break;
+            case COL_ORDER_RGB:
+                _data[offset] = R(c); _data[offset+1] = G(c); _data[offset+2] = B(c);
+                break;
+            case COL_ORDER_BRG:
+                _data[offset] = B(c); _data[offset+1] = R(c); _data[offset+2] = G(c);
+                break;
+            case COL_ORDER_RBG:
+                _data[offset] = R(c); _data[offset+1] = B(c); _data[offset+2] = G(c);
+                break;
+            case COL_ORDER_GBR:
+                _data[offset] = G(c); _data[offset+1] = B(c); _data[offset+2] = R(c);
+                break;
+            case COL_ORDER_BGR:
+                _data[offset] = B(c); _data[offset+1] = G(c); _data[offset+2] = R(c);
+                break;
+        }
+        if (_rgbw) _data[offset+3] = W(c);
+    } else {
+        _data[offset] = R(c); _data[offset+1] = G(c); _data[offset+2] = B(c);
+        if (_rgbw) _data[offset+3] = W(c);
+    }
 }
 
-uint32_t BusNetwork::getPixelColor(uint16_t pix) const {
-  if (!_valid || pix >= _len) return 0;
-  uint16_t offset = pix * _UDPchannels;
-  return RGBW32(_data[offset], _data[offset+1], _data[offset+2], _rgbw ? (_data[offset+3] << 24) : 0);
+uint32_t IRAM_ATTR_YN BusNetwork::getPixelColor(uint16_t pix) const {
+    if (pix >= _len) return 0;
+    uint16_t offset = pix * _UDPchannels;
+    uint8_t co = _colorOrderMap.getPixelColorOrder(pix + _start, _colorOrder);
+
+    uint8_t r = _data[offset + 0];
+    uint8_t g = _data[offset + 1];
+    uint8_t b = _data[offset + 2];
+    uint8_t w = _rgbw ? _data[offset + 3] : 0;
+
+    switch (co) {
+        case COL_ORDER_GRB: return RGBW32(g, r, b, w);
+        case COL_ORDER_RGB: return RGBW32(r, g, b, w);
+        case COL_ORDER_BRG: return RGBW32(b, r, g, w);
+        case COL_ORDER_RBG: return RGBW32(r, b, g, w);
+        case COL_ORDER_GBR: return RGBW32(g, b, r, w);
+        case COL_ORDER_BGR: return RGBW32(b, g, r, w);
+        default: return RGBW32(r, g, b, w); // default to RGB order
+    }
 }
 
 void BusNetwork::show() {
   if (!_valid || !canShow()) return;
   _broadcastLock = true;
-  realtimeBroadcast(_UDPtype, _client, _len, _data, _bri, _rgbw);
+  realtimeBroadcast(_UDPtype, _client, _len, _data, _bri, _rgbw, _artnet_outputs, _artnet_leds_per_output, _artnet_fps_limit);
   _broadcastLock = false;
 }
 
@@ -515,6 +567,7 @@ void BusNetwork::cleanup() {
   _valid = false;
   if (_data != nullptr) free(_data);
   _data = nullptr;
+  _len = 0;
 }
 
 // ***************************************************************************
@@ -532,6 +585,7 @@ VirtualMatrixPanel*  BusHub75Matrix::activeFourScanPanel = nullptr;
 HUB75_I2S_CFG BusHub75Matrix::activeMXconfig = HUB75_I2S_CFG();
 uint8_t BusHub75Matrix::activeType = 0;
 uint8_t BusHub75Matrix::instanceCount = 0;
+uint8_t BusHub75Matrix::last_bri = 0;
 
 
 // --------------------------
@@ -604,6 +658,8 @@ BusHub75Matrix::BusHub75Matrix(BusConfig &bc) : Bus(bc.type, bc.start, bc.autoWh
   _needsRefresh = mxconfig.latch_blanking == 1;
   reversed = mxconfig.clkphase;
 
+  if (bc.type > 104) mxconfig.driver = HUB75_I2S_CFG::FM6124;  // use FM6124 for "outdoor" panels - workaround until we can make the driver user-configurable
+
   // How many panels we have connected, cap at sane value, prevent bad data preventing boot due to low memory
   #if defined(CONFIG_IDF_TARGET_ESP32S3) && defined(BOARD_HAS_PSRAM)        // ESP32-S3: allow up to 6 panels
   mxconfig.chain_length = max((uint8_t) 1, min(bc.pins[0], (uint8_t) 6));
@@ -639,7 +695,7 @@ BusHub75Matrix::BusHub75Matrix(BusConfig &bc) : Bus(bc.type, bc.start, bc.autoWh
       mxconfig.mx_width = 64;
       mxconfig.mx_height = 64;
       break;
-    case 104: // untested
+    case 104:
       mxconfig.mx_width = 128;
       mxconfig.mx_height = 64;
       break;
@@ -734,7 +790,7 @@ BusHub75Matrix::BusHub75Matrix(BusConfig &bc) : Bus(bc.type, bc.start, bc.autoWh
    https://www.electrodragon.com/product/rgb-matrix-panel-drive-interface-board-for-esp32-dma/
    
   */
- mxconfig.gpio = { 25, 26, 27, 14, 12, 13, 23, 9, 5, 17, 18, 4, 15, 16 }; 
+ mxconfig.gpio = { 25, 26, 27, 14, 12, 13, 23, 9, 5, 17, 18, 4, 15, 16 };
 
 #endif
 
@@ -816,7 +872,7 @@ BusHub75Matrix::BusHub75Matrix(BusConfig &bc) : Bus(bc.type, bc.start, bc.autoWh
   USER_PRINTLN("MatrixPanel_I2S_DMA created");
   // let's adjust default brightness
   //display->setBrightness8(25);    // range is 0-255, 0 - 0%, 255 - 100% //  [setBrightness()] Tried to set output brightness before begin()
-  _bri = 25;
+  _bri = (last_bri > 0) ? last_bri : 25;  // try to restore persistent brightness value
 
   delay(24); // experimental
   USER_PRINT(F("heap usage: ")); USER_PRINTLN(int(lastHeap - ESP.getFreeHeap()));
@@ -834,6 +890,7 @@ BusHub75Matrix::BusHub75Matrix(BusConfig &bc) : Bus(bc.type, bc.start, bc.autoWh
     USER_PRINT(F("heap usage: ")); USER_PRINTLN(int(lastHeap - ESP.getFreeHeap()));
     delay(18);   // experiment - give the driver a moment (~ one full frame @ 60hz) to settle
     _valid = true;
+    display->setBrightness8(_bri);    // range is 0-255, 0 - 0%, 255 - 100% //  [setBrightness()] Tried to set output brightness before begin()
     display->clearScreen();   // initially clear the screen buffer
     USER_PRINTLN("MatrixPanel_I2S_DMA clear ok");
 
@@ -867,25 +924,25 @@ BusHub75Matrix::BusHub75Matrix(BusConfig &bc) : Bus(bc.type, bc.start, bc.autoWh
   switch(bc.type) {
     case 105:
       USER_PRINTLN("MatrixPanel_I2S_DMA FOUR_SCAN_32PX_HIGH - 32x32");
-      if (!fourScanPanel) fourScanPanel = new VirtualMatrixPanel((*display), 1, 1, 32, 32);
+      if (!fourScanPanel) fourScanPanel = new VirtualMatrixPanel((*display), 1, mxconfig.chain_length, 32, 32);
       fourScanPanel->setPhysicalPanelScanRate(FOUR_SCAN_32PX_HIGH);
       fourScanPanel->setRotation(0);
       break;
     case 106:
       USER_PRINTLN("MatrixPanel_I2S_DMA FOUR_SCAN_32PX_HIGH - 64x32");
-      if (!fourScanPanel) fourScanPanel = new VirtualMatrixPanel((*display), 1, 1, 64, 32);
+      if (!fourScanPanel) fourScanPanel = new VirtualMatrixPanel((*display), 1, mxconfig.chain_length, 64, 32);
       fourScanPanel->setPhysicalPanelScanRate(FOUR_SCAN_32PX_HIGH);
       fourScanPanel->setRotation(0);
       break;
     case 107:
       USER_PRINTLN("MatrixPanel_I2S_DMA FOUR_SCAN_64PX_HIGH");
-      if (!fourScanPanel) fourScanPanel = new VirtualMatrixPanel((*display), 1, 1, 64, 64);
+      if (!fourScanPanel) fourScanPanel = new VirtualMatrixPanel((*display), 1, mxconfig.chain_length, 64, 64);
       fourScanPanel->setPhysicalPanelScanRate(FOUR_SCAN_64PX_HIGH);
       fourScanPanel->setRotation(0);
       break;
     case 108: // untested
       USER_PRINTLN("MatrixPanel_I2S_DMA 128x64 FOUR_SCAN_64PX_HIGH");
-      if (!fourScanPanel) fourScanPanel = new VirtualMatrixPanel((*display), 1, 1, 128, 64);
+      if (!fourScanPanel) fourScanPanel = new VirtualMatrixPanel((*display), 1, mxconfig.chain_length, 128, 64);
       fourScanPanel->setPhysicalPanelScanRate(FOUR_SCAN_64PX_HIGH);
       fourScanPanel->setRotation(0);
       break;
@@ -917,8 +974,8 @@ BusHub75Matrix::BusHub75Matrix(BusConfig &bc) : Bus(bc.type, bc.start, bc.autoWh
   USER_PRINT(F("heap usage: ")); USER_PRINTLN(int(lastHeap - ESP.getFreeHeap()));
 }
 
-void __attribute__((hot)) BusHub75Matrix::setPixelColor(uint16_t pix, uint32_t c) {
-  if (!_valid || pix >= _len) return;
+void __attribute__((hot)) IRAM_ATTR BusHub75Matrix::setPixelColor(uint16_t pix, uint32_t c) {
+  if ( pix >= _len) return;
   // if (_cct >= 1900) c = colorBalanceFromKelvin(_cct, c); //color correction from CCT
 
   if (_ledBuffer) {
@@ -928,43 +985,15 @@ void __attribute__((hot)) BusHub75Matrix::setPixelColor(uint16_t pix, uint32_t c
       setBitInArray(_ledsDirty, pix, true);  // flag pixel as "dirty"
     }
   }
-  #if 0
-  // !! this code is not used any more !!
-  //   BusHub75Matrix::BusHub75Matrix will fail if allocating _ledBuffer fails.
-  //   The fallback code below created lots of flickering so it does not make sense to keep it enabled.
-  else {
-    // no double buffer allocated --> directly draw pixel
-    MatrixPanel_I2S_DMA* display = BusHub75Matrix::activeDisplay;
-    VirtualMatrixPanel*  fourScanPanel = BusHub75Matrix::activeFourScanPanel;
-    #ifndef NO_CIE1931
-    c = unGamma24(c); // to use the driver linear brightness feature, we first need to undo WLED gamma correction
-    #endif
-    uint8_t r = R(c);
-    uint8_t g = G(c);
-    uint8_t b = B(c);
-
-    if(fourScanPanel != nullptr) {
-      int width = _panelWidth;
-      int x = pix % width;
-      int y = pix / width;
-      fourScanPanel->drawPixelRGB888(int16_t(x), int16_t(y), r, g, b);
-    } else {
-      int width = _panelWidth;
-      int x = pix % width;
-      int y = pix / width;
-      display->drawPixelRGB888(int16_t(x), int16_t(y), r, g, b);
-    }
-  }
-  #endif
 }
 
-uint32_t BusHub75Matrix::getPixelColor(uint16_t pix) const {
-  if (!_valid || pix >= _len || !_ledBuffer) return BLACK;
+uint32_t IRAM_ATTR BusHub75Matrix::getPixelColor(uint16_t pix) const {
+  if (pix >= _len || !_ledBuffer) return BLACK;
   return uint32_t(_ledBuffer[pix].scale8(_bri)) & 0x00FFFFFF;  // scale8() is needed to mimic NeoPixelBus, which returns scaled-down colours
 }
 
-uint32_t __attribute__((hot)) BusHub75Matrix::getPixelColorRestored(uint16_t pix) const {
-  if (!_valid || pix >= _len || !_ledBuffer) return BLACK;
+uint32_t __attribute__((hot)) IRAM_ATTR BusHub75Matrix::getPixelColorRestored(uint16_t pix) const {
+  if (pix >= _len || !_ledBuffer) return BLACK;
   return uint32_t(_ledBuffer[pix]) & 0x00FFFFFF;
 }
 
@@ -974,10 +1003,11 @@ void BusHub75Matrix::setBrightness(uint8_t b, bool immediate) {
   MatrixPanel_I2S_DMA* display = BusHub75Matrix::activeDisplay;
   // if (_bri > 238) _bri=238; // not strictly needed. Enable this line if you see glitches at highest brightness.
   if ((_bri > 253) && (activeMXconfig.latch_blanking < 2)) _bri=253; // prevent glitches at highest brightness.
+  last_bri = _bri;
   if (display) display->setBrightness(_bri);
 }
 
-void __attribute__((hot)) BusHub75Matrix::show(void) {
+void __attribute__((hot)) IRAM_ATTR BusHub75Matrix::show(void) {
   if (!_valid) return;
   MatrixPanel_I2S_DMA* display = BusHub75Matrix::activeDisplay;
   if (!display) return;
@@ -1036,6 +1066,7 @@ void BusHub75Matrix::cleanup() {
 
   _valid = false;
   deallocatePins();
+  _len = 0;
   //if (fourScanPanel != nullptr) delete fourScanPanel;  // warning: deleting object of polymorphic class type 'VirtualMatrixPanel' which has non-virtual destructor might cause undefined behavior
 #if !defined(CONFIG_IDF_TARGET_ESP32S3) // S3: don't delete, as we want to re-use the driver later
   if (display) delete display;
@@ -1091,9 +1122,15 @@ uint32_t BusManager::memUsage(BusConfig &bc) {
 
 int BusManager::add(BusConfig &bc) {
   if (getNumBusses() - getNumVirtualBusses() >= WLED_MAX_BUSSES) return -1;
-  USER_PRINTF("BusManager::add(bc.type=%u)\n", bc.type);
+  // WLEDMM clear cached Bus info first
+  lastend = 0;
+  laststart = 0;
+  lastBus = nullptr;
+  slowMode = false;
+
+  DEBUG_PRINTF("BusManager::add(bc.type=%u)\n", bc.type);
   if (bc.type >= TYPE_NET_DDP_RGB && bc.type < 96) {
-    busses[numBusses] = new BusNetwork(bc);
+    busses[numBusses] = new BusNetwork(bc, colorOrderMap);
   } else if (bc.type >= TYPE_HUB75MATRIX && bc.type <= (TYPE_HUB75MATRIX + 10)) {
 #ifdef WLED_ENABLE_HUB75MATRIX
     USER_PRINTLN("BusManager::add - Adding BusHub75Matrix");
@@ -1110,10 +1147,6 @@ int BusManager::add(BusConfig &bc) {
   } else {
     busses[numBusses] = new BusPwm(bc);
   }
-  // WLEDMM clear cached Bus info
-  lastBus = nullptr;
-  laststart = 0;
-  lastend = 0;
   return numBusses++;
 }
 
@@ -1121,29 +1154,39 @@ int BusManager::add(BusConfig &bc) {
 void BusManager::removeAll() {
   DEBUG_PRINTLN(F("Removing all."));
   //prevents crashes due to deleting busses while in use.
+#if !defined(ARDUINO_ARCH_ESP32)
   while (!canAllShow()) yield();
+#else
+  while (!canAllShow()) delay(2); // WLEDMM on esp32, yield() doesn't work as you think it would
+#endif
   for (uint8_t i = 0; i < numBusses; i++) delete busses[i];
   numBusses = 0;
   // WLEDMM clear cached Bus info
   lastBus = nullptr;
   laststart = 0;
   lastend = 0;
+  slowMode = false;
 }
 
-void BusManager::show() {
-  for (uint8_t i = 0; i < numBusses; i++) {
+void __attribute__((hot)) BusManager::show() {
+  for (unsigned i = 0; i < numBusses; i++) {
+#if 1 && defined(ARDUINO_ARCH_ESP32)
+    unsigned long t0 = millis();
+    while ((busses[i]->canShow() == false) && (millis() - t0 < 80)) delay(1); // WLEDMM experimental: wait until bus driver is ready (max 80ms) - costs us 1-2 fps but reduces flickering
+#endif
     busses[i]->show();
   }
 }
 
 void BusManager::setStatusPixel(uint32_t c) {
   for (uint8_t i = 0; i < numBusses; i++) {
+    if (busses[i]->isOk() == false) continue;  // WLEDMM ignore invalid (=not ready) busses
     busses[i]->setStatusPixel(c);
   }
 }
 
 void IRAM_ATTR __attribute__((hot)) BusManager::setPixelColor(uint16_t pix, uint32_t c, int16_t cct) {
-  if ((pix >= laststart) && (pix < lastend ) && (lastBus != nullptr)) {
+  if (!slowMode && (pix >= laststart) && (pix < lastend ) && lastBus->isOk()) {
     // WLEDMM same bus as last time - no need to search again
     lastBus->setPixelColor(pix - laststart, c);
     return;
@@ -1151,15 +1194,18 @@ void IRAM_ATTR __attribute__((hot)) BusManager::setPixelColor(uint16_t pix, uint
 
   for (uint_fast8_t i = 0; i < numBusses; i++) {    // WLEDMM use fast native types
     Bus* b = busses[i];
+    if (b->isOk() == false) continue;  // WLEDMM ignore invalid (=not ready) busses
     uint_fast16_t bstart = b->getStart();
     if (pix < bstart || pix >= bstart + b->getLength()) continue;
     else {
-      // WLEDMM remember last Bus we took
-      lastBus = b;
-      laststart = bstart; 
-      lastend = bstart + b->getLength();
+      if (!slowMode) {
+        // WLEDMM remember last Bus we took
+        lastBus = b;
+        laststart = bstart;
+        lastend = bstart + b->getLength();
+      }
       b->setPixelColor(pix - bstart, c);
-      break; // WLEDMM found the right Bus -> so we can stop searching
+      if (!slowMode) break; // WLEDMM found the right Bus -> so we can stop searching - unless we have busses that overlap
     }
   }
 }
@@ -1180,20 +1226,23 @@ void __attribute__((cold)) BusManager::setSegmentCCT(int16_t cct, bool allowWBCo
 }
 
 uint32_t IRAM_ATTR  __attribute__((hot)) BusManager::getPixelColor(uint_fast16_t pix) {     // WLEDMM use fast native types, IRAM_ATTR
-  if ((pix >= laststart) && (pix < lastend ) && (lastBus != nullptr)) {
+  if ((pix >= laststart) && (pix < lastend ) && (lastBus != nullptr) && lastBus->isOk()) {
     // WLEDMM same bus as last time - no need to search again
     return lastBus->getPixelColor(pix - laststart);
   }
 
   for (uint_fast8_t i = 0; i < numBusses; i++) {
     Bus* b = busses[i];
+    if (b->isOk() == false) continue;  // WLEDMM ignore invalid (=not ready) busses
     uint_fast16_t bstart = b->getStart();
     if (pix < bstart || pix >= bstart + b->getLength()) continue;
     else {
-      // WLEDMM remember last Bus we took
-      lastBus = b;
-      laststart = bstart; 
-      lastend = bstart + b->getLength();
+      if (!slowMode) {
+        // WLEDMM remember last Bus we took
+        lastBus = b;
+        laststart = bstart;
+        lastend = bstart + b->getLength();
+      }
       return b->getPixelColor(pix - bstart);
     }
   }
@@ -1201,20 +1250,23 @@ uint32_t IRAM_ATTR  __attribute__((hot)) BusManager::getPixelColor(uint_fast16_t
 }
 
 uint32_t IRAM_ATTR  __attribute__((hot)) BusManager::getPixelColorRestored(uint_fast16_t pix) {     // WLEDMM uses bus::getPixelColorRestored()
-  if ((pix >= laststart) && (pix < lastend ) && (lastBus != nullptr)) {
+  if ((pix >= laststart) && (pix < lastend ) && (lastBus != nullptr) && lastBus->isOk()) {
     // WLEDMM same bus as last time - no need to search again
     return lastBus->getPixelColorRestored(pix - laststart);
   }
 
   for (uint_fast8_t i = 0; i < numBusses; i++) {
     Bus* b = busses[i];
+    if (b->isOk() == false) continue;  // WLEDMM ignore invalid (=not ready) busses
     uint_fast16_t bstart = b->getStart();
     if (pix < bstart || pix >= bstart + b->getLength()) continue;
     else {
-      // WLEDMM remember last Bus we took
-      lastBus = b;
-      laststart = bstart; 
-      lastend = bstart + b->getLength();
+      if (!slowMode) {
+        // WLEDMM remember last Bus we took
+        lastBus = b;
+        laststart = bstart;
+        lastend = bstart + b->getLength();
+      }
       return b->getPixelColorRestored(pix - bstart);
     }
   }
