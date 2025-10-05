@@ -64,7 +64,7 @@ static void decBrightness()
   }
 }
 
-static void presetFallback(uint8_t presetID, uint8_t effectID, uint8_t paletteID)
+static void presetFallback(uint8_t presetID, uint16_t effectID, uint8_t paletteID)
 {
   applyPresetWithFallback(presetID, CALL_MODE_BUTTON_PRESET, effectID, paletteID);
 }

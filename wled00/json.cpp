@@ -23,7 +23,7 @@ namespace {
     uint16_t startY;
     uint16_t stopY;
     uint16_t options;
-    uint8_t  mode;
+    uint16_t  mode;
     uint8_t  palette;
     uint8_t  opacity;
     uint8_t  speed;

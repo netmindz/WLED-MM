@@ -448,7 +448,7 @@ class Segment {
     uint8_t  grouping, spacing;
     uint8_t  opacity,  cct;       // 0==1900K, 255==10091K
     // effect data
-    uint8_t  mode;
+    uint16_t  mode;
     uint8_t  palette;
     uint8_t  speed;
     uint8_t  intensity;
