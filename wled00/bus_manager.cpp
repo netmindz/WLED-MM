@@ -276,8 +276,7 @@ BusPwm::BusPwm(BusConfig &bc) : Bus(bc.type, bc.start, bc.autoWhite) {
     #ifdef ESP8266
     pinMode(_pins[i], OUTPUT);
     #else
-    ledcSetup(_ledcStart + i, _frequency, 8);
-    ledcAttachPin(_pins[i], _ledcStart + i);
+    ledcAttach(_pins[i], _frequency, 8);
     #endif
     USER_PRINT(" "); USER_PRINT(currentPin);
   }
@@ -396,7 +395,7 @@ void BusPwm::deallocatePins() {
     #ifdef ESP8266
     digitalWrite(_pins[i], LOW); //turn off PWM interrupt
     #else
-    if (_ledcStart < 16) ledcDetachPin(_pins[i]);
+    if (_ledcStart < 16) ledcDetach(_pins[i]);
     #endif
   }
   #ifdef ARDUINO_ARCH_ESP32
