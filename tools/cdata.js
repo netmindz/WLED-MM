@@ -420,6 +420,12 @@ const char PAGE_dmxmap[] PROGMEM = R"=====()=====";
       filter: "html-minify",
     },
     {
+      file: "404mini.htm",
+      name: "PAGE_404_mini",
+      method: "gzip",
+      filter: "html-minify",
+    },
+    {
       file: "favicon.ico",
       name: "favicon",
       method: "binary",
