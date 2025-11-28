@@ -3804,14 +3804,17 @@ function reportUpgradeEvent(oldVersion, newVersion) {
 		// Map to UpgradeEventRequest structure per OpenAPI spec
 		// Required fields: deviceId, version, previousVersion, releaseName, chip, ledCount, isMatrix, bootloaderSHA256
 		const upgradeData = {
-			deviceId: infoData.deviceId,
-			version: infoData.ver || '',                     // Current version string
-			previousVersion: oldVersion || '',               // Previous version from version-info.json
-			releaseName: infoData.release,
-			chip: infoData.arch || '',                       // Chip architecture (esp32, esp8266, etc)
-			ledCount: infoData.leds ? infoData.leds.count : 0,  // Number of LEDs
-			isMatrix: !!(infoData.leds && infoData.leds.matrix),  // Whether it's a 2D matrix setup
-			bootloaderSHA256: infoData.bootloaderSHA256 || ''    // Bootloader SHA256 hash
+				deviceId: infoData.deviceId,                     // Use anonymous unique device ID
+				version: infoData.ver || '',                     // Current version string
+				previousVersion: oldVersion || '',               // Previous version from version-info.json
+				releaseName: infoData.release || '',             // Release name (e.g., "WLED 0.15.0")
+				chip: infoData.arch || '',                       // Chip architecture (esp32, esp8266, etc)
+				ledCount: infoData.leds ? infoData.leds.count : 0,  // Number of LEDs
+				isMatrix: !!(infoData.leds && infoData.leds.matrix),  // Whether it's a 2D matrix setup
+				bootloaderSHA256: infoData.bootloaderSHA256 || '',   // Bootloader SHA256 hash - not yet availeable in WLEDMM
+				brand: infoData.brand,                           // Device brand (always present)
+				product: infoData.product,                       // Product name (always present)
+				flashSize: infoData.flash                        // Flash size (always present)
 		};
 		
 		// Make AJAX call to postUpgradeEvent API
