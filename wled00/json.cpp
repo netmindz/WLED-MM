@@ -1134,7 +1134,17 @@ void serializeInfo(JsonObject root)
   root[F("e32text")] = restartCode2Info(getRestartReason());
 
   static char msgbuf[32];
+#if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(4, 4, 3)
+  // use the full revision if we can
+    esp_chip_info_t chip_info;
+    esp_chip_info(&chip_info);
+    snprintf(msgbuf, sizeof(msgbuf)-1, "%s rev%u.%u", 
+        ESP.getChipModel(), 
+        unsigned(chip_info.full_revision / 100),   // full revision is in (major * 100 + minor) format
+        unsigned(chip_info.full_revision % 100));
+#else
   snprintf(msgbuf, sizeof(msgbuf)-1, "%s rev.%d", ESP.getChipModel(), ESP.getChipRevision());
+#endif
   root[F("e32model")] = msgbuf;
   root[F("e32cores")] = ESP.getChipCores();
   root[F("e32speed")] = ESP.getCpuFreqMHz();
