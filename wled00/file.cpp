@@ -8,6 +8,7 @@
 #if WLED_FS != LITTLEFS && ESP_IDF_VERSION_MAJOR < 4
   #include "esp_spiffs.h"
 #endif
+//#define yield() {delay(0);}  // WLEDMM yield() is completely unnecessary on esp32, but delay(0) can reduce task contention
 #endif
 
 //WLEDMM seems that 256 is indeed the optimal buffer length
@@ -18,7 +19,7 @@
  * 1. File must be a string representation of a valid JSON object
  * 2. File must have '{' as first character
  * 3. There must not be any additional characters between a root-level key and its value object (e.g. space, tab, newline)
- * 4. There must not be any characters between an root object-separating ',' and the next object key string
+ * 4. There must not be any characters between a root object-separating ',' and the next object key string
  * 5. There may be any number of spaces, tabs, and/or newlines before such object-separating ','
  * 6. There must not be more than 5 consecutive spaces at any point except for those permitted in condition 5
  * 7. If it is desired to delete the first usable object (e.g. preset file), a dummy object '"0":{}' is inserted at the beginning.
@@ -37,17 +38,37 @@ static File f; // don't export to other cpp files
 void closeFile() {
   #ifdef ARDUINO_ARCH_ESP32
   // WLEDMM: file.close() triggers flash writing. While flash is writing, the NPB RMT driver cannot fill its buffer which may create glitches.
+  // WLEDMM more precisely (thanks to a web research done by AI):
+  //        the RMT peripheral itself doesn’t stall, but the refill path often does. In Arduino-ESP32/WLED 
+  //        typical builds, close() that commits flash writes frequently causes enough blocking that the LED pipeline under-runs, resulting in visible glitches. 
+  //        So the assumption is practically correct for this project context.
+  //    --> with neopixelBus 2.7.5, the practical ISR stall budget is about 0.08–0.12 ms — far less than LittleFS flash commit times.
+  //        typical flash write "commit" times are between 0.5ms and 10ms, but they can be a few 100ms in worst case
+  //    --> file reads rarely cause refill stalls compared to writes, but large/fragmented reads can still exceed the ~0.08–0.12 ms budget.
+  //        esp32 recommendations: use f.setBufferSize() (512–1024 for reads is reasonable); use delay(0) after file reads, to reduce task contention
+
+  if (!f) {doCloseFile = false; return;} // WLEDMM only do all this hick-hack when f is an open file
+
   unsigned long t_wait = millis();
+  bool oldLock = suspendStripService;
+  if (strip.isUpdating()) suspendStripService = true;             // WLEDMM schedule short pause to prevent LEDs glitching during flash write
   while(strip.isUpdating() && (millis() - t_wait < 72)) delay(1); // WLEDMM try to catch a moment when strip is idle
   while(strip.isUpdating() && (millis() - t_wait < 96)) delay(0); //        try harder
   //if (strip.isUpdating()) USER_PRINTLN("closeFile: strip still updating.");
   delay(2); // might help
+  #else
+    bool oldLock = suspendStripService; // fix build f***u* on 8266
   #endif
   #ifdef WLED_DEBUG_FS
     DEBUGFS_PRINT(F("Close -> "));
     uint32_t s = millis();
   #endif
+  if ((suspendStripService == false) && (oldLock == true)) oldLock = false; // update in case of parallel lock release by another task
   f.close();
+  #ifdef ARDUINO_ARCH_ESP32
+  delay(1); // might help
+  #endif
+  suspendStripService = oldLock; // restore previous lock
   DEBUGFS_PRINTF("took %d ms\n", millis() - s);
   doCloseFile = false;
 }
@@ -61,14 +82,11 @@ static bool bufferedFind(const char *target, bool fromStart = true) {
     uint32_t s = millis();
   #endif
 
-  if (!f || !f.size()) return false;
+  if (!f || !f.size()) return false; // fast return when current file closed, or file size is zero
   size_t targetLen = strlen(target);
 
   size_t index = 0;
   byte buf[FS_BUFSIZE];
-  #if ESP_IDF_VERSION_MAJOR >= 4
-  f.setBufferSize(FS_BUFSIZE);
-  #endif
   if (fromStart) f.seek(0);
 
   while (f.position() < f.size() -1) {
@@ -110,9 +128,6 @@ static bool bufferedFindSpace(size_t targetLen, bool fromStart = true) {
 
   size_t index = 0; // better to use size_t instead if uint16_t
   byte buf[FS_BUFSIZE];
-  #if ESP_IDF_VERSION_MAJOR >= 4
-  f.setBufferSize(FS_BUFSIZE);
-  #endif
   if (fromStart) f.seek(0);
 
   while (f.position() < f.size() -1) {
@@ -156,9 +171,6 @@ static bool bufferedFindObjectEnd() {
   uint16_t objDepth = 0; //num of '{' minus num of '}'. return once 0
   //size_t start = f.position();
   byte buf[FS_BUFSIZE];
-  #if ESP_IDF_VERSION_MAJOR >= 4
-  f.setBufferSize(FS_BUFSIZE);
-  #endif
   while (f.position() < f.size() -1) {
     size_t bufsize = f.read(buf, FS_BUFSIZE); // better to use size_t instead of uint16_t
     size_t count = 0;
@@ -183,9 +195,6 @@ static void writeSpace(size_t l)
 {
   byte buf[FS_BUFSIZE];
   memset(buf, ' ', FS_BUFSIZE);
-  #if ESP_IDF_VERSION_MAJOR >= 4
-  f.setBufferSize(FS_BUFSIZE);
-  #endif
   while (l > 0) {
     size_t block = (l>FS_BUFSIZE) ? FS_BUFSIZE : l;
     f.write(buf, block);
@@ -205,7 +214,7 @@ bool appendObjectToFile(const char* key, JsonDocument* content, uint32_t s, uint
   if (!f) return false;
 
   if (f.size() < 3) {
-    char init[10];
+    char init[12];
     strcpy_P(init, PSTR("{\"0\":{}}"));
     f.print(init);
   }
@@ -276,7 +285,7 @@ bool appendObjectToFile(const char* key, JsonDocument* content, uint32_t s, uint
 
 bool writeObjectToFileUsingId(const char* file, uint16_t id, JsonDocument* content)
 {
-  char objKey[10];
+  char objKey[12];
   sprintf(objKey, "\"%d\":", id);
   return writeObjectToFile(file, objKey, content);
 }
@@ -299,6 +308,9 @@ bool writeObjectToFile(const char* file, const char* key, JsonDocument* content)
     DEBUGFS_PRINTLN(F("Failed to open!"));
     return false;
   }
+  #if ESP_IDF_VERSION_MAJOR >= 4
+  f.setBufferSize(FS_BUFSIZE);        // reduced internal buffer leads to shorter blocking delay, and might prevent LED glitches
+  #endif
 
   if (!bufferedFind(key)) //key does not exist in file
   {
@@ -348,7 +360,7 @@ bool writeObjectToFile(const char* file, const char* key, JsonDocument* content)
 
 bool readObjectFromFileUsingId(const char* file, uint16_t id, JsonDocument* dest)
 {
-  char objKey[10];
+  char objKey[12];
   sprintf(objKey, "\"%d\":", id);
   return readObjectFromFile(file, objKey, dest);
 }
@@ -365,6 +377,10 @@ bool readObjectFromFile(const char* file, const char* key, JsonDocument* dest)
   f = WLED_FS.open(file, "r");
   if (!f) return false;
   else { DEBUG_PRINTF(PSTR("FILE '%s' open to read, size %d bytes\n"), file, (int)f.size());} // WLEDMM additional debug message
+
+  #if ESP_IDF_VERSION_MAJOR >= 4
+  f.setBufferSize(FS_BUFSIZE*2);        // reduced internal buffer leads to shorter blocking delay, and might prevent LED glitches
+  #endif
 
   if (key != nullptr && !bufferedFind(key)) //key does not exist in file
   {
@@ -444,6 +460,10 @@ static const uint8_t *getPresetCache(size_t &size) {
 
   if (!presetsCached) {
     File file = WLED_FS.open("/presets.json", "r");
+
+  #if ESP_IDF_VERSION_MAJOR >= 4
+    if (file) file.setBufferSize(FS_BUFSIZE*2);        // reduced internal buffer leads to shorter blocking delay, and might prevent LED glitches
+  #endif
     if (file) {
       presetsCachedTime = presetsModifiedTime;
       presetsCachedValidate = cacheInvalidate;
@@ -467,11 +487,11 @@ static const uint8_t *getPresetCache(size_t &size) {
 #endif
 
 // WLEDMM
-static bool haveLedmapFile = true;
-static bool haveIndexFile = true;
-static bool haveSkinFile = true;
-static bool haveICOFile = true;
-static bool haveCpalFile = true;
+static volatile bool haveLedmapFile = true;
+static volatile bool haveIndexFile = true;
+static volatile bool haveSkinFile = true;
+static volatile bool haveICOFile = true;
+static volatile bool haveCpalFile = true;
 void invalidateFileNameCache() { // reset "file not found" cache
   haveLedmapFile = true;
   haveIndexFile = true;

@@ -593,7 +593,7 @@ void ParticleSystem2D::render() {
       baseRGB = ColorFromPalette(SEGPALETTE, particles[i].hue, 255, blend);
       if (particles[i].sat < 255) {
         CHSV baseHSV = rgb2hsv_approximate(baseRGB); // convert to HSV
-        baseHSV.s = particles[i].sat; // set the saturation
+        baseHSV.s = min(baseHSV.s, particles[i].sat); // set the saturation but don't increase it
         hsv2rgb_spectrum(baseHSV, baseRGB); // convert back to RGB
       }
     }
@@ -628,7 +628,7 @@ void ParticleSystem2D::render() {
 }
 
 // calculate pixel positions and brightness distribution and render the particle to local buffer or global buffer
-__attribute__((optimize("O2"))) void ParticleSystem2D::renderParticle(const uint32_t particleindex, const uint8_t brightness, const CRGB& color, const bool wrapX, const bool wrapY) {
+void WLED_O3_ATTR ParticleSystem2D::renderParticle(const uint32_t particleindex, const uint8_t brightness, const CRGB& color, const bool wrapX, const bool wrapY) {
   uint32_t size = particlesize;
   if (advPartProps && advPartProps[particleindex].size > 0) // use advanced size properties (0 means use global size including single pixel rendering)
     size = advPartProps[particleindex].size;
@@ -846,7 +846,7 @@ void ParticleSystem2D::handleCollisions() {
 
 // handle a collision if close proximity is detected, i.e. dx and/or dy smaller than 2*PS_P_RADIUS
 // takes two pointers to the particles to collide and the particle hardness (softer means more energy lost in collision, 255 means full hard)
-__attribute__((optimize("O2"))) void ParticleSystem2D::collideParticles(PSparticle &particle1, PSparticle &particle2, int32_t dx, int32_t dy, const uint32_t collDistSq) {
+void WLED_O3_ATTR ParticleSystem2D::collideParticles(PSparticle &particle1, PSparticle &particle2, int32_t dx, int32_t dy, const uint32_t collDistSq) {
   int32_t distanceSquared = dx * dx + dy * dy;
   // Calculate relative velocity note: could zero check but that does not improve overall speed but deminish it as that is rarely the case and pushing is still required
   int32_t relativeVx = (int32_t)particle2.vx - (int32_t)particle1.vx;
@@ -1056,13 +1056,7 @@ void blur2D(CRGB *colorbuffer, uint32_t xsize, uint32_t ysize, uint32_t xblur, u
 //non class functions to use for initialization
 uint32_t calculateNumberOfParticles2D(uint32_t const pixels, const bool isadvanced, const bool sizecontrol) {
   uint32_t numberofParticles = pixels;  // 1 particle per pixel (for example 512 particles on 32x16)
-#ifdef ESP8266
-  uint32_t particlelimit = ESP8266_MAXPARTICLES; // maximum number of paticles allowed (based on one segment of 16x16 and 4k effect ram)
-#elif ARDUINO_ARCH_ESP32S2
-  uint32_t particlelimit = ESP32S2_MAXPARTICLES; // maximum number of paticles allowed (based on one segment of 32x32 and 24k effect ram)
-#else
-  uint32_t particlelimit = ESP32_MAXPARTICLES; // maximum number of paticles allowed (based on two segments of 32x32 and 40k effect ram)
-#endif
+  uint32_t particlelimit = MAXPARTICLES_2D; // maximum number of paticles allowed
   numberofParticles = max((uint32_t)4, min(numberofParticles, particlelimit)); // limit to 4 - particlelimit
   if (isadvanced) // advanced property array needs ram, reduce number of particles to use the same amount
     numberofParticles = (numberofParticles * sizeof(PSparticle)) / (sizeof(PSparticle) + sizeof(PSadvancedParticle));
@@ -1075,16 +1069,8 @@ uint32_t calculateNumberOfParticles2D(uint32_t const pixels, const bool isadvanc
 }
 
 uint32_t calculateNumberOfSources2D(uint32_t pixels, uint32_t requestedsources) {
-#ifdef ESP8266
-  int numberofSources = min((pixels) / 8, (uint32_t)requestedsources);
-  numberofSources = max(1, min(numberofSources, ESP8266_MAXSOURCES)); // limit
-#elif ARDUINO_ARCH_ESP32S2
-  int numberofSources = min((pixels) / 6, (uint32_t)requestedsources);
-  numberofSources = max(1, min(numberofSources, ESP32S2_MAXSOURCES)); // limit
-#else
-  int numberofSources = min((pixels) / 4, (uint32_t)requestedsources);
-  numberofSources = max(1, min(numberofSources, ESP32_MAXSOURCES)); // limit
-#endif
+ int numberofSources = min((pixels) / SOURCEREDUCTIONFACTOR, (uint32_t)requestedsources);
+  numberofSources = max(1, min(numberofSources, MAXSOURCES_2D)); // limit
   // make sure it is a multiple of 4 for proper memory alignment
   numberofSources = (numberofSources+3) & ~0x03;
   return numberofSources;
@@ -1103,7 +1089,7 @@ bool allocateParticleSystemMemory2D(uint32_t numparticles, uint32_t numsources, 
   if (sizecontrol)
     requiredmemory += sizeof(PSsizeControl) * numparticles;
   requiredmemory += sizeof(PSsource) * numsources;
-  requiredmemory += sizeof(CRGB) * SEGMENT.virtualLength(); // virtualLength is witdh * height
+  requiredmemory += sizeof(CRGB) * uint32_t(SEGMENT.calc_virtualWidth()) * uint32_t(SEGMENT.calc_virtualHeight()); // virtualLength not reliable, better to use vWidth * vHeight
   requiredmemory += additionalbytes + 3; // add 3 to ensure there is room for stuffing bytes
   //requiredmemory = (requiredmemory + 3) & ~0x03; // align memory block to next 4-byte boundary
   PSPRINTLN("mem alloc: " + String(requiredmemory));
@@ -1122,10 +1108,19 @@ bool initParticleSystem2D(ParticleSystem2D *&PartSys, uint32_t requestedsources,
   PSPRINT(" segmentsize:" + String(cols) + " x " + String(rows));
   PSPRINT(" request numparticles:" + String(numparticles));
   uint32_t numsources = calculateNumberOfSources2D(pixels, requestedsources);
-  if (!allocateParticleSystemMemory2D(numparticles, numsources, advanced, sizecontrol, additionalbytes))
-  {
-    DEBUG_PRINT(F("PS init failed: memory depleted"));
-    return false;
+  bool allocsuccess = false;
+  while(numparticles >= 4) { // make sure we have at least 4 particles or quit
+    if (allocateParticleSystemMemory2D(numparticles, numsources, advanced, sizecontrol, additionalbytes)) {
+      PSPRINTLN(F("PS 2D alloc succeeded"));
+      allocsuccess = true;
+      break; // allocation succeeded
+    }
+    numparticles = ((numparticles / 2) + 3) & ~0x03; // cut number of particles in half and try again, must be 4 byte aligned
+    PSPRINTLN(F("PS 2D alloc failed, trying with less particles..."));
+  }
+  if (!allocsuccess) {
+    PSPRINTLN(F("PS 2D alloc failed, not enough memory!"));
+    return false; // allocation failed
   }
 
   PartSys = new (SEGENV.data) ParticleSystem2D(cols, rows, numparticles, numsources, advanced, sizecontrol); // particle system constructor
@@ -1457,7 +1452,7 @@ void ParticleSystem1D::render() {
     if (advPartProps) { //saturation is advanced property in 1D system
       if (advPartProps[i].sat < 255) {
         CHSV baseHSV = rgb2hsv_approximate(baseRGB); // convert to HSV
-        baseHSV.s = advPartProps[i].sat; 
+        baseHSV.s = min(baseHSV.s, advPartProps[i].sat); // set the saturation but don't increase it
         hsv2rgb_spectrum(baseHSV, baseRGB); // convert back to RGB
       }
     }
@@ -1494,7 +1489,7 @@ void ParticleSystem1D::render() {
 }
 
 // calculate pixel positions and brightness distribution and render the particle to local buffer or global buffer
-__attribute__((optimize("O2"))) void ParticleSystem1D::renderParticle(const uint32_t particleindex, const uint8_t brightness, const CRGB &color, const bool wrap) {
+void WLED_O2_ATTR ParticleSystem1D::renderParticle(const uint32_t particleindex, const uint8_t brightness, const CRGB &color, const bool wrap) {
   uint32_t size = particlesize;
   if (advPartProps) // use advanced size properties (1D system has no large size global rendering TODO: add large global rendering?)
     size = advPartProps[particleindex].size;
@@ -1658,7 +1653,7 @@ void ParticleSystem1D::handleCollisions() {
 }
 // handle a collision if close proximity is detected, i.e. dx and/or dy smaller than 2*PS_P_RADIUS
 // takes two pointers to the particles to collide and the particle hardness (softer means more energy lost in collision, 255 means full hard)
-__attribute__((optimize("O2"))) void ParticleSystem1D::collideParticles(PSparticle1D &particle1, const PSparticleFlags1D &particle1flags, PSparticle1D &particle2, const PSparticleFlags1D &particle2flags, const int32_t dx, const uint32_t dx_abs, const uint32_t collisiondistance) {
+void WLED_O2_ATTR ParticleSystem1D::collideParticles(PSparticle1D &particle1, const PSparticleFlags1D &particle1flags, PSparticle1D &particle2, const PSparticleFlags1D &particle2flags, const int32_t dx, const uint32_t dx_abs, const uint32_t collisiondistance) {
   int32_t dv = particle2.vx - particle1.vx;
   int32_t dotProduct = (dx * dv); // is always negative if moving towards each other
 
@@ -1775,32 +1770,20 @@ void ParticleSystem1D::updatePSpointers(bool isadvanced) {
 //non class functions to use for initialization, fraction is uint8_t: 255 means 100%
 uint32_t calculateNumberOfParticles1D(const uint32_t fraction, const bool isadvanced) {
   uint32_t numberofParticles = SEGMENT.virtualLength();  // one particle per pixel (if possible)
-#ifdef ESP8266
-  uint32_t particlelimit = ESP8266_MAXPARTICLES_1D; // maximum number of paticles allowed
-#elif ARDUINO_ARCH_ESP32S2
-  uint32_t particlelimit = ESP32S2_MAXPARTICLES_1D; // maximum number of paticles allowed
-#else
-  uint32_t particlelimit = ESP32_MAXPARTICLES_1D; // maximum number of paticles allowed
-#endif
+  uint32_t particlelimit = MAXPARTICLES_1D; // maximum number of paticles allowed
   numberofParticles = min(numberofParticles, particlelimit); // limit to particlelimit
   if (isadvanced) // advanced property array needs ram, reduce number of particles to use the same amount
     numberofParticles = (numberofParticles * sizeof(PSparticle1D)) / (sizeof(PSparticle1D) + sizeof(PSadvancedParticle1D));
   numberofParticles = (numberofParticles * (fraction + 1)) >> 8; // calculate fraction of particles
-  numberofParticles = numberofParticles < 20 ? 20 : numberofParticles; // 20 minimum
+  numberofParticles = numberofParticles < 10 ? 10 : numberofParticles; // 10 minimum
   //make sure it is a multiple of 4 for proper memory alignment (easier than using padding bytes)
   numberofParticles = (numberofParticles+3) & ~0x03; // note: with a separate particle buffer, this is probably unnecessary
-  PSPRINTLN(" calc numparticles:" + String(numberofParticles))
+  PSPRINTLN(" calc numparticles:" + String(numberofParticles));
   return numberofParticles;
 }
 
 uint32_t calculateNumberOfSources1D(const uint32_t requestedsources) {
-#ifdef ESP8266
-   int numberofSources = max(1, min((int)requestedsources,ESP8266_MAXSOURCES_1D)); // limit
-#elif ARDUINO_ARCH_ESP32S2
-  int numberofSources = max(1, min((int)requestedsources, ESP32S2_MAXSOURCES_1D)); // limit
-#else
-  int numberofSources = max(1, min((int)requestedsources, ESP32_MAXSOURCES_1D)); // limit
-#endif
+  int numberofSources = max(1, min((int)requestedsources, MAXSOURCES_1D)); // limit
   // make sure it is a multiple of 4 for proper memory alignment (so minimum is acutally 4)
   numberofSources = (numberofSources+3) & ~0x03;
   return numberofSources;
@@ -1828,9 +1811,19 @@ bool initParticleSystem1D(ParticleSystem1D *&PartSys, const uint32_t requestedso
   if (SEGLEN == 1) return false; // single pixel not supported
   uint32_t numparticles = calculateNumberOfParticles1D(fractionofparticles, advanced);
   uint32_t numsources = calculateNumberOfSources1D(requestedsources);
-  if (!allocateParticleSystemMemory1D(numparticles, numsources, advanced, additionalbytes)) {
-    DEBUG_PRINT(F("PS init failed: memory depleted"));
-    return false;
+  bool allocsuccess = false;
+  while(numparticles >= 10) { // make sure we have at least 10 particles or quit
+    if (allocateParticleSystemMemory1D(numparticles, numsources, advanced, additionalbytes)) {
+      PSPRINT(F("PS 1D alloc succeeded"));
+      allocsuccess = true;
+      break; // allocation succeeded
+    }
+    numparticles = ((numparticles / 2) + 3) & ~0x03; // cut number of particles in half and try again, must be 4 byte aligned
+    PSPRINTLN(F("PS 1D alloc failed, trying with less particles..."));
+  }
+  if (!allocsuccess) {
+    PSPRINTLN(F("PS init failed: memory depleted"));
+    return false; // allocation failed
   }
   PartSys = new (SEGENV.data) ParticleSystem1D(SEGMENT.virtualLength(), numparticles, numsources, advanced); // particle system constructor
   return true;

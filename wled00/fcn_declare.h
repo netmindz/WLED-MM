@@ -51,9 +51,16 @@ bool getJsonValue(const JsonVariant& element, DestType& destination, const Defau
 
 //colors.cpp
 #if !defined(ARDUINO_ARCH_ESP32) || !defined(WLEDMM_FASTPATH) || defined(WLEDMM_SAVE_FLASH)  // WLEDMM: color utils moved into colorTools.hpp, so the compiler may inline these functions (faster)
+#if !defined(FASTLED_VERSION) // pull in FastLED if we don't have it yet (we need the CRGB type)
+  #define FASTLED_INTERNAL
+  #include <FastLED.h>
+#endif
 uint32_t __attribute__((const)) color_blend(uint32_t,uint32_t,uint_fast16_t,bool b16=false);  // WLEDMM: added attribute const
 uint32_t __attribute__((const)) color_add(uint32_t,uint32_t, bool fast=false);                // WLEDMM: added attribute const
 uint32_t __attribute__((const)) color_fade(uint32_t c1, uint8_t amount, bool video=false);
+#undef ColorFromPalette // overwrite any existing override
+CRGB __attribute__((hot,const)) ColorFromPaletteWLED(const CRGBPalette16& pal, unsigned index, uint8_t brightness=255, TBlendType blendType=LINEARBLEND);
+#define ColorFromPalette ColorFromPaletteWLED // override fastled function
 #else
 #include "colorTools.hpp"
 #endif
@@ -66,15 +73,21 @@ void colorXYtoRGB(float x, float y, byte* rgb); // only defined if huesync disab
 void colorRGBtoXY(byte* rgb, float* xy); // only defined if huesync disabled TODO
 void colorFromDecOrHexString(byte* rgb, char* in);
 bool colorFromHexString(byte* rgb, const char* in);
-uint32_t colorBalanceFromKelvin(uint16_t kelvin, uint32_t rgb);
+//uint32_t colorBalanceFromKelvin(uint16_t kelvin, uint32_t rgb);                             // WLEDMM function moved into bus_manager.cpp for better optimization
 uint16_t __attribute__((const)) approximateKelvinFromRGB(uint32_t rgb);                       // WLEDMM: added attribute const
 void setRandomColor(byte* rgb);
 uint8_t gamma8_cal(uint8_t b, float gamma);
 void calcGammaTable(float gamma);
-uint8_t __attribute__((pure)) gamma8(uint8_t b);                                              // WLEDMM: added attribute pure
+uint8_t __attribute__((pure)) gamma8_slow(uint8_t b);                                         // WLEDMM: added attribute pure
 uint32_t __attribute__((pure)) gamma32(uint32_t);                                             // WLEDMM: added attribute pure
 uint8_t unGamma8(uint8_t value);                                                              // WLEDMM revert gamma correction
 uint32_t unGamma24(uint32_t c);                                                               // WLEDMM for 24bit color (white left as-is)
+
+// WLEDMM: speedup - inline function for gamma correction
+extern uint8_t gammaTinv[256]; // colors.cpp
+extern uint8_t gammaT[256];    // colors.cpp
+inline uint8_t gamma8(uint8_t value) { return gammaT[value];}           // WLEDMM inlined for speed
+inline uint8_t fast_unGamma8(uint8_t value) { return gammaTinv[value];}
 
 //dmx_output.cpp
 void initDMXOutput();
@@ -400,7 +413,8 @@ uint8_t extractModeSlider(uint8_t mode, uint8_t slider, char *dest, uint8_t maxL
 int16_t extractModeDefaults(uint8_t mode, const char *segVar);
 void checkSettingsPIN(const char *pin);
 uint16_t  __attribute__((pure)) crc16(const unsigned char* data_p, size_t length);   // WLEDMM: added attribute pure
-
+String computeSHA1(const String& input);
+String getDeviceId();
 uint16_t beatsin88_t(accum88 beats_per_minute_88, uint16_t lowest = 0, uint16_t highest = 65535, uint32_t timebase = 0, uint16_t phase_offset = 0);
 uint16_t beatsin16_t(accum88 beats_per_minute, uint16_t lowest = 0, uint16_t highest = 65535, uint32_t timebase = 0, uint16_t phase_offset = 0);
 uint8_t beatsin8_t(accum88 beats_per_minute, uint8_t lowest = 0, uint8_t highest = 255, uint32_t timebase = 0, uint8_t phase_offset = 0);
@@ -470,16 +484,19 @@ uint8_t cos8_t(uint8_t theta);
 float sin_approx(float theta); // uses integer math (converted to float), accuracy +/-0.0015 (compared to sinf())
 float cos_approx(float theta);
 float tan_approx(float x);
-//float atan2_t(float y, float x);
-//float acos_t(float x);
-//float asin_t(float x);
-//template <typename T> T atan_t(T x);
-//float floor_t(float x);
-//float fmod_t(float num, float denom);
+#if defined(WLED_USE_UNREAL_MATH)
+float atan2_t(float y, float x);
+float acos_t(float x);
+float asin_t(float x);
+template <typename T> T atan_t(T x);
+float floor_t(float x);
+float fmod_t(float num, float denom);
+#endif
 #define sin_t sin_approx
 #define cos_t cos_approx
 #define tan_t tan_approx
 
+#if !defined(WLED_USE_UNREAL_MATH)
 #include <math.h>  // standard math functions. use a lot of flash
 #define atan2_t atan2f
 #define asin_t asinf
@@ -487,6 +504,7 @@ float tan_approx(float x);
 #define atan_t atanf
 #define fmod_t fmodf
 #define floor_t floorf
+#endif
 /*
 #define sin_t sinf
 #define cos_t cosf

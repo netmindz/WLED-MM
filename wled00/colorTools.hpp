@@ -25,8 +25,9 @@
 /*
  * color blend function (from colors.cpp)
  */
-inline __attribute__((hot,const)) uint32_t color_blend(uint32_t color1, uint32_t color2, uint_fast16_t blend, bool b16=false) {
-  if ((color1 == color2) || (blend == 0)) return color1; // WLEDMM
+inline WLED_O3_ATTR __attribute__((hot,const)) uint32_t color_blend(uint32_t color1, uint32_t color2, uint_fast16_t blend, bool b16=false) {
+  // min / max blend checking is omitted: calls with 0 or 255 are rare, checking lowers overall performance
+  // if ((color1 == color2) || (blend == 0)) return color1; // WLEDMM
   const uint_fast16_t blendmax = b16 ? 0xFFFF : 0xFF;
   if(blend >= blendmax) return color2;
   const uint_fast8_t shift = b16 ? 16 : 8;
@@ -64,7 +65,7 @@ inline __attribute__((hot,const)) uint32_t color_blend(uint32_t color1, uint32_t
  * idea: https://github.com/Aircoookie/WLED/pull/2465 by https://github.com/Proto-molecule
  */
 
-inline __attribute__((hot,const)) uint32_t color_add(uint32_t c1, uint32_t c2, bool fast=false)
+inline WLED_O3_ATTR __attribute__((hot,const)) uint32_t color_add(uint32_t c1, uint32_t c2, bool fast=false)
 {
   if (c2 == 0) return c1;  // WLEDMM shortcut
   if (c1 == 0) return c2;  // WLEDMM shortcut
@@ -98,34 +99,26 @@ inline __attribute__((hot,const)) uint32_t color_add(uint32_t c1, uint32_t c2, b
  * if using "video" method the resulting color will never become black unless it is already black
  */
 
-inline __attribute__((hot,const)) uint32_t color_fade(uint32_t c1, uint8_t amount, bool video=false)
+inline WLED_O2_ATTR __attribute__((hot,const)) uint32_t color_fade(uint32_t c1, uint8_t amount, bool video=false)
 {
-  if (amount == 255) return c1; // WLEDMM small optimization - plus it avoids over-fading in "video" mode
-  if (amount == 0) return 0; // WLEDMM shortcut
+  if (c1 == 0 || amount == 0) return 0; // black or no change
+  if (amount == 255) return c1;
+  uint32_t addRemains = 0;
 
-  uint32_t scaledcolor = 0; // color order is: W R G B from MSB to LSB
-  uint16_t w = W(c1);    // WLEDMM 16bit to make sure the compiler uses 32bit (not 64bit) for the math
-  uint16_t r = R(c1);
-  uint16_t g = G(c1);
-  uint16_t b = B(c1);
-  if (video)  {
-    uint16_t scale = amount; // 32bit for faster calculation
-    // bugfix: doing "+1" after shifting is obviously wrong
-    // optimization: ((r && scale) ? 1 : 0) can be simplified to "if (r > 0) +1" ; if we arive here, then scale != 0 and scale < 255
-    if (w>0) scaledcolor |= (((w * scale) >> 8) +1) << 24;  // WLEDMM small speedup when no white channel
-    if (r>0) scaledcolor |= (((r * scale) >> 8) +1) << 16;
-    if (g>0) scaledcolor |= (((g * scale) >> 8) +1) << 8;
-    if (b>0) scaledcolor |=  ((b * scale) >> 8) +1;
-    return scaledcolor;
+  if (!video) amount++; // add one for correct scaling using bitshifts
+  else {
+    // video scaling: make sure colors do not dim to zero if they started non-zero unless they distort the hue
+    uint8_t r = byte(c1>>16), g = byte(c1>>8), b = byte(c1), w = byte(c1>>24); // extract r, g, b, w channels
+    uint8_t maxc = (r > g) ? ((r > b) ? r : b) : ((g > b) ? g : b); // determine dominant channel for hue preservation
+    addRemains  = r && (r<<5) > maxc ? 0x00010000 : 0; // note: setting color preservation threshold too high results in flickering and
+    addRemains |= g && (g<<5) > maxc ? 0x00000100 : 0; // jumping colors in low brightness gradients. Multiplying the color preserves
+    addRemains |= b && (b<<5) > maxc ? 0x00000001 : 0; // better accuracy than dividing the maxc. Shifting by 5 is a good compromise 
+    addRemains |= w ? 0x01000000 : 0;                  // i.e. remove color channel if <13% of max
   }
-  else  {
-    uint16_t scale = 1 + amount;
-    if (w>0) scaledcolor |= ((w * scale) >> 8) << 24;                              // WLEDMM small speedup when no white channel
-    scaledcolor |= ((r * scale) >> 8) << 16;
-    scaledcolor |= (g * scale) & 0x0000FF00;                                       // WLEDMM faster than right-left shift "" >>8 ) <<8"
-    scaledcolor |= (b * scale) >> 8;
-    return scaledcolor;
-  }
+  const uint32_t TWO_CHANNEL_MASK = 0x00FF00FF;
+  uint32_t rb = (((c1 & TWO_CHANNEL_MASK) * amount) >> 8) &  TWO_CHANNEL_MASK; // scale red and blue
+  uint32_t wg = (((c1 >> 8) & TWO_CHANNEL_MASK) * amount) & ~TWO_CHANNEL_MASK; // scale white and green
+  return (rb | wg) + addRemains;
 }
 
 //scales the brightness with the briMultiplier factor (from led.cpp)

@@ -2,6 +2,10 @@
 
 #include "palettes.h"
 
+#if defined(WLED_ENABLE_FULL_FONTS)
+#include "src/font/codepages.h"
+#endif
+
 #define JSON_PATH_STATE      1
 #define JSON_PATH_INFO       2
 #define JSON_PATH_STATE_INFO 3
@@ -145,9 +149,22 @@ bool deserializeSegment(JsonObject elem, byte it, byte presetId)
     const char * name = elem["n"].as<const char*>();
     size_t len = 0;
     if (name != nullptr) len = strlen(name);
-    if (len > 0 && len < 32) {
+    if (len > 0) {
+      // WLEDMM: truncate segment name, instead of silently deleting
+      if (len > WLED_MAX_SEGNAME_LEN) {
+        len = WLED_MAX_SEGNAME_LEN;     // cut to max segment name length
+        #if defined(WLED_ENABLE_FULL_FONTS)
+        // UTF-8: don't cut in the middle of a multi-byte char
+        // the "or" condition is need because we have to look at both:
+        //  * name[len-1] - the character that would be included (at the cut boundary)
+        //  * name[len]   - the character that would be excluded (after the cut)
+        if ((name[len] > 127) || (name[len-1] > 127))
+          len = cutUnicodeAt((unsigned char*)name, len-1) +1; // find a safe cut // +1 to convert between index and length
+        #endif
+        USER_PRINTF("Segment name too long (%d chars), truncated to \"%.*s\"\n", strlen(name), (int)len, name);
+      }
       seg.name = new(std::nothrow) char[len+1];
-      if (seg.name) strlcpy(seg.name, name, len+1);
+      if (seg.name) strlcpy(seg.name, name, len+1); // copies at most size-1 characters and always null-terminates
     } else {
       // but is empty (already deleted above)
       elem.remove("n");
@@ -329,6 +346,8 @@ bool deserializeSegment(JsonObject elem, byte it, byte presetId)
     uint8_t oldMap1D2D = seg.map1D2D;
     seg.map1D2D = M12_Pixels; // no mapping
     // WLEDMM begin - we need to init segment caches before putting any pixels
+    auto oldLock = suspendStripService; // remember pevious lock status
+    suspendStripService = true;
     if (strip.isServicing()) {
       USER_PRINTLN(F("deserializeSegment() image: strip is still drawing effects."));
       strip.waitUntilIdle();
@@ -350,6 +369,8 @@ bool deserializeSegment(JsonObject elem, byte it, byte presetId)
     start = 0, stop = 0;
     set = 0; //0 nothing set, 1 start set, 2 range set
 
+    seg.startFrame();   // WLEDMM do it again, to be sure that all segment properties get cached
+    unsigned seg_len = seg.calc_virtualLength(); // WLEDMM prevent out-of-bounds writing
     for (size_t i = 0; i < iarr.size(); i++) {
       if(iarr[i].is<JsonInteger>()) {
         if (!set) {
@@ -375,12 +396,16 @@ bool deserializeSegment(JsonObject elem, byte it, byte presetId)
 
         if (set < 2 || stop <= start) stop = start + 1;
         uint32_t c = gamma32(RGBW32(rgbw[0], rgbw[1], rgbw[2], rgbw[3]));
-        while (start < stop) seg.setPixelColor(start++, c);
+        while (start < stop) {
+          if (unsigned(start) < seg_len) seg.setPixelColor(start, c);  // WLEDMM don't write out-of-bounds
+          start++;
+        }
         set = 0;
       }
     }
     seg.map1D2D = oldMap1D2D; // restore mapping
     strip.trigger(); // force segment update
+    suspendStripService = oldLock; // restore previous lock status
   }
   // send UDP/WS if segment options changed (except selection; will also deselect current preset)
   uint8_t diffresult = seg.differs(prev)  & 0x7F;
@@ -914,6 +939,8 @@ void serializeInfo(JsonObject root)
   root[F("release")] = FPSTR(releaseString);
   root[F("rel")] = FPSTR(releaseString); //WLEDMM to add bin name
 
+  root[F("deviceId")] = getDeviceId();
+
   JsonObject leds = root.createNestedObject("leds");
   leds[F("count")] = strip.getLengthTotal();
   leds[F("countP")] = strip.getLengthPhysical2(); //WLEDMM - getLengthPhysical plus plysical busses not supporting ABL (i.e. HUB75)
@@ -1107,7 +1134,17 @@ void serializeInfo(JsonObject root)
   root[F("e32text")] = restartCode2Info(getRestartReason());
 
   static char msgbuf[32];
+#if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(4, 4, 3)
+  // use the full revision if we can
+    esp_chip_info_t chip_info;
+    esp_chip_info(&chip_info);
+    snprintf(msgbuf, sizeof(msgbuf)-1, "%s rev%u.%u", 
+        ESP.getChipModel(), 
+        unsigned(chip_info.full_revision / 100),   // full revision is in (major * 100 + minor) format
+        unsigned(chip_info.full_revision % 100));
+#else
   snprintf(msgbuf, sizeof(msgbuf)-1, "%s rev.%d", ESP.getChipModel(), ESP.getChipRevision());
+#endif
   root[F("e32model")] = msgbuf;
   root[F("e32cores")] = ESP.getChipCores();
   root[F("e32speed")] = ESP.getCpuFreqMHz();

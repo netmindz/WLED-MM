@@ -10,6 +10,10 @@
 #include "FX.h"
 #include "fcn_declare.h"
 
+#if defined(WLED_ENABLE_FULL_FONTS)
+#include "src/font/codepages.h"
+#endif
+
 #ifdef WLEDMM_FASTPATH
 #undef SEGMENT
 #undef SEGENV
@@ -94,6 +98,7 @@ static float mapf(float x, float in_min, float in_max, float out_min, float out_
 
 // more accurate integer version of map() - based on map3() proposed in https://forum.arduino.cc/t/how-map-loses-precision-and-how-to-fix-it/371026/3
 // rounding instead of truncation, better handling of inverted ranges
+// Important: don't use when the input range is very small, because the output is such cases is worse than map()
 static long map2(long x, long in_min, long in_max, long out_min, long out_max)
 {
   long out_range = out_max - out_min;
@@ -109,6 +114,19 @@ static long map2(long x, long in_min, long in_max, long out_min, long out_max)
   return ((x - in_min) * out_range) / in_range + out_min;
 }
 
+// better "map" that can be used when in_min = out_min = 0. 
+// Fast and accurate (error always below 0.5)
+static inline uint32_t map0(uint32_t val, uint32_t in_max, uint32_t out_max) {
+   if (in_max == 0) return 0; // avoid division by zero
+   return ( (val*out_max) + (in_max/2) ) / in_max;     // +(in_max/2) for rounding
+}
+// a variant of map0() that handles output ranges not starting at 0 - but still requires val in [0 ... in_max]
+static inline int32_t map0(uint32_t val, uint32_t in_max, int32_t out_min, int32_t out_max) {
+  if (out_min > out_max) std::swap(out_min, out_max); // a hack, just to treat inverted ranges without producing overflows
+  int range = out_max - out_min;
+  return int(map0(val, in_max, unsigned(range))) + out_min;
+}
+
 
 static um_data_t* getAudioData() {
   um_data_t *um_data;
@@ -118,7 +136,34 @@ static um_data_t* getAudioData() {
   }
   return um_data;
 }
+
 // effect functions
+
+// forward declarations
+static uint16_t mode_oops(void);
+uint16_t mode_rainbow_cycle(void);
+static uint16_t mode_2DAkemi_core(bool withSound = true);
+uint16_t mode_static(void);
+
+/*
+ * replacement for mode_static in case of out-of-memory.
+ */
+static uint16_t mode_oops(void) {
+  strip._colors_t[0] = RED;
+  strip._colors_t[1] = BLUE;
+  strip._colors_t[2] = GREEN;
+  errorFlag = ERR_NORAM_PX;
+  if (SEGLEN <= 1) return mode_static();
+  const uint16_t width  = SEGMENT.is2D() ? SEGMENT.virtualWidth() : SEGMENT.virtualLength();
+  const uint16_t height = SEGMENT.virtualHeight();
+
+  // 2D fallback: akemi in blue
+  if (SEGMENT.is2D() && (width > 3) && (height > 3))
+    return mode_2DAkemi_core(false);
+
+  // 1D fallback: rainbow
+  return mode_rainbow_cycle();
+}
 
 /*
  * No blinking. Just plain old static light.
@@ -331,7 +376,7 @@ static const char _data_FX_MODE_RANDOM_COLOR[] PROGMEM = "Random Colors@!,Fade t
  * to new random colors.
  */
 uint16_t mode_dynamic(void) {
-  if (!SEGENV.allocateData(SEGLEN)) return mode_static(); //allocation failed
+  if (!SEGENV.allocateData(SEGLEN)) return mode_oops(); //allocation failed
 
   if(SEGENV.call == 0) {
     SEGMENT.setUpLeds();  // WLEDMM use lossless getPixelColor()
@@ -806,7 +851,7 @@ static const char _data_FX_MODE_MULTI_STROBE[] PROGMEM = "Strobe Mega@!,!;!,!;!;
  * Android loading circle
  */
 uint16_t mode_android(void) {
-  if (SEGLEN <= 1) return mode_static(); // WLEDMM to prevent division by zero
+  if (SEGLEN <= 1) return mode_oops(); // WLEDMM to prevent division by zero
   for (int i = 0; i < SEGLEN; i++) {
     SEGMENT.setPixelColor(i, SEGMENT.color_from_palette(i, true, PALETTE_SOLID_WRAP, 1));
   }
@@ -1021,7 +1066,7 @@ static const char _data_FX_MODE_COLORFUL[] PROGMEM = "Colorful@!,Saturation;1,2,
  * Emulates a traffic light.
  */
 uint16_t mode_traffic_light(void) {
-  if (SEGLEN == 1) return mode_static();
+  if (SEGLEN == 1) return mode_oops();
   for (int i=0; i < SEGLEN; i++)
     SEGMENT.setPixelColor(i, SEGMENT.color_from_palette(i, true, PALETTE_SOLID_WRAP, 1));
   uint32_t mdelay = 500;
@@ -1054,7 +1099,7 @@ static const char _data_FX_MODE_TRAFFIC_LIGHT[] PROGMEM = "Traffic Light@!,US st
  */
 #define FLASH_COUNT 4
 uint16_t mode_chase_flash(void) {
-  if (SEGLEN <= 1) return mode_static();
+  if (SEGLEN <= 1) return mode_oops();
   uint8_t flash_step = SEGENV.call % ((FLASH_COUNT * 2) + 1);
 
   for (int i = 0; i < SEGLEN; i++) {
@@ -1084,7 +1129,7 @@ static const char _data_FX_MODE_CHASE_FLASH[] PROGMEM = "Chase Flash@!;Bg,Fx;!";
  * Prim flashes running, followed by random color.
  */
 uint16_t mode_chase_flash_random(void) {
-  if (SEGLEN == 1) return mode_static();
+  if (SEGLEN == 1) return mode_oops();
   uint8_t flash_step = SEGENV.call % ((FLASH_COUNT * 2) + 1);
 
   for (int i = 0; i < SEGENV.aux1; i++) {
@@ -1219,7 +1264,7 @@ static const char _data_FX_MODE_DUAL_LARSON_SCANNER[] PROGMEM = "Scanner Dual@!,
  * Firing comets from one end. "Lighthouse"
  */
 uint16_t mode_comet(void) {
-  if (SEGLEN == 1) return mode_static();
+  if (SEGLEN == 1) return mode_oops();
   uint16_t counter = strip.now * ((SEGMENT.speed >>2) +1);
   uint16_t index = (counter * SEGLEN) >> 16;
   if (SEGENV.call == 0) {
@@ -1251,7 +1296,7 @@ static const char _data_FX_MODE_COMET[] PROGMEM = "Lighthouse@!,Fade rate;!,!;!"
  * Fireworks function.
  */
 static uint16_t mode_fireworks_core(bool useaudio) {
-  if (SEGLEN == 1) return mode_static();
+  if (SEGLEN == 1) return mode_oops();
   const uint16_t width  = SEGMENT.is2D() ? SEGMENT.virtualWidth() : SEGMENT.virtualLength();
   const uint16_t height = SEGMENT.virtualHeight();
 
@@ -1326,7 +1371,7 @@ static const char _data_FX_MODE_FIREWORKS_AR[] PROGMEM = "Fireworks audio ☾@,F
 
 //Twinkling LEDs running. Inspired by https://github.com/kitesurfer1404/WS2812FX/blob/master/src/custom/Rain.h
 uint16_t mode_rain() {
-  if (SEGLEN == 1) return mode_static();
+  if (SEGLEN == 1) return mode_oops();
   const uint16_t width  = SEGMENT.virtualWidth();
   const uint16_t height = SEGMENT.virtualHeight();
   if(SEGENV.call == 0) {
@@ -1441,7 +1486,7 @@ static const char _data_FX_MODE_LOADING[] PROGMEM = "Loading@!,Fade;!,!;!;;ix=16
 
 //American Police Light with all LEDs Red and Blue
 uint16_t police_base(uint32_t color1, uint32_t color2) {
-  if (SEGLEN == 1) return mode_static();
+  if (SEGLEN == 1) return mode_oops();
   uint16_t delay = 1 + (FRAMETIME<<3) / SEGLEN;  // longer segments should change faster
   uint32_t it = strip.now / map(SEGMENT.speed, 0, 255, delay<<4, delay);
   uint16_t offset = it % SEGLEN;
@@ -1570,7 +1615,7 @@ static const char _data_FX_MODE_FAIRY[] PROGMEM = "Fairy@!,# of flashers;!,!;!";
  */
 uint16_t mode_fairytwinkle() {
   uint16_t dataSize = sizeof(flasher) * SEGLEN;
-  if (!SEGENV.allocateData(dataSize)) return mode_static(); //allocation failed
+  if (!SEGENV.allocateData(dataSize)) return mode_oops(); //allocation failed
   Flasher* flashers = reinterpret_cast<Flasher*>(SEGENV.data);
   uint16_t now16 = strip.now & 0xFFFF;
   uint16_t PRNG16 = 5100 + strip.getCurrSegmentId();
@@ -1778,7 +1823,7 @@ uint16_t mode_multi_comet(void) {
   uint32_t cycleTime = 10 + (uint32_t)(255 - SEGMENT.speed);
   uint32_t it = strip.now / cycleTime;
   if (SEGENV.step == it) return FRAMETIME;
-  if (!SEGENV.allocateData(sizeof(uint16_t) * 8)) return mode_static(); //allocation failed
+  if (!SEGENV.allocateData(sizeof(uint16_t) * 8)) return mode_oops(); //allocation failed
 
   if (SEGENV.call == 0) {SEGENV.setUpLeds(); SEGMENT.fill(BLACK);}   // WLEDMM use lossless getPixelColor()
   SEGMENT.fade_out(SEGMENT.intensity);
@@ -1815,7 +1860,7 @@ uint16_t mode_multi_comet_ar(void) {
   uint32_t it = strip.now / cycleTime;
   if (SEGENV.step == it) return FRAMETIME; // too early
 
-  if (!SEGENV.allocateData(sizeof(uint16_t) * MAX_COMETS)) return mode_static(); //allocation failed
+  if (!SEGENV.allocateData(sizeof(uint16_t) * MAX_COMETS)) return mode_oops(); //allocation failed
   uint16_t* comets = reinterpret_cast<uint16_t*>(SEGENV.data);
   if (SEGENV.call == 0) { // do some initializations
     SEGMENT.setUpLeds(); SEGMENT.fill(BLACK);
@@ -1914,7 +1959,7 @@ uint16_t mode_oscillate(void) {
   uint8_t numOscillators = 3;
   uint16_t dataSize = sizeof(oscillator) * numOscillators;
 
-  if (!SEGENV.allocateData(dataSize)) return mode_static(); //allocation failed
+  if (!SEGENV.allocateData(dataSize)) return mode_oops(); //allocation failed
 
   Oscillator* oscillators = reinterpret_cast<Oscillator*>(SEGENV.data);
 
@@ -1963,7 +2008,7 @@ static const char _data_FX_MODE_OSCILLATE[] PROGMEM = "Oscillate";
 
 //TODO
 uint16_t mode_lightning(void) {
-  if (SEGLEN == 1) return mode_static();
+  if (SEGLEN == 1) return mode_oops();
   uint16_t ledstart = random16(SEGLEN);               // Determine starting location of flash
   uint16_t ledlen = 1 + random16(SEGLEN -ledstart);   // Determine length of flash (not to go beyond NUM_LEDS-1)
   uint8_t bri = 255/random8(1, 3);
@@ -2114,7 +2159,7 @@ static const char _data_FX_MODE_PARTYJERK[] PROGMEM = "Party jerk@Effect speed,S
 
 //eight colored dots, weaving in and out of sync with each other
 uint16_t mode_juggle(void) {
-  if (SEGLEN == 1) return mode_static();
+  if (SEGLEN == 1) return mode_oops();
   if (SEGENV.call == 0) {
     SEGMENT.setUpLeds();  //lossless getPixelColor()
     SEGMENT.fill(BLACK);
@@ -2184,9 +2229,9 @@ static const char _data_FX_MODE_PALETTE[] PROGMEM = "Palette@Cycle speed;;!;;c3=
 // feel of your fire: COOLING (used in step 1 above) (Speed = COOLING), and SPARKING (used
 // in step 3 above) (Effect Intensity = Sparking).
 uint16_t mode_fire_2012() {
-  if (SEGLEN == 1) return mode_static();
+  if (SEGLEN == 1) return mode_oops();
   const uint16_t strips = SEGMENT.nrOfVStrips();
-  if (!SEGENV.allocateData(strips * SEGLEN)) return mode_static(); //allocation failed
+  if (!SEGENV.allocateData(strips * SEGLEN)) return mode_oops(); //allocation failed
   byte* heat = SEGENV.data;
   if (SEGENV.call == 0) {SEGENV.setUpLeds(); SEGMENT.fill(BLACK);}   // WLEDMM use lossless getPixelColor()
 
@@ -2418,7 +2463,7 @@ static const char _data_FX_MODE_NOISE16_4[] PROGMEM = "Noise 4@!;!;!";
 //based on https://gist.github.com/kriegsman/5408ecd397744ba0393e
 uint16_t mode_colortwinkle() {
   uint16_t dataSize = (SEGLEN+7) >> 3; //1 bit per LED
-  if (!SEGENV.allocateData(dataSize)) return mode_static(); //allocation failed
+  if (!SEGENV.allocateData(dataSize)) return mode_oops(); //allocation failed
   if(SEGENV.call == 0) {
     SEGMENT.setUpLeds();  // WLEDMM use lossless getPixelColor()
     SEGMENT.fill(BLACK);
@@ -2500,8 +2545,8 @@ static const char _data_FX_MODE_LAKE[] PROGMEM = "Lake@!;Fx;!";
 // send a meteor from begining to to the end of the strip with a trail that randomly decays.
 // adapted from https://www.tweaking4all.com/hardware/arduino/adruino-led-strip-effects/#LEDStripEffectMeteorRain
 uint16_t mode_meteor() {
-  if (SEGLEN == 1) return mode_static();
-  if (!SEGENV.allocateData(SEGLEN)) return mode_static(); //allocation failed
+  if (SEGLEN == 1) return mode_oops();
+  if (!SEGENV.allocateData(SEGLEN)) return mode_oops(); //allocation failed
 
   byte* trail = SEGENV.data;
 
@@ -2540,8 +2585,8 @@ static const char _data_FX_MODE_METEOR[] PROGMEM = "Meteor@!,Trail,,,,Gradient;;
 // send a meteor from begining to to the end of the strip with a trail that randomly decays.
 // adapted from https://www.tweaking4all.com/hardware/arduino/adruino-led-strip-effects/#LEDStripEffectMeteorRain
 uint16_t mode_meteor_smooth() {
-  if (SEGLEN == 1) return mode_static();
-  if (!SEGENV.allocateData(SEGLEN)) return mode_static(); //allocation failed
+  if (SEGLEN == 1) return mode_oops();
+  if (!SEGENV.allocateData(SEGLEN)) return mode_oops(); //allocation failed
 
   byte* trail = SEGENV.data;
 
@@ -2578,7 +2623,7 @@ static const char _data_FX_MODE_METEOR_SMOOTH[] PROGMEM = "Meteor Smooth@!,Trail
 
 //Railway Crossing / Christmas Fairy lights
 uint16_t mode_railway() {
-  if (SEGLEN == 1) return mode_static();
+  if (SEGLEN == 1) return mode_oops();
   uint16_t dur = (256 - SEGMENT.speed) * 40;
   uint16_t rampdur = (dur * SEGMENT.intensity) >> 8;
   if (SEGENV.step > dur)
@@ -2636,7 +2681,7 @@ uint16_t ripple_base()
   random16_add_entropy(esp_random() & 0xFFFF); // improve randomness (esp32)
   #endif
 
-  if (!SEGENV.allocateData(dataSize)) return mode_static(); //allocation failed
+  if (!SEGENV.allocateData(dataSize)) return mode_oops(); //allocation failed
   if (SEGENV.call == 0) {SEGENV.setUpLeds(); SEGMENT.fill(BLACK);}                 // WLEDMM use lossless getPixelColor()
 
   Ripple* ripples = reinterpret_cast<Ripple*>(SEGENV.data);
@@ -2692,7 +2737,7 @@ uint16_t ripple_base()
 
 
 uint16_t mode_ripple(void) {
-  if (SEGLEN == 1) return mode_static();
+  if (SEGLEN == 1) return mode_oops();
   if (!SEGMENT.check2) SEGMENT.fill(SEGCOLOR(1));
   else                 SEGMENT.fade_out(250);
   return ripple_base();
@@ -2701,7 +2746,7 @@ static const char _data_FX_MODE_RIPPLE[] PROGMEM = "Ripple@!,Wave #,,,,,Overlay;
 
 
 uint16_t mode_ripple_rainbow(void) {
-  if (SEGLEN == 1) return mode_static();
+  if (SEGLEN == 1) return mode_oops();
   if (SEGENV.call ==0) {
     SEGENV.aux0 = random8();
     SEGENV.aux1 = random8();
@@ -2866,12 +2911,12 @@ static const char _data_FX_MODE_TWINKLECAT[] PROGMEM = "Twinklecat@!,Twinkle rat
 //inspired by https://www.tweaking4all.com/hardware/arduino/adruino-led-strip-effects/#LEDStripEffectBlinkingHalloweenEyes
 uint16_t mode_halloween_eyes()
 {
-  if (SEGLEN == 1) return mode_static();
+  if (SEGLEN == 1) return mode_oops();
   const uint16_t maxWidth = strip.isMatrix ? SEGMENT.virtualWidth() : SEGLEN;
   const uint16_t HALLOWEEN_EYE_SPACE = MAX(2, strip.isMatrix ? SEGMENT.virtualWidth()>>4: SEGLEN>>5);
   const uint16_t HALLOWEEN_EYE_WIDTH = HALLOWEEN_EYE_SPACE/2;
   uint16_t eyeLength = (2*HALLOWEEN_EYE_WIDTH) + HALLOWEEN_EYE_SPACE;
-  if (eyeLength >= maxWidth) return mode_static(); //bail if segment too short
+  if (eyeLength >= maxWidth) return mode_oops(); //bail if segment too short
 
   if (!SEGMENT.check2) SEGMENT.fill(SEGCOLOR(1)); //fill background
 
@@ -2976,7 +3021,7 @@ static const char _data_FX_MODE_TRI_STATIC_PATTERN[] PROGMEM = "Solid Pattern Tr
 
 uint16_t spots_base(uint16_t threshold)
 {
-  if (SEGLEN == 1) return mode_static();
+  if (SEGLEN == 1) return mode_oops();
   if (!SEGMENT.check2) SEGMENT.fill(SEGCOLOR(1));
 
   uint16_t maxZones = SEGLEN >> 2;
@@ -3032,12 +3077,12 @@ typedef struct Ball {
 *  Bouncing Balls Effect
 */
 uint16_t mode_bouncing_balls(void) {
-  if (SEGLEN == 1) return mode_static();
+  if (SEGLEN == 1) return mode_oops();
   //allocate segment data
   const uint16_t strips = SEGMENT.nrOfVStrips(); // adapt for 2D
   constexpr size_t maxNumBalls = 16;
   uint16_t dataSize = sizeof(ball) * maxNumBalls;
-  if (!SEGENV.allocateData(dataSize * strips)) return mode_static(); //allocation failed
+  if (!SEGENV.allocateData(dataSize * strips)) return mode_oops(); //allocation failed
 
   Ball* balls = reinterpret_cast<Ball*>(SEGENV.data);
 
@@ -3118,7 +3163,7 @@ static uint16_t rolling_balls(void) {
   //allocate segment data
   const uint16_t maxNumBalls = 16; // 255/16 + 1
   uint16_t dataSize = sizeof(rball_t) * maxNumBalls;
-  if (!SEGENV.allocateData(dataSize)) return mode_static(); //allocation failed
+  if (!SEGENV.allocateData(dataSize)) return mode_oops(); //allocation failed
 
   rball_t *balls = reinterpret_cast<rball_t *>(SEGENV.data);
 
@@ -3203,7 +3248,7 @@ static const char _data_FX_MODE_ROLLINGBALLS[] PROGMEM = "Rolling Balls@!,# of b
 * Sinelon stolen from FASTLED examples
 */
 uint16_t sinelon_base(bool dual, bool rainbow=false) {
-  if (SEGLEN == 1) return mode_static();
+  if (SEGLEN == 1) return mode_oops();
   if (SEGENV.call == 0) { SEGENV.setUpLeds(); SEGMENT.fill(BLACK); }  // WLEDMM use lossless getPixelColor()
   SEGMENT.fade_out(SEGMENT.intensity);
   uint16_t pos = beatsin16_t(SEGMENT.speed/10,0,SEGLEN-1);
@@ -3302,7 +3347,7 @@ typedef struct Spark {
 *  modified from https://github.com/kitesurfer1404/WS2812FX/blob/master/src/custom/Popcorn.h
 */
 static uint16_t mode_popcorn_core(bool useaudio) {
-  if (SEGLEN == 1) return mode_static();
+  if (SEGLEN == 1) return mode_oops();
   //allocate segment data
   uint16_t strips = SEGMENT.nrOfVStrips();
   size_t dataSize = sizeof(spark) * maxNumPopcorn;
@@ -3312,7 +3357,7 @@ static uint16_t mode_popcorn_core(bool useaudio) {
     neededPopcorn = min(max(neededPopcorn, uint8_t(2)), uint8_t(maxNumPopcorn));
     dataSize = sizeof(spark) * neededPopcorn;
   }
-  if (!SEGENV.allocateData(dataSize * strips)) return mode_static(); //allocation failed
+  if (!SEGENV.allocateData(dataSize * strips)) return mode_oops(); //allocation failed
 
   Spark* popcorn = reinterpret_cast<Spark*>(SEGENV.data);
 
@@ -3527,7 +3572,7 @@ typedef struct particle {
 } star;
 
 static uint16_t mode_starburst_core(bool useaudio) {
-  if (SEGLEN == 1) return mode_static();
+  if (SEGLEN == 1) return mode_oops();
   uint16_t maxData = FAIR_DATA_PER_SEG; //ESP8266: 256 ESP32: 640
   uint8_t segs = strip.getActiveSegmentsNum();
   if (segs <= (strip.getMaxSegments() /2)) maxData *= 2; //ESP8266: 512 if <= 8 segs ESP32: 1280 if <= 16 segs
@@ -3538,7 +3583,7 @@ static uint16_t mode_starburst_core(bool useaudio) {
   if (numStars > maxStars) numStars = maxStars;
   uint16_t dataSize = sizeof(star) * numStars;
 
-  if (!SEGENV.allocateData(dataSize)) return mode_static(); //allocation failed
+  if (!SEGENV.allocateData(dataSize)) return mode_oops(); //allocation failed
 
   uint32_t it = strip.now;
 
@@ -3677,7 +3722,7 @@ static const char _data_FX_MODE_STARBURST_AR[] PROGMEM = "Fw Starburst audio ☾
  */
 uint16_t mode_exploding_fireworks(void)
 {
-  if (SEGLEN == 1) return mode_static();
+  if (SEGLEN == 1) return mode_oops();
   const uint16_t cols = strip.isMatrix ? SEGMENT.virtualWidth() : 1;
   const uint16_t rows = strip.isMatrix ? SEGMENT.virtualHeight() : SEGMENT.virtualLength();
   if (SEGENV.call == 0) {
@@ -3694,7 +3739,7 @@ uint16_t mode_exploding_fireworks(void)
 
   unsigned numSparks = min(5 + ((rows*cols) >> 1), maxSparks);
   unsigned dataSize = sizeof(spark) * numSparks;
-  if (!SEGENV.allocateData(dataSize + sizeof(float))) return mode_static(); //allocation failed
+  if (!SEGENV.allocateData(dataSize + sizeof(float))) return mode_oops(); //allocation failed
   float *dying_gravity = reinterpret_cast<float*>(SEGENV.data + dataSize);
 
   if (dataSize != SEGENV.aux1) { //reset to flare if sparks were reallocated (it may be good idea to reset segment if bounds change)
@@ -3831,12 +3876,12 @@ typedef struct __attribute__ ((packed)) SparkDrop {
  */
 uint16_t mode_drip(void)
 {
-  if (SEGLEN == 1) return mode_static();
+  if (SEGLEN == 1) return mode_oops();
   //allocate segment data
   uint16_t strips = SEGMENT.nrOfVStrips();
   constexpr int maxNumDrops = 4;
   uint16_t dataSize = sizeof(sparkdrop) * maxNumDrops;
-  if (!SEGENV.allocateData(dataSize * strips)) return mode_static(); //allocation failed
+  if (!SEGENV.allocateData(dataSize * strips)) return mode_oops(); //allocation failed
   SparkDrop* drops = reinterpret_cast<SparkDrop*>(SEGENV.data);
 
   if (SEGENV.call == 0) {
@@ -3950,10 +3995,10 @@ typedef struct Tetris {
 } tetris;
 
 uint16_t mode_tetrix(void) {
-  if (SEGLEN == 1) return mode_static();
+  if (SEGLEN == 1) return mode_oops();
   uint16_t strips = SEGMENT.nrOfVStrips(); // allow running on virtual strips (columns in 2D segment)
   uint16_t dataSize = sizeof(tetris);
-  if (!SEGENV.allocateData(dataSize * strips)) return mode_static(); //allocation failed
+  if (!SEGENV.allocateData(dataSize * strips)) return mode_oops(); //allocation failed
   Tetris* drops = reinterpret_cast<Tetris*>(SEGENV.data);
 
   //if (SEGENV.call == 0) SEGMENT.fill(SEGCOLOR(1));  // will fill entire segment (1D or 2D), then use drop->step = 0 below
@@ -4102,7 +4147,7 @@ uint16_t mode_percent(void) {
 
  	return FRAMETIME;
 }
-static const char _data_FX_MODE_PERCENT[] PROGMEM = "Percent@,% of fill,,,,One color;!,!;!";
+static const char _data_FX_MODE_PERCENT[] PROGMEM = "Percent@!,% of fill,,,,One color;!,!;!";
 
 
 /*
@@ -4259,7 +4304,7 @@ static const char _data_FX_MODE_PACIFICA[] PROGMEM = "Pacifica@!,Angle;;!;;pal=5
  * Mode simulates a gradual sunrise
  */
 uint16_t mode_sunrise() {
-  if (SEGLEN == 1) return mode_static();
+  if (SEGLEN == 1) return mode_oops();
   //speed 0 - static sun
   //speed 1 - 60: sunrise time in minutes
   //speed 60 - 120 : sunset time in minutes - 60;
@@ -4373,7 +4418,7 @@ uint16_t mode_noisepal(void) {                                    // Slow noise 
   //#define scale 30
 
   uint16_t dataSize = sizeof(CRGBPalette16) * 2; //allocate space for 2 Palettes (2 * 16 * 3 = 96 bytes)
-  if (!SEGENV.allocateData(dataSize)) return mode_static(); //allocation failed
+  if (!SEGENV.allocateData(dataSize)) return mode_oops(); //allocation failed
 
   CRGBPalette16* palettes = reinterpret_cast<CRGBPalette16*>(SEGENV.data);
 
@@ -4472,7 +4517,7 @@ static const char _data_FX_MODE_FLOW[] PROGMEM = "Flow@!,Zones;;!;;m12=1"; //ver
  */
 uint16_t mode_chunchun(void)
 {
-  if (SEGLEN <= 1) return mode_static();
+  if (SEGLEN <= 1) return mode_oops();
   if (SEGENV.call == 0) {SEGENV.setUpLeds(); SEGMENT.fill(BLACK);}   // WLEDMM use lossless getPixelColor()
   SEGMENT.fade_out(253); // add a bit of trail                       // WLEDMM fade rate above 253 has no effect
   uint32_t counter = ((strip.now * (96 + SEGMENT.speed)) >> 4);      // WLEDMM same result, better resolution
@@ -4525,13 +4570,13 @@ typedef struct Spotlight {
  */
 uint16_t mode_dancing_shadows(void)
 {
-  if (SEGLEN == 1) return mode_static();
+  if (SEGLEN == 1) return mode_oops();
   uint8_t numSpotlights = map(SEGMENT.intensity, 0, 255, 2, SPOT_MAX_COUNT);  // 49 on 32 segment ESP32, 17 on 16 segment ESP8266
   bool initialize = SEGENV.aux0 != numSpotlights;
   SEGENV.aux0 = numSpotlights;
 
   uint16_t dataSize = sizeof(spotlight) * numSpotlights;
-  if (!SEGENV.allocateData(dataSize)) return mode_static(); //allocation failed
+  if (!SEGENV.allocateData(dataSize)) return mode_oops(); //allocation failed
   Spotlight* spotlights = reinterpret_cast<Spotlight*>(SEGENV.data);
   if (SEGENV.call == 0) SEGENV.setUpLeds();   // WLEDMM use lossless getPixelColor()
 
@@ -4666,9 +4711,11 @@ static const char _data_FX_MODE_WASHING_MACHINE[] PROGMEM = "Washing Machine@!,!
   Draws a .gif image from filesystem on the matrix/strip
 */
 uint16_t mode_image(void) {
+  if (!strip.isMatrix) return mode_oops(); // not a 2D set-up
   #ifndef WLED_ENABLE_GIF
-  return mode_static();
+  return mode_oops();
   #else
+  if (max(SEGMENT.virtualWidth(),SEGMENT.virtualHeight()) < 4) return mode_oops(); // too small
   renderImageToSegment(SEGMENT);
   return FRAMETIME;
   #endif
@@ -4677,7 +4724,7 @@ uint16_t mode_image(void) {
   //   Serial.println(status);
   // }
 }
-static const char _data_FX_MODE_IMAGE[] PROGMEM = "Image@!,;;;12;sx=128";
+static const char _data_FX_MODE_IMAGE[] PROGMEM = "Image@!,Blur,;;;12;sx=128,ix=0";
 
 /*
   Blends random colors across palette
@@ -4686,7 +4733,7 @@ static const char _data_FX_MODE_IMAGE[] PROGMEM = "Image@!,;;;12;sx=128";
 uint16_t mode_blends(void) {
   uint16_t pixelLen = SEGLEN > UINT8_MAX ? UINT8_MAX : SEGLEN;
   uint16_t dataSize = sizeof(uint32_t) * (pixelLen + 1);  // max segment length of 56 pixels on 16 segment ESP8266
-  if (!SEGENV.allocateData(dataSize)) return mode_static(); //allocation failed
+  if (!SEGENV.allocateData(dataSize)) return mode_oops(); //allocation failed
   uint32_t* pixels = reinterpret_cast<uint32_t*>(SEGENV.data);
   uint8_t blendSpeed = map(SEGMENT.intensity, 0, UINT8_MAX, 10, 128);
   uint8_t shift = (strip.now * ((SEGMENT.speed >> 3) +1)) >> 8;
@@ -4736,7 +4783,7 @@ uint16_t mode_tv_simulator(void) {
   uint16_t nr, ng, nb, r, g, b, i, hue;
   uint8_t  sat, bri, j;
 
-  if (!SEGENV.allocateData(sizeof(tvSim))) return mode_static(); //allocation failed
+  if (!SEGENV.allocateData(sizeof(tvSim))) return mode_oops(); //allocation failed
   TvSim* tvSimulator = reinterpret_cast<TvSim*>(SEGENV.data);
 
   uint8_t colorSpeed     = map(SEGMENT.speed,     0, UINT8_MAX,  1, 20);
@@ -4951,7 +4998,7 @@ uint16_t mode_aurora(void) {
     SEGENV.aux0 = SEGMENT.intensity;
 
     if(!SEGENV.allocateData(sizeof(AuroraWave) * SEGENV.aux1)) { // 26 on 32 segment ESP32, 9 on 16 segment ESP8266
-      return mode_static(); //allocation failed
+      return mode_oops(); //allocation failed
     }
 
     waves = reinterpret_cast<AuroraWave*>(SEGENV.data);
@@ -5006,7 +5053,7 @@ static const char _data_FX_MODE_AURORA[] PROGMEM = "Aurora@!,!;1,2,3;!;;sx=24,pa
 // 16 bit perlinmove. Use Perlin Noise instead of sinewaves for movement. By Andrew Tuline.
 // Controls are speed, # of pixels, faderate.
 uint16_t mode_perlinmove(void) {
-  if (SEGLEN == 1) return mode_static();
+  if (SEGLEN == 1) return mode_oops();
   if (SEGENV.call == 0) {SEGENV.setUpLeds(); SEGMENT.fill(BLACK);}   // WLEDMM use lossless getPixelColor()
   SEGMENT.fade_out(255-SEGMENT.custom1);
   for (int i = 0; i < SEGMENT.intensity/16 + 1; i++) {
@@ -5069,7 +5116,7 @@ static const char _data_FX_MODE_FLOWSTRIPE[] PROGMEM = "Flow Stripe@Hue speed,Ef
 
 // Black hole
 uint16_t mode_2DBlackHole(void) {            // By: Stepko https://editor.soulmatelights.com/gallery/1012 , Modified by: Andrew Tuline
-  if (!strip.isMatrix) return mode_static(); // not a 2D set-up
+  if (!strip.isMatrix) return mode_oops(); // not a 2D set-up
 
   const uint16_t cols = SEGMENT.virtualWidth();
   const uint16_t rows = SEGMENT.virtualHeight();
@@ -5110,7 +5157,7 @@ static const char _data_FX_MODE_2DBLACKHOLE[] PROGMEM = "Black Hole@Fade rate,Ou
 //     2D Colored Bursts  //
 ////////////////////////////
 uint16_t mode_2DColoredBursts() {              // By: ldirko   https://editor.soulmatelights.com/gallery/819-colored-bursts , modified by: Andrew Tuline
-  if (!strip.isMatrix) return mode_static(); // not a 2D set-up
+  if (!strip.isMatrix) return mode_oops(); // not a 2D set-up
 
   const uint16_t cols = SEGMENT.virtualWidth();
   const uint16_t rows = SEGMENT.virtualHeight();
@@ -5164,7 +5211,7 @@ static const char _data_FX_MODE_2DCOLOREDBURSTS[] PROGMEM = "Colored Bursts@Spee
 //      2D DNA     //
 /////////////////////
 uint16_t mode_2Ddna(void) {         // dna originally by by ldirko at https://pastebin.com/pCkkkzcs. Updated by Preyy. WLED conversion by Andrew Tuline. Phases added by @ewoudwijma
-  if (!strip.isMatrix) return mode_static(); // not a 2D set-up
+  if (!strip.isMatrix) return mode_oops(); // not a 2D set-up
 
   const uint16_t cols = SEGMENT.virtualWidth();
   const uint16_t rows = SEGMENT.virtualHeight();
@@ -5209,7 +5256,7 @@ static const char _data_FX_MODE_2DDNA[] PROGMEM = "DNA@Scroll speed,Blur,Phases;
 //     2D DNA Spiral   //
 /////////////////////////
 uint16_t mode_2DDNASpiral() {               // By: ldirko  https://editor.soulmatelights.com/gallery/512-dna-spiral-variation , modified by: Andrew Tuline
-  if (!strip.isMatrix) return mode_static(); // not a 2D set-up
+  if (!strip.isMatrix) return mode_oops(); // not a 2D set-up
 
   const uint16_t cols = SEGMENT.virtualWidth();
   const uint16_t rows = SEGMENT.virtualHeight();
@@ -5258,7 +5305,7 @@ static const char _data_FX_MODE_2DDNASPIRAL[] PROGMEM = "DNA Spiral@Scroll speed
 /////////////////////////
 uint16_t mode_2DDrift() {              // By: Stepko   https://editor.soulmatelights.com/gallery/884-drift , Modified by: Andrew Tuline
                                        // optimized for large panels by @softhack007
-  if (!strip.isMatrix) return mode_static(); // not a 2D set-up
+  if (!strip.isMatrix) return mode_oops(); // not a 2D set-up
 
   const uint16_t cols = SEGMENT.virtualWidth();
   const uint16_t rows = SEGMENT.virtualHeight();
@@ -5312,7 +5359,7 @@ static const char _data_FX_MODE_2DDRIFT[] PROGMEM = "Drift@Rotation speed,Blur,,
 //     2D Firenoise     //
 //////////////////////////
 uint16_t mode_2Dfirenoise(void) {               // firenoise2d. By Andrew Tuline. Yet another short routine.
-  if (!strip.isMatrix) return mode_static(); // not a 2D set-up
+  if (!strip.isMatrix) return mode_oops(); // not a 2D set-up
 
   const uint16_t cols = SEGMENT.virtualWidth();
   const uint16_t rows = SEGMENT.virtualHeight();
@@ -5347,7 +5394,7 @@ static const char _data_FX_MODE_2DFIRENOISE[] PROGMEM = "Firenoise@X scale,Y sca
 //     2D Frizzles          //
 //////////////////////////////
 uint16_t mode_2DFrizzles(void) {                 // By: Stepko https://editor.soulmatelights.com/gallery/640-color-frizzles , Modified by: Andrew Tuline
-  if (!strip.isMatrix) return mode_static(); // not a 2D set-up
+  if (!strip.isMatrix) return mode_oops(); // not a 2D set-up
 
   const uint16_t cols = SEGMENT.virtualWidth();
   const uint16_t rows = SEGMENT.virtualHeight();
@@ -5437,14 +5484,14 @@ class GameOfLifeGrid {
 
 uint16_t mode_2Dgameoflife(void) { // Written by Ewoud Wijma, inspired by https://natureofcode.com/book/chapter-7-cellular-automata/ 
                                    // and https://github.com/DougHaber/nlife-color , Modified By: Brandon Butler
-  if (!strip.isMatrix) return mode_static(); // not a 2D set-up
+  if (!strip.isMatrix) return mode_oops(); // not a 2D set-up
 
   const uint16_t cols = SEGMENT.virtualWidth();
   const uint16_t rows = SEGMENT.virtualHeight();
   const size_t dataSize  = SEGMENT.length() * sizeof(Cell); // Cell = 2 bytes
   const size_t totalSize = dataSize + 6; // 6 bytes for prevRows(2), prevCols(2), prevPalette, prevWrap
 
-  if (!SEGENV.allocateData(totalSize)) return mode_static(); //allocation failed
+  if (!SEGENV.allocateData(totalSize)) return mode_oops(); //allocation failed
   uint16_t *prevRows   = reinterpret_cast<uint16_t*>(SEGENV.data);
   uint16_t *prevCols   = reinterpret_cast<uint16_t*>(SEGENV.data + 2);
   uint8_t *prevPalette = reinterpret_cast<uint8_t*> (SEGENV.data + 4);
@@ -5659,12 +5706,12 @@ static void setBitValue(uint8_t* byteArray, size_t n, bool value) {
 }
 uint16_t mode_2DSnowFall(void) { // By: Brandon Butler
   // Uses bit array to track snow/particles
-  if (!strip.isMatrix) return mode_static(); // Not a 2D set-up
+  if (!strip.isMatrix) return mode_oops(); // Not a 2D set-up
   const uint16_t cols = SEGMENT.virtualWidth();
   const uint16_t rows = SEGMENT.virtualHeight();
   const size_t dataSize = (SEGMENT.length() + 7) / 8; // Round up to nearest byte
   
-  if (!SEGENV.allocateData(dataSize)) return mode_static(); // Allocation failed
+  if (!SEGENV.allocateData(dataSize)) return mode_oops(); // Allocation failed
   byte *grid = reinterpret_cast<byte*>(SEGENV.data);
   
   bool overlay = SEGMENT.check2; // Overlay is inverted. Only draws non-snow. Layer 1 controls snow color
@@ -5771,7 +5818,7 @@ static const char _data_FX_MODE_2DSNOWFALL[] PROGMEM = "Snow Fall ☾@!,Spawn Ra
 //     2D Hiphotic     //
 /////////////////////////
 uint16_t mode_2DHiphotic() {                        //  By: ldirko  https://editor.soulmatelights.com/gallery/810 , Modified by: Andrew Tuline
-  if (!strip.isMatrix) return mode_static(); // not a 2D set-up
+  if (!strip.isMatrix) return mode_oops(); // not a 2D set-up
 
   const uint16_t cols = SEGMENT.virtualWidth();
   const uint16_t rows = SEGMENT.virtualHeight();
@@ -5803,12 +5850,12 @@ typedef struct Julia {
 } julia;
 
 uint16_t mode_2DJulia(void) {                           // An animated Julia set by Andrew Tuline.
-  if (!strip.isMatrix) return mode_static(); // not a 2D set-up
+  if (!strip.isMatrix) return mode_oops(); // not a 2D set-up
 
   const uint16_t cols = SEGMENT.virtualWidth();
   const uint16_t rows = SEGMENT.virtualHeight();
 
-  if (!SEGENV.allocateData(sizeof(julia))) return mode_static();
+  if (!SEGENV.allocateData(sizeof(julia))) return mode_oops();
   Julia* julias = reinterpret_cast<Julia*>(SEGENV.data);
 
   float reAl;
@@ -5927,7 +5974,7 @@ static const char _data_FX_MODE_2DJULIA[] PROGMEM = "Julia@,Max iterations per p
 //     2D Lissajous         //
 //////////////////////////////
 uint16_t mode_2DLissajous(void) {            // By: Andrew Tuline
-  if (!strip.isMatrix) return mode_static(); // not a 2D set-up
+  if (!strip.isMatrix) return mode_oops(); // not a 2D set-up
 
   const uint16_t cols = SEGMENT.virtualWidth();
   const uint16_t rows = SEGMENT.virtualHeight();
@@ -5969,7 +6016,7 @@ static const char _data_FX_MODE_2DLISSAJOUS[] PROGMEM = "Lissajous ☾@X frequen
 //    2D Matrix      //
 ///////////////////////
 uint16_t mode_2Dmatrix(void) {                  // Matrix2D. By Jeremy Williams. Adapted by Andrew Tuline & improved by merkisoft and ewowi, and softhack007.
-  if (!strip.isMatrix) return mode_static(); // not a 2D set-up
+  if (!strip.isMatrix) return mode_oops(); // not a 2D set-up
 
   const uint16_t cols = SEGMENT.virtualWidth();
   const uint16_t rows = SEGMENT.virtualHeight();
@@ -6045,7 +6092,7 @@ static const char _data_FX_MODE_2DMATRIX[] PROGMEM = "Matrix@!,Spawning rate,Tra
 //     2D Metaballs    //
 /////////////////////////
 uint16_t mode_2Dmetaballs(void) {   // Metaballs by Stefan Petrick. Cannot have one of the dimensions be 2 or less. Adapted by Andrew Tuline.
-  if (!strip.isMatrix) return mode_static(); // not a 2D set-up
+  if (!strip.isMatrix) return mode_oops(); // not a 2D set-up
 
   const uint16_t cols = SEGMENT.virtualWidth();
   const uint16_t rows = SEGMENT.virtualHeight();
@@ -6104,7 +6151,7 @@ static const char _data_FX_MODE_2DMETABALLS[] PROGMEM = "Metaballs@!;;!;2";
 //    2D Noise      //
 //////////////////////
 uint16_t mode_2Dnoise(void) {                  // By Andrew Tuline
-  if (!strip.isMatrix) return mode_static(); // not a 2D set-up
+  if (!strip.isMatrix) return mode_oops(); // not a 2D set-up
 
   const uint16_t cols = SEGMENT.virtualWidth();
   const uint16_t rows = SEGMENT.virtualHeight();
@@ -6127,7 +6174,7 @@ static const char _data_FX_MODE_2DNOISE[] PROGMEM = "Noise2D@!,Scale;;!;2";
 //     2D Plasma Ball       //
 //////////////////////////////
 uint16_t mode_2DPlasmaball(void) {                   // By: Stepko https://editor.soulmatelights.com/gallery/659-plasm-ball , Modified by: Andrew Tuline
-  if (!strip.isMatrix) return mode_static(); // not a 2D set-up
+  if (!strip.isMatrix) return mode_oops(); // not a 2D set-up
 
   const uint16_t cols = SEGMENT.virtualWidth();
   const uint16_t rows = SEGMENT.virtualHeight();
@@ -6173,7 +6220,7 @@ static const char _data_FX_MODE_2DPLASMABALL[] PROGMEM = "Plasma Ball@Speed,,Fad
 //  return (out_max - out_min) * (x - in_min) / (in_max - in_min) + out_min;
 //}
 uint16_t mode_2DPolarLights(void) {        // By: Kostyantyn Matviyevskyy  https://editor.soulmatelights.com/gallery/762-polar-lights , Modified by: Andrew Tuline
-  if (!strip.isMatrix) return mode_static(); // not a 2D set-up
+  if (!strip.isMatrix) return mode_oops(); // not a 2D set-up
 
   const uint16_t cols = SEGMENT.virtualWidth();
   const uint16_t rows = SEGMENT.virtualHeight();
@@ -6249,7 +6296,7 @@ static const char _data_FX_MODE_2DPOLARLIGHTS[] PROGMEM = "Polar Lights@!,Scale,
 //     2D Pulser       //
 /////////////////////////
 uint16_t mode_2DPulser(void) {                       // By: ldirko   https://editor.soulmatelights.com/gallery/878-pulse-test , modifed by: Andrew Tuline
-  if (!strip.isMatrix) return mode_static(); // not a 2D set-up
+  if (!strip.isMatrix) return mode_oops(); // not a 2D set-up
 
   const uint16_t cols = SEGMENT.virtualWidth();
   const uint16_t rows = SEGMENT.virtualHeight();
@@ -6277,7 +6324,7 @@ static const char _data_FX_MODE_2DPULSER[] PROGMEM = "Pulser@!,Blur;;!;2";
 //     2D Sindots      //
 /////////////////////////
 uint16_t mode_2DSindots(void) {                             // By: ldirko   https://editor.soulmatelights.com/gallery/597-sin-dots , modified by: Andrew Tuline
-  if (!strip.isMatrix) return mode_static(); // not a 2D set-up
+  if (!strip.isMatrix) return mode_oops(); // not a 2D set-up
 
   const uint16_t cols = SEGMENT.virtualWidth();
   const uint16_t rows = SEGMENT.virtualHeight();
@@ -6309,7 +6356,7 @@ static const char _data_FX_MODE_2DSINDOTS[] PROGMEM = "Sindots@!,Dot distance,Fa
 // custom3 affects the blur amount.
 uint16_t mode_2Dsquaredswirl(void) {            // By: Mark Kriegsman. https://gist.github.com/kriegsman/368b316c55221134b160
                                                           // Modifed by: Andrew Tuline
-  if (!strip.isMatrix) return mode_static(); // not a 2D set-up
+  if (!strip.isMatrix) return mode_oops(); // not a 2D set-up
 
   const uint16_t cols = SEGMENT.virtualWidth();
   const uint16_t rows = SEGMENT.virtualHeight();
@@ -6349,14 +6396,14 @@ static const char _data_FX_MODE_2DSQUAREDSWIRL[] PROGMEM = "Squared Swirl@,,,,Bl
 //     2D Sun Radiation     //
 //////////////////////////////
 uint16_t mode_2DSunradiation(void) {                   // By: ldirko https://editor.soulmatelights.com/gallery/599-sun-radiation  , modified by: Andrew Tuline
-  if (!strip.isMatrix) return mode_static(); // not a 2D set-up
+  if (!strip.isMatrix) return mode_oops(); // not a 2D set-up
 
   const uint16_t cols = SEGMENT.virtualWidth();
   const uint16_t rows = SEGMENT.virtualHeight();
   const int minSize = min(cols, rows);          // WLEDMM
   const int magnify = (minSize <= 32) ? 8 : 46; // WLEDMM
 
-  if (!SEGENV.allocateData(sizeof(byte)*(cols+2)*(rows+2))) return mode_static(); //allocation failed
+  if (!SEGENV.allocateData(sizeof(byte)*(cols+2)*(rows+2))) return mode_oops(); //allocation failed
   byte *bump = reinterpret_cast<byte*>(SEGENV.data);
 
   if (SEGENV.call == 0) {
@@ -6402,7 +6449,7 @@ static const char _data_FX_MODE_2DSUNRADIATION[] PROGMEM = "Sun Radiation@Varian
 //     2D Tartan       //
 /////////////////////////
 uint16_t mode_2Dtartan(void) {          // By: Elliott Kember  https://editor.soulmatelights.com/gallery/3-tartan , Modified by: Andrew Tuline
-  if (!strip.isMatrix) return mode_static(); // not a 2D set-up
+  if (!strip.isMatrix) return mode_oops(); // not a 2D set-up
 
   const uint16_t cols = SEGMENT.virtualWidth();
   const uint16_t rows = SEGMENT.virtualHeight();
@@ -6442,7 +6489,7 @@ static const char _data_FX_MODE_2DTARTAN[] PROGMEM = "Tartan@X scale,Y scale,,,S
 //     2D spaceships   //
 /////////////////////////
 uint16_t mode_2Dspaceships(void) {    //// Space ships by stepko (c)05.02.21 [https://editor.soulmatelights.com/gallery/639-space-ships], adapted by Blaz Kristan (AKA blazoncek)
-  if (!strip.isMatrix) return mode_static(); // not a 2D set-up
+  if (!strip.isMatrix) return mode_oops(); // not a 2D set-up
 
   const uint16_t cols = SEGMENT.virtualWidth();
   const uint16_t rows = SEGMENT.virtualHeight();
@@ -6490,7 +6537,7 @@ static const char _data_FX_MODE_2DSPACESHIPS[] PROGMEM = "Spaceships@!,Blur;;!;2
 //// Crazy bees by stepko (c)12.02.21 [https://editor.soulmatelights.com/gallery/651-crazy-bees], adapted by Blaz Kristan (AKA blazoncek)
 constexpr uint_fast16_t MAX_BEES = 5;
 uint16_t mode_2Dcrazybees(void) {
-  if (!strip.isMatrix) return mode_static(); // not a 2D set-up
+  if (!strip.isMatrix) return mode_oops(); // not a 2D set-up
 
   const uint_fast16_t cols = SEGMENT.virtualWidth();
   const uint_fast16_t rows = SEGMENT.virtualHeight();
@@ -6513,7 +6560,7 @@ uint16_t mode_2Dcrazybees(void) {
     };
   } bee_t;
 
-  if (!SEGENV.allocateData(sizeof(bee_t)*MAX_BEES)) return mode_static(); //allocation failed
+  if (!SEGENV.allocateData(sizeof(bee_t)*MAX_BEES)) return mode_oops(); //allocation failed
   bee_t *bee = reinterpret_cast<bee_t*>(SEGENV.data);
 
   if (SEGENV.call == 0) {
@@ -6565,7 +6612,7 @@ static const char _data_FX_MODE_2DCRAZYBEES[] PROGMEM = "Crazy Bees@!,Blur;;;2";
 //// Ghost Rider by stepko (c)2021 [https://editor.soulmatelights.com/gallery/716-ghost-rider], adapted by Blaz Kristan (AKA blazoncek)
 #define LIGHTERS_AM 64  // max lighters (adequate for 32x32 matrix)
 uint16_t mode_2Dghostrider(void) {
-  if (!strip.isMatrix) return mode_static(); // not a 2D set-up
+  if (!strip.isMatrix) return mode_oops(); // not a 2D set-up
 
   const uint16_t cols = SEGMENT.virtualWidth();
   const uint16_t rows = SEGMENT.virtualHeight();
@@ -6583,7 +6630,7 @@ uint16_t mode_2Dghostrider(void) {
     int8_t   Vspeed;
   } lighter_t;
 
-  if (!SEGENV.allocateData(sizeof(lighter_t))) return mode_static(); //allocation failed
+  if (!SEGENV.allocateData(sizeof(lighter_t))) return mode_oops(); //allocation failed
   lighter_t *lighter = reinterpret_cast<lighter_t*>(SEGENV.data);
 
   const size_t maxLighters = min(cols + rows, LIGHTERS_AM);
@@ -6655,7 +6702,7 @@ static const char _data_FX_MODE_2DGHOSTRIDER[] PROGMEM = "Ghost Rider@Fade rate,
 //// Floating Blobs by stepko (c)2021 [https://editor.soulmatelights.com/gallery/573-blobs], adapted by Blaz Kristan (AKA blazoncek)
 #define MAX_BLOBS 8
 uint16_t mode_2Dfloatingblobs(void) {
-  if (!strip.isMatrix) return mode_static(); // not a 2D set-up
+  if (!strip.isMatrix) return mode_oops(); // not a 2D set-up
 
   const uint16_t cols = SEGMENT.virtualWidth();
   const uint16_t rows = SEGMENT.virtualHeight();
@@ -6670,7 +6717,7 @@ uint16_t mode_2Dfloatingblobs(void) {
 
   uint8_t Amount = (SEGMENT.intensity>>5) + 1; // NOTE: be sure to update MAX_BLOBS if you change this
 
-  if (!SEGENV.allocateData(sizeof(blob_t))) return mode_static(); //allocation failed
+  if (!SEGENV.allocateData(sizeof(blob_t))) return mode_oops(); //allocation failed
   blob_t *blob = reinterpret_cast<blob_t*>(SEGENV.data);
 
   // WLEDMM fix SEGENV.step in case that timebase jumps
@@ -6761,7 +6808,7 @@ static const char _data_FX_MODE_2DBLOBS[] PROGMEM = "Blobs@!,# blobs,Blur;!;!;2;
 //     2D Scrolling text  //
 ////////////////////////////
 uint16_t mode_2Dscrollingtext(void) {
-  if (!strip.isMatrix) return mode_static(); // not a 2D set-up
+  if (!strip.isMatrix) return mode_oops(); // not a 2D set-up
 
   const uint16_t cols = SEGMENT.virtualWidth();
   const uint16_t rows = SEGMENT.virtualHeight();
@@ -6781,9 +6828,15 @@ uint16_t mode_2Dscrollingtext(void) {
     case 5: letterWidth = 5; letterHeight = 12; break;
   }
   const int yoffset = map(SEGMENT.intensity, 0, 255, -rows/2, rows/2) + (rows-letterHeight)/2;
-  char text[33] = {'\0'};
-  unsigned maxLen = (SEGMENT.name) ? min(32, (int)strlen(SEGMENT.name)) : 0;  // WLEDMM make it robust against too long segment names
-  if (SEGMENT.name) for (size_t i=0,j=0; i<maxLen; i++) if (SEGMENT.name[i]>31 && SEGMENT.name[i]<128) text[j++] = SEGMENT.name[i];
+  char text[WLED_MAX_SEGNAME_LEN+1] = {'\0'};
+  unsigned maxLen = (SEGMENT.name) ? min(WLED_MAX_SEGNAME_LEN, (int)strlen(SEGMENT.name)) : 0;  // WLEDMM make it robust against too long segment names
+
+#if !defined(WLED_ENABLE_FULL_FONTS) || defined(ESP8266)
+  if (SEGMENT.name) for (size_t i=0,j=0; i<maxLen; i++) if (SEGMENT.name[i]>31 && SEGMENT.name[i]<128) text[j++] = SEGMENT.name[i]; // unicode killer
+#else
+  if (SEGMENT.name) for (size_t i=0,j=0; i<maxLen; i++) text[j++] = SEGMENT.name[i]; // don't kill unicode
+#endif
+
   const bool zero = strchr(text, '0') != nullptr;
   bool drawShadow = (SEGMENT.check2); // "shadow" is only needed for overlays to improve readability
 
@@ -6826,14 +6879,21 @@ uint16_t mode_2Dscrollingtext(void) {
     else if ((!strncmp_P(text,PSTR("#AMP"),4)) || (!strncmp_P(text,PSTR("#POW"),4))) sprintf_P(text, PSTR("%3.1fA"), float(strip.currentMilliamps)/1000.0f); // WLEDMM
     else sprintf_P(text, PSTR("%s %d, %d %d:%02d%s"), monthShortStr(month(localTime)), day(localTime), year(localTime), AmPmHour, minute(localTime), sec);
   } else drawShadow = false;  // static text does not require shadow
-  const int numberOfLetters = strlen(text);
+  const int numberOfChars = strlen(text); // bytes count after macros expansions
+
+#if !defined(WLED_ENABLE_FULL_FONTS) || defined(ESP8266)
+  const int numberOfLetters = numberOfChars;
+#else
+  const int numberOfLetters = strlenUC((unsigned char *)text); // get the mumber of unicode letters
+#endif
 
   long delayTime = long(strip.now) - long(SEGENV.step);
   if ((delayTime >= 0) || (abs(delayTime) > 1500)) {   // WLEDMM keep on scrolling if timebase jumps (supersync, or brightness off, or wifi delay)
     if ((numberOfLetters * letterWidth) > cols) ++SEGENV.aux0 %= (numberOfLetters * letterWidth) + cols;      // offset
     else                                          SEGENV.aux0  = (cols + (numberOfLetters * letterWidth))/2;
     SEGENV.aux1 = (SEGENV.aux1 + 1) & 0xFF; // color shift // WLEDMM changed to prevent overflow
-    SEGENV.step = strip.now + map2(SEGMENT.speed, 0, 255, 10*FRAMETIME_FIXED, 2*FRAMETIME_FIXED);
+    long minDelay = max((FRAMETIME_FIXED/2 + FRAMETIME_FIXED/4), int(FRAMETIME));
+    SEGENV.step = strip.now + map2(SEGMENT.speed, 0, 255, 10*FRAMETIME_FIXED, minDelay); // WLEDMM scroll faster
     if (!SEGMENT.check2) {
       for (int y = 0; y < rows; y++) for (int x = 0; x < cols; x++ )
         SEGMENT.blendPixelColorXY(x, y, SEGCOLOR(1), 255 - (SEGMENT.custom1>>1));
@@ -6846,6 +6906,7 @@ uint16_t mode_2Dscrollingtext(void) {
   }
 
   if (SEGENV.check2 && ((numberOfLetters * letterWidth) > cols)) drawShadow = true; // scrolling overlay is easier to read with shadow
+#if !defined(WLED_ENABLE_FULL_FONTS)
   for (int i = 0; i < numberOfLetters; i++) {
     if (int(cols) - int(SEGENV.aux0) + letterWidth*(i+1) < 0) continue; // don't draw characters off-screen
     uint32_t col1 = SEGMENT.color_from_palette(SEGENV.aux1, false, PALETTE_SOLID_WRAP, 0);
@@ -6856,10 +6917,26 @@ uint16_t mode_2Dscrollingtext(void) {
     }
     SEGMENT.drawCharacter(text[i], int(cols) - int(SEGENV.aux0) + letterWidth*i, yoffset, letterWidth, letterHeight, col1, col2, drawShadow);
   }
+#else
+  uint32_t col1 = SEGMENT.color_from_palette(SEGENV.aux1, false, PALETTE_SOLID_WRAP, 0);
+  uint32_t col2 = BLACK;
+  if (SEGMENT.check1 && SEGMENT.palette == 0) {
+    col1 = SEGCOLOR(0);
+    col2 = SEGCOLOR(2);
+  }
+  maxLen = numberOfChars; // Ensure maxLen reflects the actual rendered text, not the original SEGMENT.name length
+  SEGMENT.drawText((unsigned char*)text, maxLen, int(cols) - int(SEGENV.aux0), yoffset, letterWidth, letterHeight, col1, col2, drawShadow);
+#endif
+
+  // WLEDMM add some blur
+  if (SEGMENT.check3 && !SEGMENT.check2) { // blur looks ugly together with "overlay"
+    if (SEGMENT.custom1 < 16) SEGMENT.blurRows(16); // only blur rows when no trail
+    SEGMENT.blurCols(20);
+  }
 
   return FRAMETIME;
 }
-static const char _data_FX_MODE_2DSCROLLTEXT[] PROGMEM = "Scrolling Text@!,Y Offset,Trail,Font size,,Gradient,Overlay;!,!,Gradient;!;2;ix=128,c1=0,rev=0,mi=0,rY=0,mY=0";
+static const char _data_FX_MODE_2DSCROLLTEXT[] PROGMEM = "Scrolling Text@!,Y Offset,Trail,Font size,,Gradient,Overlay,Soft;!,!,Gradient;!;2;ix=128,c1=0,rev=0,mi=0,rY=0,mY=0";
 
 
 ////////////////////////////
@@ -6867,7 +6944,7 @@ static const char _data_FX_MODE_2DSCROLLTEXT[] PROGMEM = "Scrolling Text@!,Y Off
 ////////////////////////////
 //// Drift Rose by stepko (c)2021 [https://editor.soulmatelights.com/gallery/1369-drift-rose-pattern], adapted by Blaz Kristan (AKA blazoncek)
 uint16_t mode_2Ddriftrose(void) {
-  if (!strip.isMatrix) return mode_static(); // not a 2D set-up
+  if (!strip.isMatrix) return mode_oops(); // not a 2D set-up
 
   const uint16_t cols = SEGMENT.virtualWidth();
   const uint16_t rows = SEGMENT.virtualHeight();
@@ -6969,7 +7046,7 @@ uint16_t mode_ripplepeak(void) {                // * Ripple peak. By Andrew Tuli
 
   uint16_t maxRipples = 16;
   uint16_t dataSize = sizeof(Ripple) * maxRipples;
-  if (!SEGENV.allocateData(dataSize)) return mode_static(); //allocation failed
+  if (!SEGENV.allocateData(dataSize)) return mode_oops(); //allocation failed
   Ripple* ripples = reinterpret_cast<Ripple*>(SEGENV.data);
 
   um_data_t *um_data = getAudioData();
@@ -7048,7 +7125,7 @@ static const char _data_FX_MODE_RIPPLEPEAK[] PROGMEM = "Ripple Peak@Fade rate,Ma
 /////////////////////////
 // By: Mark Kriegsman https://gist.github.com/kriegsman/5adca44e14ad025e6d3b , modified by Andrew Tuline
 uint16_t mode_2DSwirl(void) {
-  if (!strip.isMatrix) return mode_static(); // not a 2D set-up
+  if (!strip.isMatrix) return mode_oops(); // not a 2D set-up
 
   const uint16_t cols = SEGMENT.virtualWidth();
   const uint16_t rows = SEGMENT.virtualHeight();
@@ -7091,7 +7168,7 @@ static const char _data_FX_MODE_2DSWIRL[] PROGMEM = "Swirl@!,Sensitivity,Blur;,B
 /////////////////////////
 // By: Stepko, https://editor.soulmatelights.com/gallery/652-wave , modified by Andrew Tuline
 uint16_t mode_2DWaverly(void) {
-  if (!strip.isMatrix) return mode_static(); // not a 2D set-up
+  if (!strip.isMatrix) return mode_oops(); // not a 2D set-up
 
   const uint16_t cols = SEGMENT.virtualWidth();
   const uint16_t rows = SEGMENT.virtualHeight();
@@ -7148,7 +7225,7 @@ typedef struct Gravity {
 uint16_t mode_gravcenter(void) {                // Gravcenter. By Andrew Tuline.
 
   constexpr uint16_t dataSize = sizeof(gravity);
-  if (!SEGENV.allocateData(dataSize)) return mode_static(); //allocation failed
+  if (!SEGENV.allocateData(dataSize)) return mode_oops(); //allocation failed
   Gravity* gravcen = reinterpret_cast<Gravity*>(SEGENV.data);
   if (SEGENV.call == 0) {
     SEGMENT.setUpLeds();
@@ -7196,7 +7273,7 @@ static const char _data_FX_MODE_GRAVCENTER[] PROGMEM = "Gravcenter@Rate of fall,
 uint16_t mode_gravcentric(void) {                     // Gravcentric. By Andrew Tuline.
 
   uint16_t dataSize = sizeof(gravity);
-  if (!SEGENV.allocateData(dataSize)) return mode_static();     //allocation failed
+  if (!SEGENV.allocateData(dataSize)) return mode_oops();     //allocation failed
   Gravity* gravcen = reinterpret_cast<Gravity*>(SEGENV.data);
   if (SEGENV.call == 0) {
     SEGMENT.setUpLeds();
@@ -7247,7 +7324,7 @@ static const char _data_FX_MODE_GRAVCENTRIC[] PROGMEM = "Gravcentric@Rate of fal
 uint16_t mode_gravimeter(void) {                // Gravmeter. By Andrew Tuline.
 
   uint16_t dataSize = sizeof(gravity);
-  if (!SEGENV.allocateData(dataSize)) return mode_static(); //allocation failed
+  if (!SEGENV.allocateData(dataSize)) return mode_oops(); //allocation failed
   Gravity* gravcen = reinterpret_cast<Gravity*>(SEGENV.data);
 
   um_data_t *um_data = getAudioData();
@@ -7530,7 +7607,7 @@ typedef struct Plasphase {
 
 uint16_t mode_plasmoid(void) {                  // Plasmoid. By Andrew Tuline.
   // even with 1D effect we have to take logic for 2D segments for allocation as fill_solid() fills whole segment
-  if (!SEGENV.allocateData(sizeof(plasphase))) return mode_static(); //allocation failed
+  if (!SEGENV.allocateData(sizeof(plasphase))) return mode_oops(); //allocation failed
   Plasphase* plasmoip = reinterpret_cast<Plasphase*>(SEGENV.data);
 
   um_data_t *um_data = getAudioData();
@@ -7642,7 +7719,7 @@ static const char _data_FX_MODE_PUDDLES[] PROGMEM = "Puddles@Fade rate,Puddle si
 //////////////////////
 uint16_t mode_pixels(void) {                    // Pixels. By Andrew Tuline.
 
-  if (!SEGENV.allocateData(32*sizeof(uint8_t))) return mode_static(); //allocation failed
+  if (!SEGENV.allocateData(32*sizeof(uint8_t))) return mode_oops(); //allocation failed
   uint8_t *myVals = reinterpret_cast<uint8_t*>(SEGENV.data); // Used to store a pile of samples because WLED frame rate and WLED sample rate are not synchronized. Frame rate is too low.
 
   um_data_t *um_data = getAudioData();
@@ -8046,7 +8123,7 @@ static const char _data_FX_MODE_FREQWAVE[] PROGMEM = "Freqwave@Speed,Sound effec
 uint16_t mode_gravfreq(void) {                  // Gravfreq. By Andrew Tuline.
 
   uint16_t dataSize = sizeof(gravity);
-  if (!SEGENV.allocateData(dataSize)) return mode_static(); //allocation failed
+  if (!SEGENV.allocateData(dataSize)) return mode_oops(); //allocation failed
   Gravity* gravcen = reinterpret_cast<Gravity*>(SEGENV.data);
 
   um_data_t *um_data = getAudioData();
@@ -8240,7 +8317,7 @@ static void setFlatPixelXY(bool flatMode, int x, int y, uint32_t color, unsigned
 }
 
 uint16_t mode_2DGEQ(void) { // By Will Tatam. Code reduction by Ewoud Wijma. Flat Mode added by softhack007
-  //if (!strip.isMatrix) return mode_static(); // not a 2D set-up, not a problem
+  //if (!strip.isMatrix) return mode_oops(); // not a 2D set-up, not a problem
   bool flatMode = !SEGMENT.is2D() || (SEGMENT.width() < 3) || (SEGMENT.height() < 3); // also use flat mode when less than 3 colums or rows
 
   const int NUM_BANDS = map2(SEGMENT.custom1, 0, 255, 1, 16);
@@ -8249,9 +8326,9 @@ uint16_t mode_2DGEQ(void) { // By Will Tatam. Code reduction by Ewoud Wijma. Fla
   const uint16_t rows = flatMode ? vLength / cols : SEGMENT.virtualHeight();
   const unsigned offset = flatMode ? max(0, (vLength - rows*cols +1) / 2) : 0;              // flatmode: always center effect
 
-  if ((cols <=1) || (rows <=1)) return mode_static(); // too small
+  if ((cols <=1) || (rows <=1)) return mode_oops(); // too small
 
-  if (!SEGENV.allocateData(cols*sizeof(uint16_t))) return mode_static(); //allocation failed
+  if (!SEGENV.allocateData(cols*sizeof(uint16_t))) return mode_oops(); //allocation failed
   uint16_t *previousBarHeight = reinterpret_cast<uint16_t*>(SEGENV.data); //array of previous bar heights per frequency band
 
   um_data_t *um_data = getAudioData();
@@ -8349,7 +8426,7 @@ static const char _data_FX_MODE_2DGEQ[] PROGMEM = "GEQ ☾@Fade speed,Ripple dec
 //  ** 2D Funky plank  //
 /////////////////////////
 uint16_t mode_2DFunkyPlank(void) {              // Written by ??? Adapted by Will Tatam.
-  if (!strip.isMatrix) return mode_static(); // not a 2D set-up
+  if (!strip.isMatrix) return mode_oops(); // not a 2D set-up
 
   const uint16_t cols = SEGMENT.virtualWidth();
   const uint16_t rows = SEGMENT.virtualHeight();
@@ -8439,8 +8516,10 @@ static uint8_t akemi[] PROGMEM = {
 };
 
 uint16_t mode_2DAkemi(void) {
-  if (!strip.isMatrix) return mode_static(); // not a 2D set-up
-
+  return mode_2DAkemi_core(true);
+}
+static uint16_t mode_2DAkemi_core(bool withSound) {
+  if ((withSound == true) && (!strip.isMatrix)) return mode_oops(); // not a 2D set-up
   const uint16_t cols = SEGMENT.virtualWidth();
   const uint16_t rows = SEGMENT.virtualHeight();
 
@@ -8452,7 +8531,7 @@ uint16_t mode_2DAkemi(void) {
   const float lightFactor  = 0.15f;
   const float normalFactor = 0.4f;
 
-  um_data_t *um_data = getAudioData();
+  um_data_t *um_data = withSound ? getAudioData() : simulateSound(SEGMENT.soundSim);
   uint8_t fftResult[NUM_GEQ_CHANNELS] = {0};
   if (um_data->u_data != nullptr) memcpy(fftResult, um_data->u_data[2], sizeof(fftResult));  // WLEDMM buffer curent values
   float base = fftResult[0]/255.0f;
@@ -8509,7 +8588,7 @@ static const char _data_FX_MODE_2DAKEMI[] PROGMEM = "Akemi@Color speed,Dance;Hea
 // https://editor.soulmatelights.com/gallery/1089-distorsion-waves
 // adapted for WLED by @blazoncek
 uint16_t mode_2Ddistortionwaves() {
-  if (!strip.isMatrix) return mode_static(); // not a 2D set-up
+  if (!strip.isMatrix) return mode_oops(); // not a 2D set-up
 
   const uint16_t cols = SEGMENT.virtualWidth();
   const uint16_t rows = SEGMENT.virtualHeight();
@@ -8564,13 +8643,13 @@ static const char _data_FX_MODE_2DDISTORTIONWAVES[] PROGMEM = "Distortion Waves@
 //Idea from https://www.youtube.com/watch?v=DiHBgITrZck&ab_channel=StefanPetrick
 // adapted for WLED by @blazoncek
 uint16_t mode_2Dsoap() {
-  if (!strip.isMatrix) return mode_static(); // not a 2D set-up
+  if (!strip.isMatrix) return mode_oops(); // not a 2D set-up
 
   const uint16_t cols = SEGMENT.virtualWidth();
   const uint16_t rows = SEGMENT.virtualHeight();
 
   const size_t dataSize = SEGMENT.width() * SEGMENT.height() * sizeof(uint8_t); // prevent reallocation if mirrored or grouped
-  if (!SEGENV.allocateData(dataSize + sizeof(uint32_t)*3)) return mode_static(); //allocation failed
+  if (!SEGENV.allocateData(dataSize + sizeof(uint32_t)*3)) return mode_oops(); //allocation failed
 
   uint8_t  *noise3d   = reinterpret_cast<uint8_t*>(SEGENV.data);
   uint32_t *noise32_x = reinterpret_cast<uint32_t*>(SEGENV.data + dataSize);
@@ -8685,7 +8764,7 @@ static const char _data_FX_MODE_2DSOAP[] PROGMEM = "Soap@!,Smoothness;;!;2";
 // adapted for WLED by @blazoncek
 // RadialWave mode added by @softhack007, based on https://editor.soulmatelights.com/gallery/1090-radialwave
 uint16_t mode_2Doctopus() {
-  if (!strip.isMatrix) return mode_static(); // not a 2D set-up
+  if (!strip.isMatrix) return mode_oops(); // not a 2D set-up
 
   const uint16_t cols = SEGMENT.virtualWidth();
   const uint16_t rows = SEGMENT.virtualHeight();
@@ -8697,7 +8776,7 @@ uint16_t mode_2Doctopus() {
   } map_t;
 
   const size_t dataSize = SEGMENT.width() * SEGMENT.height() * sizeof(map_t); // prevent reallocation if mirrored or grouped
-  if (!SEGENV.allocateData(dataSize + 2)) return mode_static(); //allocation failed
+  if (!SEGENV.allocateData(dataSize + 2)) return mode_oops(); //allocation failed
 
   map_t *rMap = reinterpret_cast<map_t*>(SEGENV.data);
   uint8_t *offsX = reinterpret_cast<uint8_t*>(SEGENV.data + dataSize);
@@ -8770,7 +8849,7 @@ static const char _data_FX_MODE_2DOCTOPUS[] PROGMEM = "Octopus@!,,Offset X,Offse
 //@Stepko (https://editor.soulmatelights.com/gallery/1704-wavingcells)
 // adapted for WLED by @blazoncek
 uint16_t mode_2Dwavingcell() {
-  if (!strip.isMatrix) return mode_static(); // not a 2D set-up
+  if (!strip.isMatrix) return mode_oops(); // not a 2D set-up
 
   const uint16_t cols = SEGMENT.virtualWidth();
   const uint16_t rows = SEGMENT.virtualHeight();
@@ -8789,8 +8868,8 @@ static const char _data_FX_MODE_2DWAVINGCELL[] PROGMEM = "Waving Cell@!,,Amplitu
 /* 
    @title     MoonModules WLED - GEQ 3D Effect
    @file      included in FX.cpp
-   @repo      https://github.com/MoonModules/WLED, submit changes to this file as PRs to MoonModules/WLED
-   @Authors   https://github.com/MoonModules/WLED/commits/mdev/
+   @repo      https://github.com/MoonModules/WLED-MM, submit changes to this file as PRs to MoonModules/WLED-MM
+   @Authors   https://github.com/MoonModules/WLED-MM/commits/mdev/
    @Copyright © 2024 Github MoonModules Commit Authors (contact moonmodules@icloud.com for details)
    @license   Licensed under the EUPL-1.2 or later
 */
@@ -8803,10 +8882,10 @@ uint16_t mode_GEQLASER(void) {
   // Author: @TroyHacks
   // @license GNU GENERAL PUBLIC LICENSE Version 3, 29 June 2007
 
-  if (!strip.isMatrix) return mode_static(); // not a 2D set-up  
+  if (!strip.isMatrix) return mode_oops(); // not a 2D set-up  
   const int cols = SEGMENT.virtualWidth();
   const int rows = SEGMENT.virtualHeight();
-  if ((cols < 3) || (rows < 3)) return mode_static(); // too small
+  if ((cols < 3) || (rows < 3)) return mode_oops(); // too small
 
   int16_t *projector     = reinterpret_cast<int16_t *>(&(SEGENV.aux0)); // *projector is an alias for aux0 (uint16_t)
   int16_t *projector_dir = reinterpret_cast<int16_t *>(&(SEGENV.aux1)); // *projector_dir is an alias for aux1  (uint16_t)
@@ -8936,8 +9015,8 @@ static const char _data_FX_MODE_GEQLASER[] PROGMEM = "GEQ 3D ☾@Speed,Front Fil
 /* 
    @title     MoonModules WLED - Painbrush Effect
    @file      included in FX.cpp
-   @repo      https://github.com/MoonModules/WLED, submit changes to this file as PRs to MoonModules/WLED
-   @Authors   https://github.com/MoonModules/WLED/commits/mdev/
+   @repo      https://github.com/MoonModules/WLED-MM, submit changes to this file as PRs to MoonModules/WLED-MM
+   @Authors   https://github.com/MoonModules/WLED-MM/commits/mdev/
    @Copyright © 2024 Github MoonModules Commit Authors (contact moonmodules@icloud.com for details)
    @license   GNU GENERAL PUBLIC LICENSE Version 3, 29 June 2007
 
@@ -8959,12 +9038,12 @@ uint16_t mode_2DPaintbrush() {
   // Author: @TroyHacks
   // @license GNU GENERAL PUBLIC LICENSE Version 3, 29 June 2007
 
-  if (!strip.isMatrix) return mode_static(); // not a 2D set-up
+  if (!strip.isMatrix) return mode_oops(); // not a 2D set-up
 
   const uint16_t cols = SEGMENT.virtualWidth();
   const uint16_t rows = SEGMENT.virtualHeight();
 
-  if (!SEGENV.allocateData(4)) return mode_static(); //allocation failed
+  if (!SEGENV.allocateData(4)) return mode_oops(); //allocation failed
 
   if (SEGENV.call == 0) {
     SEGMENT.setUpLeds();
@@ -9022,13 +9101,13 @@ static const char _data_FX_MODE_2DPAINTBRUSH[] PROGMEM = "Paintbrush ☾@Oscilla
 #define NUMBEROFSOURCES 8
 uint16_t mode_particlevortex(void) {
   if (SEGLEN == 1)
-    return mode_static();
+    return mode_oops();
   ParticleSystem2D *PartSys = nullptr;
   uint32_t i, j;
 
   if (SEGMENT.call == 0) { // initialization
     if (!initParticleSystem2D(PartSys, NUMBEROFSOURCES))
-      return mode_static(); // allocation failed
+      return mode_oops(); // allocation failed
     #ifdef ESP8266
     PartSys->setMotionBlur(180);
     #else
@@ -9046,7 +9125,7 @@ uint16_t mode_particlevortex(void) {
     PartSys = reinterpret_cast<ParticleSystem2D *>(SEGENV.data); // if not first call, just set the pointer to the PS
 
   if (PartSys == nullptr)
-    return mode_static(); // something went wrong, no data!
+    return mode_oops(); // something went wrong, no data!
 
   PartSys->updateSystem(); // update system properties (dimensions and data pointers)
   uint32_t spraycount = min(PartSys->numSources, (uint32_t)(1 + (SEGMENT.custom1 >> 5))); // number of sprays to display, 1-8
@@ -9141,7 +9220,7 @@ uint16_t mode_particlefireworks(void) {
 
   if (SEGMENT.call == 0) { // initialization
     if (!initParticleSystem2D(PartSys, NUMBEROFSOURCES))
-      return mode_static(); // allocation failed
+      return mode_oops(); // allocation failed
 
     PartSys->setKillOutOfBounds(true); // out of bounds particles dont return (except on top, taken care of by gravity setting)
     PartSys->setWallHardness(120); // ground bounce is fixed
@@ -9155,7 +9234,7 @@ uint16_t mode_particlefireworks(void) {
     PartSys = reinterpret_cast<ParticleSystem2D *>(SEGENV.data); // if not first call, just set the pointer to the PS
 
   if (PartSys == nullptr)
-    return mode_static(); // something went wrong, no data!
+    return mode_oops(); // something went wrong, no data!
 
   PartSys->updateSystem(); // update system properties (dimensions and data pointers)
   numRockets = map(SEGMENT.speed, 0 , 255, 4, min(PartSys->numSources, (uint32_t)NUMBEROFSOURCES));
@@ -9270,7 +9349,7 @@ uint16_t mode_particlefireworks(void) {
   return FRAMETIME;
 }
 #undef NUMBEROFSOURCES
-static const char _data_FX_MODE_PARTICLEFIREWORKS[] PROGMEM = "PS Fireworks@Launches,Explosion Size,Fuse,Blur,Gravity,Cylinder,Ground,Fast;;!;2;pal=11,ix=50,c1=40,c2=0,c3=12";
+static const char _data_FX_MODE_PARTICLEFIREWORKS[] PROGMEM = "PS Fireworks@Launches,Explosion Size,Fuse,Blur,Gravity,Cylinder,Ground,Fast;;!;2;pal=11,ix=200,sx=180,c1=196,c2=0,c3=10,o3=1";
 
 /*
   Particle Volcano
@@ -9288,7 +9367,7 @@ uint16_t mode_particlevolcano(void) {
 
   if (SEGMENT.call == 0) { // initialization
     if (!initParticleSystem2D(PartSys, NUMBEROFSOURCES)) // init, no additional data needed
-      return mode_static(); // allocation failed or not 2D
+      return mode_oops(); // allocation failed or not 2D
 
     PartSys->setBounceY(true);
     PartSys->setGravity(); // enable with default gforce
@@ -9309,7 +9388,7 @@ uint16_t mode_particlevolcano(void) {
     PartSys = reinterpret_cast<ParticleSystem2D *>(SEGENV.data); // if not first call, just set the pointer to the PS
 
   if (PartSys == nullptr)
-    return mode_static(); // something went wrong, no data!
+    return mode_oops(); // something went wrong, no data!
 
   numSprays = min(PartSys->numSources, (uint32_t)NUMBEROFSOURCES); // number of volcanoes
 
@@ -9344,7 +9423,7 @@ uint16_t mode_particlevolcano(void) {
   return FRAMETIME;
 }
 #undef NUMBEROFSOURCES
-static const char _data_FX_MODE_PARTICLEVOLCANO[] PROGMEM = "PS Volcano@Speed,Intensity,Move,Bounce,Spread,AgeColor,Walls,Collide;;!;2;pal=35,sx=100,ix=190,c1=0,c2=160,c3=6,o1=1";
+static const char _data_FX_MODE_PARTICLEVOLCANO[] PROGMEM = "PS Volcano@Speed,Intensity,Move,Bounce,Spread,AgeColor,Walls,Collide;;!;2;pal=35,sx=208,ix=190,c1=0,c2=190,c3=16,o1=1";
 
 /*
   Particle Fire
@@ -9358,14 +9437,14 @@ uint16_t mode_particlefire(void) {
 
   if (SEGMENT.call == 0) { // initialization
     if (!initParticleSystem2D(PartSys, SEGMENT.virtualWidth(), 4)) //maximum number of source (PS may limit based on segment size); need 4 additional bytes for time keeping (uint32_t lastcall)
-      return mode_static(); // allocation failed or not 2D
+      return mode_oops(); // allocation failed or not 2D
     SEGENV.aux0 = hw_random16(); // aux0 is wind position (index) in the perlin noise
   }
   else
     PartSys = reinterpret_cast<ParticleSystem2D *>(SEGENV.data); // if not first call, just set the pointer to the PS
 
   if (PartSys == nullptr)
-    return mode_static(); // something went wrong, no data!
+    return mode_oops(); // something went wrong, no data!
 
   PartSys->updateSystem(); // update system properties (dimensions and data pointers)
   PartSys->setWrapX(SEGMENT.check2);
@@ -9398,7 +9477,7 @@ uint16_t mode_particlefire(void) {
       PartSys->sources[i].source.ttl = 20 + hw_random16((SEGMENT.custom1 * SEGMENT.custom1) >> 8) / (1 + (firespeed >> 5)); //'hotness' of fire, faster flames reduce the effect or flame height will scale too much with speed
       PartSys->sources[i].maxLife = hw_random16(SEGMENT.virtualHeight() >> 1) + 16; // defines flame height together with the vy speed, vy speed*maxlife/PS_P_RADIUS is the average flame height
       PartSys->sources[i].minLife = PartSys->sources[i].maxLife >> 1;
-      PartSys->sources[i].vx = hw_random16(4) - 2; // emitting speed (sideways)
+      PartSys->sources[i].vx = hw_random16(5) - 2; // emitting speed (sideways)
       PartSys->sources[i].vy = (SEGMENT.virtualHeight() >> 1) + (firespeed >> 4) + (SEGMENT.custom1 >> 4); // emitting speed (upwards)
       PartSys->sources[i].var = 2 + hw_random16(2 + (firespeed >> 4)); // speed variation around vx,vy (+/- var)
     }
@@ -9449,7 +9528,7 @@ uint16_t mode_particlepit(void) {
 
   if (SEGMENT.call == 0) { // initialization
     if (!initParticleSystem2D(PartSys, 0, 0, true, false)) // init
-      return mode_static(); // allocation failed or not 2D
+      return mode_oops(); // allocation failed or not 2D
     PartSys->setKillOutOfBounds(true);
     PartSys->setGravity(); // enable with default gravity
     PartSys->setUsedParticles(170); // use 75% of available particles
@@ -9457,7 +9536,7 @@ uint16_t mode_particlepit(void) {
   else
     PartSys = reinterpret_cast<ParticleSystem2D *>(SEGENV.data); // if not first call, just set the pointer to the PS
   if (PartSys == nullptr)
-    return mode_static(); // something went wrong, no data!
+    return mode_oops(); // something went wrong, no data!
 
   PartSys->updateSystem(); // update system properties (dimensions and data pointers)
 
@@ -9521,7 +9600,7 @@ uint16_t mode_particlewaterfall(void) {
 
   if (SEGMENT.call == 0) { // initialization
     if (!initParticleSystem2D(PartSys, 12)) // init, request 12 sources, no additional data needed
-      return mode_static(); // allocation failed or not 2D
+      return mode_oops(); // allocation failed or not 2D
 
     PartSys->setGravity();  // enable with default gforce
     PartSys->setKillOutOfBounds(true); // out of bounds particles dont return (except on top, taken care of by gravity setting)
@@ -9542,7 +9621,7 @@ uint16_t mode_particlewaterfall(void) {
   else
     PartSys = reinterpret_cast<ParticleSystem2D *>(SEGENV.data); // if not first call, just set the pointer to the PS
   if (PartSys == nullptr)
-    return mode_static(); // something went wrong, no data!
+    return mode_oops(); // something went wrong, no data!
 
   // Particle System settings
   PartSys->updateSystem(); // update system properties (dimensions and data pointers)
@@ -9592,7 +9671,7 @@ uint16_t mode_particlebox(void) {
 
   if (SEGMENT.call == 0) { // initialization
     if (!initParticleSystem2D(PartSys, 1)) // init
-      return mode_static(); // allocation failed or not 2D
+      return mode_oops(); // allocation failed or not 2D
     PartSys->setBounceX(true);
     PartSys->setBounceY(true);
     SEGENV.aux0 = hw_random16(); // position in perlin noise
@@ -9601,7 +9680,7 @@ uint16_t mode_particlebox(void) {
     PartSys = reinterpret_cast<ParticleSystem2D *>(SEGENV.data); // if not first call, just set the pointer to the PS
 
   if (PartSys == nullptr)
-    return mode_static(); // something went wrong, no data!
+    return mode_oops(); // something went wrong, no data!
 
   PartSys->updateSystem(); // update system properties (dimensions and data pointers)
   PartSys->setParticleSize(SEGMENT.custom3<<3);
@@ -9673,7 +9752,7 @@ uint16_t mode_particleperlin(void) {
 
   if (SEGMENT.call == 0) { // initialization
     if (!initParticleSystem2D(PartSys, 1, 0, true)) // init with 1 source and advanced properties
-      return mode_static(); // allocation failed or not 2D
+      return mode_oops(); // allocation failed or not 2D
 
     PartSys->setKillOutOfBounds(true); // should never happen, but lets make sure there are no stray particles
     PartSys->setMotionBlur(230); // anable motion blur
@@ -9684,7 +9763,7 @@ uint16_t mode_particleperlin(void) {
     PartSys = reinterpret_cast<ParticleSystem2D *>(SEGENV.data); // if not first call, just set the pointer to the PS
 
   if (PartSys == nullptr)
-    return mode_static(); // something went wrong, no data!
+    return mode_oops(); // something went wrong, no data!
 
   PartSys->updateSystem(); // update system properties (dimensions and data pointers)
   PartSys->setWrapX(SEGMENT.check1);
@@ -9738,13 +9817,13 @@ uint16_t mode_particleimpact(void) {
 
   if (SEGMENT.call == 0) { // initialization
     if (!initParticleSystem2D(PartSys, NUMBEROFSOURCES)) // init, no additional data needed
-      return mode_static(); // allocation failed or not 2D
+      return mode_oops(); // allocation failed or not 2D
     PartSys->setKillOutOfBounds(true);
     PartSys->setGravity(); // enable default gravity
     PartSys->setBounceY(true); // always use ground bounce
     PartSys->setWallRoughness(220); // high roughness
     numMeteors = min(PartSys->numSources, (uint32_t)NUMBEROFSOURCES);
-    for (i = 0; i < numMeteors; i++) {
+    for (uint32_t i = 0; i < numMeteors; i++) {
       PartSys->sources[i].source.ttl = hw_random16(10 * i); // set initial delay for meteors
       PartSys->sources[i].source.vy = 10; // at positive speeds, no particles are emitted and if particle dies, it will be relaunched
     }
@@ -9753,7 +9832,7 @@ uint16_t mode_particleimpact(void) {
     PartSys = reinterpret_cast<ParticleSystem2D *>(SEGENV.data); // if not first call, just set the pointer to the PS
 
   if (PartSys == nullptr)
-    return mode_static(); // something went wrong, no data!
+    return mode_oops(); // something went wrong, no data!
 
   // Particle System settings
   PartSys->updateSystem(); // update system properties (dimensions and data pointers)
@@ -9848,7 +9927,7 @@ uint16_t mode_particleattractor(void) {
   PSparticle *attractor; // particle pointer to the attractor
   if (SEGMENT.call == 0) { // initialization
     if (!initParticleSystem2D(PartSys, 1, sizeof(PSparticle), true)) // init using 1 source and advanced particle settings
-      return mode_static(); // allocation failed or not 2D
+      return mode_oops(); // allocation failed or not 2D
     PartSys->sources[0].source.hue = hw_random16();
     PartSys->sources[0].source.vx = -7; // will collied with wall and get random bounce direction
     PartSys->sources[0].sourceFlags.collide = true; // seeded particles will collide
@@ -9869,7 +9948,7 @@ uint16_t mode_particleattractor(void) {
   }
 
   if (PartSys == nullptr)
-    return mode_static(); // something went wrong, no data!
+    return mode_oops(); // something went wrong, no data!
 
   // Particle System settings
   PartSys->updateSystem(); // update system properties (dimensions and data pointers)
@@ -9941,7 +10020,7 @@ uint16_t mode_particlespray(void) {
 
   if (SEGMENT.call == 0) { // initialization
     if (!initParticleSystem2D(PartSys, 1)) // init, no additional data needed
-      return mode_static(); // allocation failed or not 2D
+      return mode_oops(); // allocation failed or not 2D
     PartSys->setKillOutOfBounds(true); // out of bounds particles dont return (except on top, taken care of by gravity setting)
     PartSys->setBounceY(true);
     PartSys->setMotionBlur(200); // anable motion blur
@@ -9954,7 +10033,7 @@ uint16_t mode_particlespray(void) {
     PartSys = reinterpret_cast<ParticleSystem2D *>(SEGENV.data); // if not first call, just set the pointer to the PS
 
   if (PartSys == nullptr)
-    return mode_static(); // something went wrong, no data!
+    return mode_oops(); // something went wrong, no data!
 
   // Particle System settings
   PartSys->updateSystem(); // update system properties (dimensions and data pointers)
@@ -10026,14 +10105,14 @@ uint16_t mode_particleGEQ(void) {
 
   if (SEGMENT.call == 0) { // initialization
     if (!initParticleSystem2D(PartSys, 1))
-      return mode_static(); // allocation failed or not 2D
+      return mode_oops(); // allocation failed or not 2D
     PartSys->setKillOutOfBounds(true);
     PartSys->setUsedParticles(170); // use 2/3 of available particles
   }
   else
     PartSys = reinterpret_cast<ParticleSystem2D *>(SEGENV.data); // if not first call, just set the pointer to the PS
   if (PartSys == nullptr)
-    return mode_static(); // something went wrong, no data!
+    return mode_oops(); // something went wrong, no data!
 
   uint32_t i;
   // set particle system properties
@@ -10087,7 +10166,7 @@ uint16_t mode_particleGEQ(void) {
   return FRAMETIME;
 }
 
-static const char _data_FX_MODE_PARTICLEGEQ[] PROGMEM = "PS GEQ 2D@Speed,Intensity,Diverge,Bounce,Gravity,Cylinder,Walls,Floor;;!;2f;pal=0,sx=155,ix=200,c1=0";
+static const char _data_FX_MODE_PARTICLEGEQ[] PROGMEM = "PS GEQ 2D@Speed,Intensity,Diverge,Bounce,Gravity,Cylinder,Walls,Floor;;!;2f;pal=0,sx=232,ix=200,c1=0,c3=9";
 
 /*
   Particle rotating GEQ
@@ -10103,7 +10182,7 @@ uint16_t mode_particlecenterGEQ(void) {
 
   if (SEGMENT.call == 0) { // initialization
     if (!initParticleSystem2D(PartSys, NUMBEROFSOURCES))  // init, request 16 sources
-      return mode_static(); // allocation failed or not 2D
+      return mode_oops(); // allocation failed or not 2D
 
     numSprays = min(PartSys->numSources, (uint32_t)NUMBEROFSOURCES);
     for (i = 0; i < numSprays; i++) {
@@ -10119,7 +10198,7 @@ uint16_t mode_particlecenterGEQ(void) {
     PartSys = reinterpret_cast<ParticleSystem2D *>(SEGENV.data); // if not first call, just set the pointer to the PS
 
   if (PartSys == nullptr)
-    return mode_static(); // something went wrong, no data!
+    return mode_oops(); // something went wrong, no data!
 
   PartSys->updateSystem(); // update system properties (dimensions and data pointers)
   numSprays = min(PartSys->numSources, (uint32_t)NUMBEROFSOURCES);
@@ -10172,7 +10251,7 @@ uint16_t mode_particleghostrider(void) {
 
   if (SEGMENT.call == 0) { // initialization
     if (!initParticleSystem2D(PartSys, 1)) // init, no additional data needed
-      return mode_static(); // allocation failed or not 2D
+      return mode_oops(); // allocation failed or not 2D
     PartSys->setKillOutOfBounds(true); // out of bounds particles dont return (except on top, taken care of by gravity setting)
     PartSys->sources[0].maxLife = 260; // lifetime in frames
     PartSys->sources[0].minLife = 250;
@@ -10185,7 +10264,7 @@ uint16_t mode_particleghostrider(void) {
   }
 
   if (PartSys == nullptr)
-    return mode_static(); // something went wrong, no data!
+    return mode_oops(); // something went wrong, no data!
 
   if (SEGMENT.intensity > 0) { // spiraling
     if (SEGENV.aux1) {
@@ -10251,7 +10330,7 @@ uint16_t mode_particleblobs(void) {
 
   if (SEGMENT.call == 0) {
     if (!initParticleSystem2D(PartSys, 0, 0, true, true)) //init, no additional bytes, advanced size & size control
-      return mode_static(); // allocation failed or not 2D
+      return mode_oops(); // allocation failed or not 2D
     PartSys->setBounceX(true);
     PartSys->setBounceY(true);
     PartSys->setWallHardness(255);
@@ -10262,7 +10341,7 @@ uint16_t mode_particleblobs(void) {
     PartSys = reinterpret_cast<ParticleSystem2D *>(SEGENV.data); // if not first call, just set the pointer to the PS
 
   if (PartSys == nullptr)
-    return mode_static(); // something went wrong, no data!
+    return mode_oops(); // something went wrong, no data!
 
   PartSys->updateSystem(); // update system properties (dimensions and data pointers)
   PartSys->setUsedParticles(map(SEGMENT.intensity, 0, 255, 25, 128)); // minimum 10%, maximum 50% of available particles (note: PS ensures at least 1)
@@ -10334,7 +10413,7 @@ uint16_t mode_particleDrip(void) {
   //uint8_t numSprays;
   if (SEGMENT.call == 0) { // initialization
     if (!initParticleSystem1D(PartSys, 4)) // init
-      return mode_static(); // allocation failed or single pixel
+      return mode_oops(); // allocation failed or single pixel
     PartSys->setKillOutOfBounds(true); // out of bounds particles dont return (except on top, taken care of by gravity setting)
     PartSys->sources[0].source.hue = hw_random16();
     SEGENV.aux1 = 0xFFFF; // invalidate
@@ -10343,7 +10422,7 @@ uint16_t mode_particleDrip(void) {
     PartSys = reinterpret_cast<ParticleSystem1D *>(SEGENV.data); // if not first call, just set the pointer to the PS
 
   if (PartSys == nullptr)
-    return mode_static(); // something went wrong, no data!
+    return mode_oops(); // something went wrong, no data!
 
   // Particle System settings
   PartSys->updateSystem(); // update system properties (dimensions and data pointers)
@@ -10439,7 +10518,7 @@ uint16_t mode_particlePinball(void) {
 
   if (SEGMENT.call == 0) { // initialization
     if (!initParticleSystem1D(PartSys, 1, 128, 0, true)) // init
-      return mode_static(); // allocation failed or is single pixel
+      return mode_oops(); // allocation failed or is single pixel
     PartSys->sources[0].sourceFlags.collide = true; // seeded particles will collide (if enabled)
     PartSys->sources[0].source.x = PS_P_RADIUS_1D; //emit at bottom
     PartSys->setKillOutOfBounds(true); // out of bounds particles dont return
@@ -10450,7 +10529,7 @@ uint16_t mode_particlePinball(void) {
     PartSys = reinterpret_cast<ParticleSystem1D *>(SEGENV.data); // if not first call, just set the pointer to the PS
 
   if (PartSys == nullptr)
-    return mode_static(); // something went wrong, no data!
+    return mode_oops(); // something went wrong, no data!
 
   // Particle System settings
   //uint32_t hardness = 240 + (SEGMENT.custom1>>4);
@@ -10549,7 +10628,7 @@ uint16_t mode_particleDancingShadows(void) {
 
   if (SEGMENT.call == 0) { // initialization
     if (!initParticleSystem1D(PartSys, 1)) // init, one source
-      return mode_static(); // allocation failed or is single pixel
+      return mode_oops(); // allocation failed or is single pixel
     PartSys->sources[0].maxLife = 1000; //set long life (kill out of bounds is done in custom way)
     PartSys->sources[0].minLife = PartSys->sources[0].maxLife;
   }
@@ -10558,7 +10637,7 @@ uint16_t mode_particleDancingShadows(void) {
   }
 
   if (PartSys == nullptr)
-    return mode_static(); // something went wrong, no data!
+    return mode_oops(); // something went wrong, no data!
 
   // Particle System settings
   PartSys->updateSystem(); // update system properties (dimensions and data pointers)
@@ -10667,14 +10746,14 @@ uint16_t mode_particleFireworks1D(void) {
   if (SEGMENT.call == 0) { // initialization
     if (!initParticleSystem1D(PartSys, 4, 150, 4, true)) // init advanced particle system
     if (!initParticleSystem1D(PartSys, 4, 150, 4, true)) // init advanced particle system
-      return mode_static(); // allocation failed or is single pixel
+      return mode_oops(); // allocation failed or is single pixel
     PartSys->setKillOutOfBounds(true);
     PartSys->sources[0].sourceFlags.custom1 = 1; // set rocket state to standby
   }
   else
     PartSys = reinterpret_cast<ParticleSystem1D *>(SEGENV.data); // if not first call, just set the pointer to the PS
   if (PartSys == nullptr)
-    return mode_static(); // something went wrong, no data!
+    return mode_oops(); // something went wrong, no data!
 
   // Particle System settings
   PartSys->updateSystem(); // update system properties (dimensions and data pointers)
@@ -10787,11 +10866,11 @@ uint16_t mode_particleSparkler(void) {
 
   if (SEGMENT.call == 0) { // initialization
     if (!initParticleSystem1D(PartSys, 16, 128 ,0, true)) // init, no additional data needed
-      return mode_static(); // allocation failed or is single pixel
+      return mode_oops(); // allocation failed or is single pixel
   } else
     PartSys = reinterpret_cast<ParticleSystem1D *>(SEGENV.data); // if not first call, just set the pointer to the PS
   if (PartSys == nullptr)
-    return mode_static(); // something went wrong, no data!
+    return mode_oops(); // something went wrong, no data!
 
   // Particle System settings
   PartSys->updateSystem(); // update system properties (dimensions and data pointers)
@@ -10858,14 +10937,14 @@ uint16_t mode_particleHourglass(void) {
   uint32_t* settingTracker;
   if (SEGMENT.call == 0) { // initialization
     if (!initParticleSystem1D(PartSys, 0, 255, 8, false)) // init
-      return mode_static(); // allocation failed or is single pixel
+      return mode_oops(); // allocation failed or is single pixel
     PartSys->setBounce(true);
     PartSys->setWallHardness(100);
   }
   else
     PartSys = reinterpret_cast<ParticleSystem1D *>(SEGENV.data); // if not first call, just set the pointer to the PS
   if (PartSys == nullptr)
-    return mode_static(); // something went wrong, no data!
+    return mode_oops(); // something went wrong, no data!
 
   // Particle System settings
   PartSys->updateSystem(); // update system properties (dimensions and data pointers)
@@ -10983,7 +11062,7 @@ uint16_t mode_particle1Dspray(void) {
 
   if (SEGMENT.call == 0) { // initialization
     if (!initParticleSystem1D(PartSys, 1))
-      return mode_static(); // allocation failed or is single pixel
+      return mode_oops(); // allocation failed or is single pixel
     PartSys->setKillOutOfBounds(true);
     PartSys->setWallHardness(150);
     PartSys->setParticleSize(1);
@@ -10991,7 +11070,7 @@ uint16_t mode_particle1Dspray(void) {
   else
     PartSys = reinterpret_cast<ParticleSystem1D *>(SEGENV.data); // if not first call, just set the pointer to the PS
   if (PartSys == nullptr)
-    return mode_static(); // something went wrong, no data!
+    return mode_oops(); // something went wrong, no data!
 
   // Particle System settings
   PartSys->updateSystem(); // update system properties (dimensions and data pointers)
@@ -11036,13 +11115,13 @@ uint16_t mode_particleBalance(void) {
 
   if (SEGMENT.call == 0) { // initialization
     if (!initParticleSystem1D(PartSys, 1, 128)) // init, no additional data needed, use half of max particles
-      return mode_static(); // allocation failed or is single pixel
+      return mode_oops(); // allocation failed or is single pixel
     PartSys->setParticleSize(1);
   }
   else
     PartSys = reinterpret_cast<ParticleSystem1D *>(SEGENV.data); // if not first call, just set the pointer to the PS
   if (PartSys == nullptr)
-    return mode_static(); // something went wrong, no data!
+    return mode_oops(); // something went wrong, no data!
 
   // Particle System settings
   PartSys->updateSystem(); // update system properties (dimensions and data pointers)
@@ -11115,7 +11194,7 @@ uint16_t mode_particleChase(void) {
   ParticleSystem1D *PartSys = nullptr;
   if (SEGMENT.call == 0) { // initialization
     if (!initParticleSystem1D(PartSys, 1, 255, 2, true)) // init
-      return mode_static(); // allocation failed or is single pixel
+      return mode_oops(); // allocation failed or is single pixel
     SEGENV.aux0 = 0xFFFF; // invalidate
     *PartSys->PSdataEnd = 1; // huedir
     *(PartSys->PSdataEnd + 1) = 1; // sizedir
@@ -11123,7 +11202,7 @@ uint16_t mode_particleChase(void) {
   else
     PartSys = reinterpret_cast<ParticleSystem1D *>(SEGENV.data); // if not first call, just set the pointer to the PS
   if (PartSys == nullptr)
-    return mode_static(); // something went wrong, no data!
+    return mode_oops(); // something went wrong, no data!
   // Particle System settings
   PartSys->updateSystem(); // update system properties (dimensions and data pointers)
   PartSys->setColorByPosition(SEGMENT.check3);
@@ -11211,7 +11290,7 @@ uint16_t mode_particleStarburst(void) {
 
   if (SEGMENT.call == 0) { // initialization
     if (!initParticleSystem1D(PartSys, 1, 200, 0, true)) // init
-      return mode_static(); // allocation failed or is single pixel
+      return mode_oops(); // allocation failed or is single pixel
     PartSys->setKillOutOfBounds(true);
     PartSys->enableParticleCollisions(true, 200);
     PartSys->sources[0].source.ttl = 1; // set initial stanby time
@@ -11220,7 +11299,7 @@ uint16_t mode_particleStarburst(void) {
   else
     PartSys = reinterpret_cast<ParticleSystem1D *>(SEGENV.data); // if not first call, just set the pointer to the PS
   if (PartSys == nullptr)
-    return mode_static(); // something went wrong, no data!
+    return mode_oops(); // something went wrong, no data!
 
   // Particle System settings
   PartSys->updateSystem(); // update system properties (dimensions and data pointers)
@@ -11273,12 +11352,12 @@ uint16_t mode_particle1DGEQ(void) {
 
   if (SEGMENT.call == 0) { // initialization
     if (!initParticleSystem1D(PartSys, 16, 255, 0, true)) // init, no additional data needed
-      return mode_static(); // allocation failed or is single pixel
+      return mode_oops(); // allocation failed or is single pixel
   }
   else
     PartSys = reinterpret_cast<ParticleSystem1D *>(SEGENV.data); // if not first call, just set the pointer to the PS
   if (PartSys == nullptr)
-    return mode_static(); // something went wrong, no data!
+    return mode_oops(); // something went wrong, no data!
 
   // Particle System settings
   PartSys->updateSystem(); // update system properties (dimensions and data pointers)
@@ -11345,14 +11424,14 @@ uint16_t mode_particleFire1D(void) {
 
   if (SEGMENT.call == 0) { // initialization
     if (!initParticleSystem1D(PartSys, 5)) // init
-      return mode_static(); // allocation failed or is single pixel
+      return mode_oops(); // allocation failed or is single pixel
     PartSys->setKillOutOfBounds(true);
     PartSys->setParticleSize(1);
   }
   else
     PartSys = reinterpret_cast<ParticleSystem1D *>(SEGENV.data); // if not first call, just set the pointer to the PS
   if (PartSys == nullptr)
-    return mode_static(); // something went wrong, no data!
+    return mode_oops(); // something went wrong, no data!
 
   // Particle System settings
   PartSys->updateSystem(); // update system properties (dimensions and data pointers)
@@ -11410,7 +11489,7 @@ uint16_t mode_particle1DsonicStream(void) {
 
   if (SEGMENT.call == 0) { // initialization
     if (!initParticleSystem1D(PartSys, 1, 255, 0, true)) // init, no additional data needed
-      return mode_static(); // allocation failed or is single pixel
+      return mode_oops(); // allocation failed or is single pixel
     PartSys->setKillOutOfBounds(true);
     PartSys->sources[0].source.x = 0; // at start
     //PartSys->sources[1].source.x = PartSys->maxX; // at end
@@ -11419,7 +11498,7 @@ uint16_t mode_particle1DsonicStream(void) {
   else
     PartSys = reinterpret_cast<ParticleSystem1D *>(SEGENV.data); // if not first call, just set the pointer to the PS
   if (PartSys == nullptr)
-    return mode_static(); // something went wrong, no data!
+    return mode_oops(); // something went wrong, no data!
 
   // Particle System settings
   PartSys->updateSystem(); // update system properties (dimensions and data pointers)
@@ -11513,13 +11592,13 @@ uint16_t mode_particle1DsonicBoom(void) {
   ParticleSystem1D *PartSys = nullptr;
   if (SEGMENT.call == 0) { // initialization
     if (!initParticleSystem1D(PartSys, 1, 255, 0, true)) // init, no additional data needed
-      return mode_static(); // allocation failed or is single pixel
+      return mode_oops(); // allocation failed or is single pixel
     PartSys->setKillOutOfBounds(true);
   }
   else
     PartSys = reinterpret_cast<ParticleSystem1D *>(SEGENV.data); // if not first call, just set the pointer to the PS
   if (PartSys == nullptr)
-    return mode_static(); // something went wrong, no data!
+    return mode_oops(); // something went wrong, no data!
 
   // Particle System settings
   PartSys->updateSystem(); // update system properties (dimensions and data pointers)
@@ -11603,13 +11682,13 @@ uint16_t mode_particleSpringy(void) {
   ParticleSystem1D *PartSys = nullptr;
   if (SEGMENT.call == 0) { // initialization
     if (!initParticleSystem1D(PartSys, 1, 128, 0, true)) // init
-      return mode_static(); // allocation failed or is single pixel
+      return mode_oops(); // allocation failed or is single pixel
     SEGENV.aux0 = SEGENV.aux1 = 0xFFFF; // invalidate settings
   }
   else
     PartSys = reinterpret_cast<ParticleSystem1D *>(SEGENV.data); // if not first call, just set the pointer to the PS
   if (PartSys == nullptr)
-    return mode_static(); // something went wrong, no data!
+    return mode_oops(); // something went wrong, no data!
   // Particle System settings
   PartSys->updateSystem(); // update system properties (dimensions and data pointers)
   PartSys->setMotionBlur(220 * SEGMENT.check1); // anable motion blur
@@ -11773,18 +11852,35 @@ static const char _data_RESERVED[] PROGMEM = "RSVD";
 // use id==255 to find unallocated gaps (with "Reserved" data string)
 // if vector size() is smaller than id (single) data is appended at the end (regardless of id)
 void WS2812FX::addEffect(uint8_t id, mode_ptr mode_fn, const char *mode_name) {
+  if ((id < _mode.size()) && (_modeData[id] != _data_RESERVED)) {
+      DEBUG_PRINTF("addEffect(%d) -> ", id);
+      DEBUG_PRINTF(" already in use, finding a new slot for -> %s\n", mode_name);
+      id = 255;
+  }
+  if ((id >= _mode.size()) && (id != 255)) {
+      DEBUG_PRINTF("!addEffect(%d) -> slot not existing, finding new slot\n", id);
+  }
   if (id == 255) { // find empty slot
     for (size_t i=1; i<_mode.size(); i++) if (_modeData[i] == _data_RESERVED) { id = i; break; }
   }
+
   if (id < _mode.size()) {
-    if (_modeData[id] != _data_RESERVED) return; // do not overwrite alerady added effect
+    if (_modeData[id] != _data_RESERVED) {
+      USER_PRINTF("!addEffect(%d)  failed - existing effect cannot be replaced. <=> %s\n", id, mode_name);
+      return; // do not overwrite alerady added effect
+  }
     _mode[id]     = mode_fn;
     _modeData[id] = mode_name;
   } else {
+    if (_modeCount > 253) {
+      USER_PRINTF("!addEffect(%d)  failed - mode list is full!    %s\n", id, mode_name);
+      return; // mode list is full - cannot add
+    }
     _mode.push_back(mode_fn);
     _modeData.push_back(mode_name);
     if (_modeCount < _mode.size()) _modeCount++;
   }
+  DEBUG_PRINTF("addEffect(%d) => %s\n", id, mode_name);
 }
 
 void WS2812FX::setupEffectData() {

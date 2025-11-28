@@ -697,6 +697,8 @@ function populateInfo(i)
 	//if (i.ver.includes("0.14.1-b")) vcn = "Fried Chicken";  // final line of "One Vision" by Queen
 	if (i.ver.includes("0.14.3-b")) vcn = "Fried Chicken";
 	if (i.ver.includes("14.5.")) vcn = "Small Step";
+	if (i.ver.includes("14.6.")) vcn = "New Light";
+	if (i.ver.includes("14.7.")) vcn = "Next Step";
 
 	cn += `v${i.ver} &nbsp;<i>"${vcn}"</i><p>(WLEDMM ${i.rel}.bin)</p><p><em>build ${i.vid}</em></p><table>
 ${urows}
@@ -825,7 +827,7 @@ function populateSegments(s)
 				(cfg.comp.segpwr ? segp : '') +
 				`<div class="segin" id="seg${i}in">`+
 					`<input id="seg${i}fx" value="${inst.fx}" type="hidden"/>` + // <!--WLEDMM-->
-					`<input type="text" class="ptxt" id="seg${i}t" autocomplete="off" maxlength=32 value="${inst.n?inst.n:""}" placeholder="Enter name..."/>`+
+					`<input type="text" class="ptxt" id="seg${i}t" autocomplete="off" maxlength=64 value="${inst.n?inst.n:""}" placeholder="Enter name..."/>`+
 					`<table class="infot segt">`+
 					`<tr>`+
 						`<td>${isMSeg?'Start X':'Start LED'}</td>`+
@@ -1973,6 +1975,9 @@ function readState(s,command=false)
 			break;
 		case  3:
 			errstr = "Buffer locked!";
+			break;
+		case  7:
+			errstr = "No RAM for pixel buffer!";
 			break;
 		case  8:
 			errstr = "Effect RAM depleted!";
@@ -3220,7 +3225,7 @@ setInterval(()=>{
 	gId('heartMM').style.color = `hsl(${hc}, 100%, 50%)`;
 }, 910);
 
-function openGH() { window.open("https://github.com/Aircoookie/WLED/wiki"); }
+function openGH() { window.open("https://mm.kno.wled.ge/"); }
 
 var cnfr = false;
 function cnfReset()

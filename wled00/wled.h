@@ -7,7 +7,7 @@
  */
 
 // version code in format yymmddb (b = daily build)
-#define VERSION 2501170
+#define VERSION 2510241
 
 // WLEDMM  - you can check for this define in usermods, to only enabled WLEDMM specific code in the "right" fork. Its not defined in AC WLED.
 #define _MoonModules_WLED_
@@ -87,6 +87,9 @@
 
 // WLEDMM MANDATORY flags
 #define WLEDMM_PROTECT_SERVICE // prevents crashes when effects are drawing while asyncWebServer tries to modify segments at the same time
+#if !defined(WLEDMM_FASTPATH) && !defined(ESP8266)
+#define WLEDMM_FASTPATH        // all WLED-MM build are FASTPATH
+#endif
 
 // Library inclusions.
 #include <Arduino.h>
@@ -173,7 +176,7 @@
 #include "src/dependencies/async-mqtt-client/AsyncMqttClient.h"
 #endif
 
-#define ARDUINOJSON_DECODE_UNICODE 0
+#define ARDUINOJSON_DECODE_UNICODE 0   // WLEDMM enables support for unicode HEX strings - deserializeJson(doc, "{'firstname':'Beno\\u00EEt'}"); --> not needed - disable saves 1.2KB flash
 #include "src/dependencies/json/AsyncJson-v6.h"
 #include "src/dependencies/json/ArduinoJson-v6.h"
 
@@ -345,7 +348,7 @@ WLED_GLOBAL char clientSSID[33] _INIT(CLIENT_SSID);
 WLED_GLOBAL char clientPass[65] _INIT(CLIENT_PASS);
 WLED_GLOBAL char cmDNS[33] _INIT(MDNS_NAME);                       // mDNS address (*.local, replaced by wledXXXXXX if default is used)
 WLED_GLOBAL char apSSID[33] _INIT("");                             // AP off by default (unless setup)
-WLED_GLOBAL byte apChannel _INIT(1);                               // 2.4GHz WiFi AP channel (1-13)
+WLED_GLOBAL byte apChannel _INIT(6);                               // 2.4GHz WiFi AP channel (1-13)
 WLED_GLOBAL byte apHide    _INIT(0);                               // hidden AP SSID
 WLED_GLOBAL byte apBehavior _INIT(AP_BEHAVIOR_BOOT_NO_CONN);       // access point opens when no connection after boot by default
 WLED_GLOBAL IPAddress staticIP      _INIT_N(((  0,   0,  0,  0))); // static IP of ESP
@@ -714,9 +717,9 @@ WLED_GLOBAL uint16_t olen _INIT(0);
 // General filesystem
 WLED_GLOBAL size_t fsBytesUsed _INIT(0);
 WLED_GLOBAL size_t fsBytesTotal _INIT(0);
-WLED_GLOBAL unsigned long presetsModifiedTime _INIT(0L);
+WLED_GLOBAL volatile unsigned long presetsModifiedTime _INIT(0L);
 WLED_GLOBAL JsonDocument* fileDoc;
-WLED_GLOBAL bool doCloseFile _INIT(false);
+WLED_GLOBAL volatile bool doCloseFile _INIT(false);
 
 // presets
 WLED_GLOBAL byte currentPreset _INIT(0);
@@ -880,7 +883,7 @@ WLED_GLOBAL volatile uint8_t jsonBufferLock _INIT(0);
 #endif
 
 // debug macro variable definitions
-#ifdef WLED_DEBUG
+#if defined(WLED_DEBUG) || defined(WLED_DEBUG_HEAP)
   WLED_GLOBAL unsigned long debugTime _INIT(0);
   WLED_GLOBAL int lastWifiState _INIT(3);
   WLED_GLOBAL unsigned long wifiStateChangedTime _INIT(0);
