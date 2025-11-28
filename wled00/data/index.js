@@ -3816,7 +3816,11 @@ function reportUpgradeEvent(oldVersion, newVersion) {
 				product: infoData.product,                       // Product name (always present)
 				flashSize: infoData.flash                        // Flash size (always present)
 		};
-		
+		// Add optional fields if available
+		if (infoData.tpram !== undefined) upgradeData.psramSize = Math.round(infoData.tpram / (1024 * 1024));  // convert bytes to MB - tpram is MM specific
+		// Note: partitionSizes not currently available in /json/info endpoint
+		//    it is availeable in WLEDMM => infoData.t = total FS size in bytes
+
 		// Make AJAX call to postUpgradeEvent API
 		return fetch('https://usage.wled.me/api/usage/upgrade', {
 			method: 'POST',
