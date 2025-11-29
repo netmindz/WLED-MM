@@ -1,3 +1,5 @@
+#if defined(ARDUINO_ARCH_ESP32) && !defined(WLED_DISABLE_OTA) // WLEDMM we only want getBootloaderSHA256Hex()
+
 #include "ota_update.h"
 #include "wled.h"
 
@@ -31,6 +33,9 @@ constexpr size_t METADATA_OFFSET = 0x1000;     // ESP8266: metadata appears at 4
 #endif
 constexpr size_t METADATA_SEARCH_RANGE = 512;  // bytes
 
+#endif
+
+#if 0 // WLEDMM not needed - we only want getBootloaderSHA256Hex();
 
 /**
  * Check if OTA should be allowed based on release compatibility using custom description
@@ -75,7 +80,7 @@ struct UpdateContext {
 
   // Buffer to hold block data across posts, if needed
   std::vector<uint8_t> releaseMetadataBuffer;  
-};
+}
 
 
 static void endOTA(AsyncWebServerRequest *request) {
@@ -106,7 +111,7 @@ static void endOTA(AsyncWebServerRequest *request) {
     }
     delete context;
   }
-};
+}
 
 static bool beginOTA(AsyncWebServerRequest *request, UpdateContext* context)
 {
@@ -271,11 +276,13 @@ void handleOTAData(AsyncWebServerRequest *request, size_t index, uint8_t *data, 
   }
 }
 
+#endif
+
 #if defined(ARDUINO_ARCH_ESP32) && !defined(WLED_DISABLE_OTA)
 static String bootloaderSHA256HexCache = "";
 
 // Calculate and cache the bootloader SHA256 digest as hex string
-void calculateBootloaderSHA256() {
+static void calculateBootloaderSHA256() {
   if (!bootloaderSHA256HexCache.isEmpty()) return;
 
   // Calculate SHA256
@@ -317,7 +324,7 @@ String getBootloaderSHA256Hex() {
 }
 
 // Invalidate cached bootloader SHA256 (call after bootloader update)
-void invalidateBootloaderSHA256Cache() {
+static void invalidateBootloaderSHA256Cache() {
   bootloaderSHA256HexCache = "";
 }
 #endif
