@@ -3696,45 +3696,41 @@ function checkVersionUpgrade(info) {
 	versionCheckDone = true;
 
 	// Fetch version-info.json using existing /edit endpoint
-	fetch('/edit?edit=version-info.json', {
+	fetch('/edit?edit=/version-info.json', {
 		method: 'get'
 	})
-	.then(res => {
-		if (res.status === 404) {
-			// File doesn't exist - first install, show install prompt
-			showVersionUpgradePrompt(info, null, info.ver);
-			return null;
-		}
-		if (!res.ok) {
-			throw new Error('Failed to fetch version-info.json');
-		}
-		return res.json();
-	})
-	.then(versionInfo => {
-		if (!versionInfo) return; // 404 case already handled
-		
-		// Check if user opted out
-		if (versionInfo.neverAsk) return;
-		
-		// Check if version has changed
-		const currentVersion = info.ver;
-		const storedVersion = versionInfo.version || '';
-		
-		if (storedVersion && storedVersion !== currentVersion) {
-			// Version has changed, show upgrade prompt
-			showVersionUpgradePrompt(info, storedVersion, currentVersion);
-		} else if (!storedVersion) {
-			// Empty version in file, show install prompt
-			showVersionUpgradePrompt(info, null, currentVersion);
-		}
-	})
-	.catch(e => {
-		console.log('Failed to load version-info.json', e);
-		// On error, save current version for next time
-		if (info && info.ver) {
-			updateVersionInfo(info.ver, false);
-		}
-	});
+		.then(res => {
+			if (res.status === 404) {
+				// File doesn't exist - first install, show install prompt
+				showVersionUpgradePrompt(info, null, info.ver);
+				return null;
+			}
+			if (!res.ok) {
+				throw new Error('Failed to fetch version-info.json');
+			}
+			return res.json();
+		})
+		.then(versionInfo => {
+			if (!versionInfo) return; // 404 case already handled
+
+			// Check if user opted out
+			if (versionInfo.neverAsk) return;
+
+			// Check if version has changed
+			const currentVersion = info.ver;
+			const storedVersion = versionInfo.version || '';
+
+			if (storedVersion && storedVersion !== currentVersion) {
+				// Version has changed, show upgrade prompt
+				showVersionUpgradePrompt(info, storedVersion, currentVersion);
+			} else if (!storedVersion) {
+				// Empty version in file, show install prompt
+				showVersionUpgradePrompt(info, null, currentVersion);
+			}
+		})
+		.catch(e => {
+			console.log('Failed to load version-info.json', e);
+		});
 }
 
 function showVersionUpgradePrompt(info, oldVersion, newVersion) {
