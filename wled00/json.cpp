@@ -1108,7 +1108,7 @@ void serializeInfo(JsonObject root)
   #endif
   #if defined(ARDUINO_ARCH_ESP32) && defined(BOARD_HAS_PSRAM)
   if (psramFound()) {
-    root[F("tpram")] = ESP.getPsramSize(); //WLEDMM
+    root[F("tpsram")] = ESP.getPsramSize(); //WLEDMM
     root[F("psram")] = ESP.getFreePsram();
     root[F("psusedram")] = ESP.getMinFreePsram();
     #if CONFIG_ESP32S3_SPIRAM_SUPPORT  // WLEDMM -S3 has "qspi" or "opi" PSRAM mode
@@ -1121,7 +1121,7 @@ void serializeInfo(JsonObject root)
   }
   #else
   // for testing
-  //  root[F("tpram")] = 4194304; //WLEDMM
+  //  root[F("tpsram")] = 4194304; //WLEDMM
   //  root[F("psram")] = 4193000;
   //  root[F("psusedram")] = 3083000;
   #endif
