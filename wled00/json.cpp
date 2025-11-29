@@ -1,4 +1,5 @@
 #include "wled.h"
+#include "ota_update.h"
 
 #include "palettes.h"
 
@@ -938,7 +939,7 @@ void serializeInfo(JsonObject root)
   //root[F("cn")] = F(WLED_CODENAME);    //WLEDMM removed
   root[F("release")] = FPSTR(releaseString);
   root[F("rel")] = FPSTR(releaseString); //WLEDMM to add bin name
-
+  //root[F("repo")] = repoString;        // WLEDMM not availeable
   root[F("deviceId")] = getDeviceId();
 
   JsonObject leds = root.createNestedObject("leds");
@@ -1083,6 +1084,9 @@ void serializeInfo(JsonObject root)
 
   root[F("lwip")] = 0; //deprecated
   root[F("totalheap")] = ESP.getHeapSize(); //WLEDMM
+  #ifndef WLED_DISABLE_OTA
+  root[F("bootloaderSHA256")] = getBootloaderSHA256Hex();
+  #endif
   #else
   root[F("arch")] = "esp8266";
   root[F("core")] = ESP.getCoreVersion();
