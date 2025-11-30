@@ -390,13 +390,13 @@ void initServer()
   });
   #endif
   server.on("/", HTTP_GET, [](AsyncWebServerRequest *request){
-    USER_PRINT("Client request"); //WLEDMM: want to see if client connects to wled
+    DEBUG_PRINT("Client request"); //WLEDMM: want to see if client connects to wled
     #ifdef ARDUINO_ARCH_ESP32
     DEBUG_PRINTF("%s min free stack %d\n", pcTaskGetTaskName(NULL), uxTaskGetStackHighWaterMark(NULL)); //WLEDMM
     #endif
     if (captivePortal(request)) return;
     serveIndexOrWelcome(request);
-    USER_PRINTLN(" done"); //WLEDMM: want to see if client connects to wled
+    DEBUG_PRINTLN(" done"); //WLEDMM: want to see if client connects to wled
   });
 
   #ifdef WLED_ENABLE_PIXART
