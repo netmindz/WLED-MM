@@ -7,6 +7,7 @@
 #else
 #include "mbedtls/sha1.h"   // for SHA1 on ESP32
 #include "esp_efuse.h"
+#include "esp_adc_cal.h"
 #endif
 
 //helper to get int value at a position in string
@@ -703,18 +704,17 @@ String computeSHA1(const String& input) {
 }
 
 #ifdef ESP32
-#include "esp_adc_cal.h"
 String generateDeviceFingerprint() {
   uint32_t fp[2] = {0, 0}; // create 64 bit fingerprint
   esp_chip_info_t chip_info;
   esp_chip_info(&chip_info);
   esp_efuse_mac_get_default((uint8_t*)fp);
   fp[1] ^= ESP.getFlashChipSize();
-#if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(4, 4, 3)
+  #if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(4, 4, 4)
   fp[0] ^= chip_info.full_revision | (chip_info.model << 16);
-#else
+  #else
   fp[0] ^= chip_info.revision | (chip_info.model << 16);
-#endif
+  #endif
   // mix in ADC calibration data:
   esp_adc_cal_characteristics_t ch;
   #if SOC_ADC_MAX_BITWIDTH == 13 // S2 has 13 bit ADC
@@ -739,6 +739,7 @@ String generateDeviceFingerprint() {
   sprintf(fp_string, "%08X%08X", fp[1], fp[0]);
   return String(fp_string);
 }
+
 #else // ESP8266
 String generateDeviceFingerprint() {
   uint32_t fp[2] = {0, 0}; // create 64 bit fingerprint

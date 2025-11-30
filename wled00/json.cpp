@@ -1,4 +1,5 @@
 #include "wled.h"
+#include "ota_update.h"
 
 #include "palettes.h"
 
@@ -938,7 +939,7 @@ void serializeInfo(JsonObject root)
   //root[F("cn")] = F(WLED_CODENAME);    //WLEDMM removed
   root[F("release")] = FPSTR(releaseString);
   root[F("rel")] = FPSTR(releaseString); //WLEDMM to add bin name
-
+  //root[F("repo")] = repoString;        // WLEDMM not availeable
   root[F("deviceId")] = getDeviceId();
 
   JsonObject leds = root.createNestedObject("leds");
@@ -1083,6 +1084,9 @@ void serializeInfo(JsonObject root)
 
   root[F("lwip")] = 0; //deprecated
   root[F("totalheap")] = ESP.getHeapSize(); //WLEDMM
+  #ifndef WLED_DISABLE_OTA
+  root[F("bootloaderSHA256")] = getBootloaderSHA256Hex();
+  #endif
   #else
   root[F("arch")] = "esp8266";
   root[F("core")] = ESP.getCoreVersion();
@@ -1104,7 +1108,7 @@ void serializeInfo(JsonObject root)
   #endif
   #if defined(ARDUINO_ARCH_ESP32) && defined(BOARD_HAS_PSRAM)
   if (psramFound()) {
-    root[F("tpram")] = ESP.getPsramSize(); //WLEDMM
+    root[F("tpsram")] = ESP.getPsramSize(); //WLEDMM
     root[F("psram")] = ESP.getFreePsram();
     root[F("psusedram")] = ESP.getMinFreePsram();
     #if CONFIG_ESP32S3_SPIRAM_SUPPORT  // WLEDMM -S3 has "qspi" or "opi" PSRAM mode
@@ -1117,7 +1121,7 @@ void serializeInfo(JsonObject root)
   }
   #else
   // for testing
-  //  root[F("tpram")] = 4194304; //WLEDMM
+  //  root[F("tpsram")] = 4194304; //WLEDMM
   //  root[F("psram")] = 4193000;
   //  root[F("psusedram")] = 3083000;
   #endif
