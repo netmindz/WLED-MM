@@ -17,8 +17,8 @@ static const char s_content_enc[] PROGMEM = "Content-Encoding";
 static const char s_unlock_ota [] PROGMEM = "Please unlock OTA in security settings!";
 static const char s_unlock_cfg [] PROGMEM = "Please unlock settings using PIN code!";
 static const char s_cache_control[]  PROGMEM = "Cache-Control";
-static const char s_no_store[]       PROGMEM = "no-store";
-static const char s_expires[]        PROGMEM = "Expires";
+//static const char s_no_store[]       PROGMEM = "no-store";
+//static const char s_expires[]        PROGMEM = "Expires";
 
 /*
  * Integrated HTTP web server page declarations
@@ -619,7 +619,7 @@ void serveSettingsJS(AsyncWebServerRequest* request)
   
   AsyncWebServerResponse *response;
   response = request->beginResponse(200, "application/javascript", buf);
-  response->addHeader(F("Cache-Control"),"no-store");
+  response->addHeader(FPSTR(s_cache_control),F("no-store"));
   response->addHeader(F("Expires"),"0");
   request->send(response);
 }
