@@ -382,7 +382,7 @@ WLED_GLOBAL bool cctFromRgb      _INIT(false); // CCT is calculated from RGB ins
 WLED_GLOBAL bool gammaCorrectCol _INIT(true ); // use gamma correction on colors // WLEDMM that's what you would think, but the code tells a different story.
 WLED_GLOBAL bool gammaCorrectPreview _INIT(true); // WLEDMM: revert gamma correction for LiveLeds (screens have their own gamma correction)
 WLED_GLOBAL bool gammaCorrectBri _INIT(false); // use gamma correction on brightness
-WLED_GLOBAL float gammaCorrectVal _INIT(2.8f); // gamma correction value
+WLED_GLOBAL float gammaCorrectVal _INIT(2.6f); // gamma correction value // WLEDMM reduced from 2.8 to 2.6
 
 WLED_GLOBAL byte col[]    _INIT_N(({ 255, 160, 0, 0 }));  // current RGB(W) primary color. col[] should be updated if you want to change the color.
 WLED_GLOBAL byte colSec[] _INIT_N(({ 0, 0, 0, 0 }));      // current RGB(W) secondary color
