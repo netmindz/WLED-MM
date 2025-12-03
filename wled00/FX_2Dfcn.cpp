@@ -172,7 +172,7 @@ void WS2812FX::setUpMatrix() {
     }
   }
 
-//#ifdef WLED_ENABLE_HUB75MATRIX
+#ifdef WLED_ENABLE_HUB75MATRIX
   // softhack007 hack: delete mapping table in case it only contains "identity"
   if (customMappingTable != nullptr && customMappingTableSize > 0) {
     bool isIdentity = true;
@@ -187,7 +187,7 @@ void WS2812FX::setUpMatrix() {
       loadedLedmap = 0; //WLEDMM
     }
   }
-//#endif
+#endif
 
 #else
   isMatrix = false; // no matter what config says
