@@ -100,7 +100,7 @@ function adoptVersionAndRepo(html) {
   if (repoUrl) {
     repoUrl = repoUrl.replace(/^git\+/, "");
     repoUrl = repoUrl.replace(/\.git$/, "");
-    // html = html.replaceAll("https://github.com/wled-dev/WLED", repoUrl); // WLEDMM replacing upstream break "credits"
+    // html = strReplace(html, "https://github.com/wled-dev/WLED", repoUrl); // replacing upstream break "credits"
     html = html.replaceAll("https://github.com/atuline/WLED", repoUrl);
     html = html.replaceAll("https://github.com/Aircoookie/WLED", repoUrl);
   }
@@ -259,8 +259,8 @@ if (isAlreadyBuilt("wled00/data") && process.argv[2] !== '--force' && process.ar
 writeHtmlGzipped("wled00/data/index.htm", "wled00/html_ui.h", 'index', false);
 writeHtmlGzipped("wled00/data/simple.htm", "wled00/html_simple.h", 'simple');
 writeHtmlGzipped("wled00/data/pixart/pixart.htm", "wled00/html_pixart.h", 'pixart');
-//writeHtmlGzipped("wled00/data/pxmagic/pxmagic.htm", "wled00/html_pxmagic.h", 'pxmagic');
-//writeHtmlGzipped("wled00/data/pixelforge/pixelforge.htm", "wled00/html_pixelforge.h", 'pixelforge', false); // do not inline css
+writeHtmlGzipped("wled00/data/pxmagic/pxmagic.htm", "wled00/html_pxmagic.h", 'pxmagic');
+writeHtmlGzipped("wled00/data/pixelforge/pixelforge.htm", "wled00/html_pixelforge.h", 'pixelforge', false); // do not inline css
 writeHtmlGzipped("wled00/data/cpal/cpal.htm", "wled00/html_cpal.h", 'cpal');
 //writeHtmlGzipped("wled00/data/edit.htm", "wled00/html_edit.h", 'edit');
 

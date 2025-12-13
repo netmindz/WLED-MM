@@ -9,6 +9,9 @@
 #ifdef WLED_ENABLE_PIXART
   #include "html_pixart.h"
 #endif
+#ifdef WLED_ENABLE_PIXELFORGE
+  #include "html_pixelforge.h"
+#endif
 #include "html_cpal.h"
 
 // define flash strings once (saves flash memory)
@@ -448,6 +451,19 @@ void initServer()
   });
   #endif
 
+  #ifdef WLED_ENABLE_PIXELFORGE
+  static const char _pixelforge_htm[] PROGMEM = "/pixelforge.htm";
+  server.on(_pixelforge_htm, HTTP_GET, [](AsyncWebServerRequest *request) {
+    //handleStaticContent(request, FPSTR(_pixelforge_htm), 200, FPSTR(CONTENT_TYPE_HTML), PAGE_pixelforge, PAGE_pixelforge_length);
+    if (handleFileRead(request, FPSTR(_pixelforge_htm))) return;
+    if (handleIfNoneMatchCacheHeader(request)) return;
+    AsyncWebServerResponse *response = request->beginResponse_P(200, "text/html", PAGE_pixelforge, PAGE_pixelforge_L);
+    response->addHeader(FPSTR(s_content_enc),"gzip");
+    setStaticContentCacheHeaders(response);
+    request->send(response);
+  });
+  #endif
+
   server.on("/cpal.htm", HTTP_GET, [](AsyncWebServerRequest *request){
     if (handleFileRead(request, "/cpal.htm")) return;
     if (handleIfNoneMatchCacheHeader(request)) return;
@@ -463,8 +479,8 @@ void initServer()
 
   //called when the url is not defined here, ajax-in; get-settings
   server.onNotFound([](AsyncWebServerRequest *request){
-    DEBUG_PRINT("Not-Found HTTP call: ");
-    DEBUG_PRINTLN("URI: " + request->url());
+    USER_PRINT("Not-Found HTTP call: ");
+    USER_PRINTLN("URI: " + request->url());
     if (captivePortal(request)) return;
 
     //make API CORS compatible
