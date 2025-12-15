@@ -395,16 +395,10 @@ void userConnected();
 void userLoop();
 
 //util.cpp
-#ifdef ESP8266
-#define HW_RND_REGISTER RANDOM_REG32
-#else // ESP32 family
-#include "soc/wdev_reg.h"
-#define HW_RND_REGISTER REG_READ(WDEV_RND_REG)
-#endif
 #define inoise8 perlin8   // fastled legacy alias
 #define inoise16 perlin16 // fastled legacy alias
 #define hex2int(a) (((a)>='0' && (a)<='9') ? (a)-'0' : ((a)>='A' && (a)<='F') ? (a)-'A'+10 : ((a)>='a' && (a)<='f') ? (a)-'a'+10 : 0)
-int getNumVal(const String* req, uint16_t pos);
+int  __attribute__((pure)) getNumVal(const String* req, uint16_t pos);
 void parseNumber(const char* str, byte* val, byte minv=0, byte maxv=255);
 bool getVal(JsonVariant elem, byte* val, byte minv=0, byte maxv=255);
 bool updateVal(const char* req, const char* key, byte* val, byte minv=0, byte maxv=255);
@@ -421,7 +415,7 @@ uint8_t extractModeName(uint8_t mode, const char *src, char *dest, uint8_t maxLe
 uint8_t extractModeSlider(uint8_t mode, uint8_t slider, char *dest, uint8_t maxLen, uint8_t *var = nullptr);
 int16_t extractModeDefaults(uint8_t mode, const char *segVar);
 void checkSettingsPIN(const char *pin);
-uint16_t  __attribute__((pure)) crc16(const unsigned char* data_p, size_t length);   // WLEDMM: added attribute pure
+uint16_t __attribute__((pure)) crc16(const unsigned char* data_p, size_t length);   // WLEDMM: added attribute pure
 String computeSHA1(const String& input);
 String getDeviceId();
 uint16_t beatsin88_t(accum88 beats_per_minute_88, uint16_t lowest = 0, uint16_t highest = 65535, uint32_t timebase = 0, uint16_t phase_offset = 0);

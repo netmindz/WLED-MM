@@ -2364,7 +2364,7 @@ uint16_t mode_fillnoise8() {
   if (SEGENV.call == 0) SEGENV.step = random16(12345);
   //CRGB fastled_col;
   for (int i = 0; i < SEGLEN; i++) {
-    uint8_t index = inoise8(i * SEGLEN, SEGENV.step + i * SEGLEN);
+    uint8_t index = perlin8(i * SEGLEN, SEGENV.step + i * SEGLEN);
     //fastled_col = ColorFromPalette(SEGPALETTE, index, 255, LINEARBLEND);
     //SEGMENT.setPixelColor(i, fastled_col.red, fastled_col.green, fastled_col.blue);
     SEGMENT.setPixelColor(i, SEGMENT.color_from_palette(index, false, PALETTE_SOLID_WRAP, 0));
@@ -2387,7 +2387,7 @@ uint16_t mode_noise16_1() {
     uint16_t real_x = (i + shift_x) * scale;                  // the x position of the noise field swings @ 17 bpm
     uint16_t real_y = (i + shift_y) * scale;                  // the y position becomes slowly incremented
     uint32_t real_z = SEGENV.step;                            // the z position becomes quickly incremented
-    uint8_t noise = inoise16(real_x, real_y, real_z) >> 8;    // get the noise data and scale it down
+    uint8_t noise = perlin16(real_x, real_y, real_z) >> 8;    // get the noise data and scale it down
     uint8_t index = sin8_t(noise * 3);                          // map LED color based on noise data
 
     //fastled_col = ColorFromPalette(SEGPALETTE, index, 255, LINEARBLEND);   // With that value, look up the 8 bit colour palette value and assign it to the current LED.
@@ -2408,7 +2408,7 @@ uint16_t mode_noise16_2() {
   for (int i = 0; i < SEGLEN; i++) {
     uint16_t shift_x = SEGENV.step >> 6;                        // x as a function of time
     uint32_t real_x = (i + shift_x) * scale;                    // calculate the coordinates within the noise field
-    uint8_t noise = inoise16(real_x, 0, 4223) >> 8;             // get the noise data and scale it down
+    uint8_t noise = perlin16(real_x, 0, 4223) >> 8;             // get the noise data and scale it down
     uint8_t index = sin8_t(noise * 3);                          // map led color based on noise data
 
     //fastled_col = ColorFromPalette(SEGPALETTE, index, noise, LINEARBLEND);   // With that value, look up the 8 bit colour palette value and assign it to the current LED.
@@ -2432,7 +2432,7 @@ uint16_t mode_noise16_3() {
     uint32_t real_x = (i + shift_x) * scale;                  // calculate the coordinates within the noise field
     uint32_t real_y = (i + shift_y) * scale;                  // based on the precalculated positions
     uint32_t real_z = SEGENV.step*8;
-    uint8_t noise = inoise16(real_x, real_y, real_z) >> 8;    // get the noise data and scale it down
+    uint8_t noise = perlin16(real_x, real_y, real_z) >> 8;    // get the noise data and scale it down
     uint8_t index = sin8_t(noise * 3);                        // map led color based on noise data
 
     //fastled_col = ColorFromPalette(SEGPALETTE, index, noise, LINEARBLEND);   // With that value, look up the 8 bit colour palette value and assign it to the current LED.
@@ -2450,7 +2450,7 @@ uint16_t mode_noise16_4() {
   //CRGB fastled_col;
   uint32_t stp = (strip.now * SEGMENT.speed) >> 7;
   for (int i = 0; i < SEGLEN; i++) {
-    int16_t index = inoise16(uint32_t(i) << 12, stp);
+    int16_t index = perlin16(uint32_t(i) << 12, stp);
     //fastled_col = ColorFromPalette(SEGPALETTE, index);
     //SEGMENT.setPixelColor(i, fastled_col.red, fastled_col.green, fastled_col.blue);
     SEGMENT.setPixelColor(i, SEGMENT.color_from_palette(index, false, PALETTE_SOLID_WRAP, 0));
@@ -4368,7 +4368,7 @@ uint16_t phased_base(uint8_t moder) {                  // We're making sine wave
   *phase += SEGMENT.speed/32.0f;                                 // You can change the speed of the wave. AKA SPEED (was .4)
 
   for (int i = 0; i < SEGLEN; i++) {
-    if (moder == 1) modVal = (inoise8(i*10 + i*10) /16);         // Let's randomize our mod length with some Perlin noise.
+    if (moder == 1) modVal = (perlin8(i*10 + i*10) /16);         // Let's randomize our mod length with some Perlin noise.
     uint16_t val = (i+1) * allfreq;                              // This sets the frequency of the waves. The +1 makes sure that led 0 is used.
     if (modVal == 0) modVal = 1;
     val += *phase * (i % modVal +1) /2;                          // This sets the varying phase change of the waves. By Andrew Tuline.
@@ -4439,7 +4439,7 @@ uint16_t mode_noisepal(void) {                                    // Slow noise 
   if (SEGMENT.palette > 0) palettes[0] = SEGPALETTE;
 
   for (int i = 0; i < SEGLEN; i++) {
-    uint8_t index = inoise8(i*scale, SEGENV.aux0+i*scale);                // Get a value from the noise function. I'm using both x and y axis.
+    uint8_t index = perlin8(i*scale, SEGENV.aux0+i*scale);                // Get a value from the noise function. I'm using both x and y axis.
     color = ColorFromPalette(palettes[0], index, 255, LINEARBLEND);       // Use the my own palette.
     SEGMENT.setPixelColor(i, color.red, color.green, color.blue);
   }
@@ -5057,7 +5057,7 @@ uint16_t mode_perlinmove(void) {
   if (SEGENV.call == 0) {SEGENV.setUpLeds(); SEGMENT.fill(BLACK);}   // WLEDMM use lossless getPixelColor()
   SEGMENT.fade_out(255-SEGMENT.custom1);
   for (int i = 0; i < SEGMENT.intensity/16 + 1; i++) {
-    uint16_t locn = inoise16(strip.now*128/(260-SEGMENT.speed)+i*15000, strip.now*128/(260-SEGMENT.speed)); // Get a new pixel location from moving noise.
+    uint16_t locn = perlin16(strip.now*128/(260-SEGMENT.speed)+i*15000, strip.now*128/(260-SEGMENT.speed)); // Get a new pixel location from moving noise.
     uint16_t pixloc = map(locn, 50*256, 192*256, 0, SEGLEN-1);                                            // Map that to the length of the strand, and ensure we don't go over.
     SEGMENT.setPixelColor(pixloc, SEGMENT.color_from_palette(pixloc%255, false, PALETTE_SOLID_WRAP, 0));
   }
@@ -5166,7 +5166,7 @@ uint16_t mode_shimmer() {
         if (SEGMENT.check1) {
           modVal = (sin16_t((i * SEGMENT.custom2 << 6) + (strip.now * SEGMENT.custom3 << 5)) >> 8) + 128; // sine modulation: regular "Zebra" stripes
         } else {
-          modVal = inoise16((i * SEGMENT.custom2 << 7), strip.now * SEGMENT.custom3 << 5) >> 8; // perlin noise modulation
+          modVal = perlin16((i * SEGMENT.custom2 << 7), strip.now * SEGMENT.custom3 << 5) >> 8; // perlin noise modulation
         }
         color = color_fade(color, modVal, true); // dim by modulator value
       }
@@ -5452,7 +5452,7 @@ uint16_t mode_2Dfirenoise(void) {               // firenoise2d. By Andrew Tuline
 
   for (int j=0; j < cols; j++) {
     for (int i=0; i < rows; i++) {
-      indexx = inoise8(j*yscale*rows/255, i*xscale+strip.now/4);                                               // We're moving along our Perlin map.
+      indexx = perlin8(j*yscale*rows/255, i*xscale+strip.now/4);                                               // We're moving along our Perlin map.
       SEGMENT.setPixelColorXY(j, i, ColorFromPalette(pal, min(i*(indexx)>>4, 255U), i*255/cols, LINEARBLEND)); // With that value, look up the 8 bit colour palette value and assign it to the current LED.
     } // for i
   } // for j
@@ -6172,11 +6172,11 @@ uint16_t mode_2Dmetaballs(void) {   // Metaballs by Stefan Petrick. Cannot have 
   float speed = 0.25f * (1+(SEGMENT.speed>>6));
 
   // get some 2 random moving points
-  uint8_t x2 = map(inoise8(strip.now * speed, 25355, 685), 0, 255, 0, cols-1);
-  uint8_t y2 = map(inoise8(strip.now * speed, 355, 11685), 0, 255, 0, rows-1);
+  uint8_t x2 = map(perlin8(strip.now * speed, 25355, 685), 0, 255, 0, cols-1);
+  uint8_t y2 = map(perlin8(strip.now * speed, 355, 11685), 0, 255, 0, rows-1);
 
-  uint8_t x3 = map(inoise8(strip.now * speed, 55355, 6685), 0, 255, 0, cols-1);
-  uint8_t y3 = map(inoise8(strip.now * speed, 25355, 22685), 0, 255, 0, rows-1);
+  uint8_t x3 = map(perlin8(strip.now * speed, 55355, 6685), 0, 255, 0, cols-1);
+  uint8_t y3 = map(perlin8(strip.now * speed, 25355, 22685), 0, 255, 0, rows-1);
 
   // and one Lissajou function
   uint8_t x1 = beatsin8_t(23 * speed, 0, cols-1);
@@ -6232,7 +6232,7 @@ uint16_t mode_2Dnoise(void) {                  // By Andrew Tuline
 
   for (int y = 0; y < rows; y++) {
     for (int x = 0; x < cols; x++) {
-      uint8_t pixelHue8 = inoise8(x * scale, y * scale, strip.now / (16 - SEGMENT.speed/16));
+      uint8_t pixelHue8 = perlin8(x * scale, y * scale, strip.now / (16 - SEGMENT.speed/16));
       SEGMENT.setPixelColorXY(x, y, ColorFromPalette(SEGPALETTE, pixelHue8));
     }
   }
@@ -6260,10 +6260,10 @@ uint16_t mode_2DPlasmaball(void) {                   // By: Stepko https://edito
 
   uint_fast32_t t = (strip.now * 8) / (256 - SEGMENT.speed);  // optimized to avoid float
   for (int i = 0; i < cols; i++) {
-    uint16_t thisVal = inoise8(i * 30, t, t);
+    uint16_t thisVal = perlin8(i * 30, t, t);
     uint16_t thisMax = map(thisVal, 0, 255, 0, cols-1);
     for (int j = 0; j < rows; j++) {
-      uint16_t thisVal_ = inoise8(t, j * 30, t);
+      uint16_t thisVal_ = perlin8(t, j * 30, t);
       uint16_t thisMax_ = map(thisVal_, 0, 255, 0, rows-1);
       uint16_t x = (i + thisMax_ - cols / 2);
       uint16_t y = (j + thisMax - cols / 2);
@@ -6353,7 +6353,7 @@ uint16_t mode_2DPolarLights(void) {        // By: Kostyantyn Matviyevskyy  https
     SEGENV.step++;
     SEGMENT.setPixelColorXY(x, y, ColorFromPalette(effectPalette,
                                     qsub8(
-                                      inoise8((SEGENV.step%2) + x * _scale, y * 16 + SEGENV.step % 16, SEGENV.step / _speed),
+                                      perlin8((SEGENV.step%2) + x * _scale, y * 16 + SEGENV.step % 16, SEGENV.step / _speed),
                                       fabsf(rows_2 - (float)y) * adjustHeight)));  // WLEDMM
     }
   }
@@ -6488,7 +6488,8 @@ uint16_t mode_2DSunradiation(void) {                   // By: ldirko https://edi
   uint8_t someVal = SEGMENT.speed/4;             // Was 25.
   for (int j = 0; j < (rows + 2); j++) {
     for (int i = 0; i < (cols + 2); i++) {
-      byte col = (inoise8_raw(i * someVal, j * someVal, t)) / 2;
+      //byte col = (inoise8_raw(i * someVal, j * someVal, t)) / 2;
+      byte col = ((int16_t)perlin8(i * someVal, j * someVal, t) - 0x7F) / 3;
       bump[index++] = col;
     }
   }
@@ -7262,8 +7263,8 @@ uint16_t mode_2DWaverly(void) {
 
   long t = strip.now / 2;
   for (int i = 0; i < cols; i++) {
-    //uint16_t thisVal = volumeSmth*SEGMENT.intensity/64 * inoise8(i * 45 , t , t)/64;      // WLEDMM back to SR code
-    unsigned thisVal = unsigned(volumeSmth*SEGMENT.intensity) * inoise8(i * 45 , t , t) / (64*64);      // WLEDMM same result but more accurate
+    //uint16_t thisVal = volumeSmth*SEGMENT.intensity/64 * perlin8(i * 45 , t , t)/64;      // WLEDMM back to SR code
+    unsigned thisVal = unsigned(volumeSmth*SEGMENT.intensity) * perlin8(i * 45 , t , t) / (64*64);      // WLEDMM same result but more accurate
 
     //int thisMax = map(thisVal, 0, 512, 0, rows);
     int thisMax = (thisVal * rows) / 512;     // WLEDMM same result, just faster
@@ -7318,7 +7319,7 @@ uint16_t mode_gravcenter(void) {                // Gravcenter. By Andrew Tuline.
   uint8_t gravity = 8 - SEGMENT.speed/32;
 
   for (int i=0; i<tempsamp; i++) {
-    uint8_t index = inoise8(i*segmentSampleAvg+strip.now, 5000+i*segmentSampleAvg);
+    uint8_t index = perlin8(i*segmentSampleAvg+strip.now, 5000+i*segmentSampleAvg);
     SEGMENT.setPixelColor(i+SEGLEN/2, color_blend(SEGCOLOR(1), SEGMENT.color_from_palette(index, false, PALETTE_SOLID_WRAP, 0), segmentSampleAvg*8));
     SEGMENT.setPixelColor(SEGLEN/2-i-1, color_blend(SEGCOLOR(1), SEGMENT.color_from_palette(index, false, PALETTE_SOLID_WRAP, 0), segmentSampleAvg*8));
   }
@@ -7439,7 +7440,7 @@ uint16_t mode_gravimeter(void) {                // Gravmeter. By Andrew Tuline.
   blendVal = constrain(blendVal, 32, 255);                                                    // and saturation for all
   if (realVolume > 0.85) // hide main "bar" in silence
   for (int i=0; i<tempsamp; i++) {
-    uint8_t index = inoise8(i*segmentSampleAvg+strip.now, 5000+i*segmentSampleAvg);
+    uint8_t index = perlin8(i*segmentSampleAvg+strip.now, 5000+i*segmentSampleAvg);
     SEGMENT.setPixelColor(i, color_blend(SEGCOLOR(1), SEGMENT.color_from_palette(index, false, PALETTE_SOLID_WRAP, 0), (uint8_t)blendVal));
   }
 
@@ -7564,7 +7565,7 @@ uint16_t mode_midnoise(void) {                  // Midnoise. By Andrew Tuline.
   if (maxLen >SEGLEN/2) maxLen = SEGLEN/2;
 
   for (int i=(SEGLEN/2-maxLen); i<(SEGLEN/2+maxLen); i++) {
-    uint8_t index = inoise8(i*volumeSmth+SEGENV.aux0, SEGENV.aux1+i*volumeSmth);  // Get a value from the noise function. I'm using both x and y axis.
+    uint8_t index = perlin8(i*volumeSmth+SEGENV.aux0, SEGENV.aux1+i*volumeSmth);  // Get a value from the noise function. I'm using both x and y axis.
     SEGMENT.setPixelColor(i, SEGMENT.color_from_palette(index, false, PALETTE_SOLID_WRAP, 0));
   }
 
@@ -7592,7 +7593,7 @@ uint16_t mode_noisefire(void) {                 // Noisefire. By Andrew Tuline.
   if (SEGENV.call == 0) SEGMENT.fill(BLACK);
 
   for (int i = 0; i < SEGLEN; i++) {
-    uint16_t index = inoise8(i*SEGMENT.speed/64,strip.now*SEGMENT.speed/64*SEGLEN/255);  // X location is constant, but we move along the Y at the rate of strip.now. By Andrew Tuline.
+    uint16_t index = perlin8(i*SEGMENT.speed/64,strip.now*SEGMENT.speed/64*SEGLEN/255);  // X location is constant, but we move along the Y at the rate of strip.now. By Andrew Tuline.
     index = (255 - i*256/SEGLEN) * index/(256-SEGMENT.intensity);                       // Now we need to scale index so that it gets blacker as we get close to one of the ends.
                                                                                         // This is a simple y=mx+b equation that's been scaled. index/128 is another scaling.
 
@@ -7625,7 +7626,7 @@ uint16_t mode_noisemeter(void) {                // Noisemeter. By Andrew Tuline.
   if (maxLen >SEGLEN) maxLen = SEGLEN;
 
   for (int i=0; i<maxLen; i++) {                                    // The louder the sound, the wider the soundbar. By Andrew Tuline.
-    uint8_t index = inoise8(i*volumeSmth+SEGENV.aux0, SEGENV.aux1+i*volumeSmth);  // Get a value from the noise function. I'm using both x and y axis.
+    uint8_t index = perlin8(i*volumeSmth+SEGENV.aux0, SEGENV.aux1+i*volumeSmth);  // Get a value from the noise function. I'm using both x and y axis.
     SEGMENT.setPixelColor(i, SEGMENT.color_from_palette(index, false, PALETTE_SOLID_WRAP, 0));
   }
 
@@ -8261,7 +8262,7 @@ uint16_t mode_noisemove(void) {                 // Noisemove.    By: Andrew Tuli
 
   uint8_t numBins = map2(SEGMENT.intensity,0,255,0,16);    // Map slider to fftResult bins.
   for (int i=0; i<numBins; i++) {                         // How many active bins are we using.
-    uint16_t locn = inoise16(strip.now*SEGMENT.speed+i*50000, strip.now*SEGMENT.speed);   // Get a new pixel location from moving noise.
+    uint16_t locn = perlin16(strip.now*SEGMENT.speed+i*50000, strip.now*SEGMENT.speed);   // Get a new pixel location from moving noise.
     // if SEGLEN equals 1 locn will be always 0, hence we set the first pixel only
     locn = map2(locn, 7500, 58000, 0, SEGLEN-1);           // Map that to the length of the strand, and ensure we don't go over.
     SEGMENT.setPixelColor(locn, color_blend(SEGCOLOR(1), SEGMENT.color_from_palette(i*64, false, PALETTE_SOLID_WRAP, 0), fftResult[i % 16]*4));
@@ -8756,7 +8757,7 @@ uint16_t mode_2Dsoap() {
     int32_t ioffset = scale32_x * (i - cols / 2);
     for (int j = 0; j < rows; j++) {
       int32_t joffset = scale32_y * (j - rows / 2);
-      uint8_t data = inoise16(noise32_x_MM + ioffset, noise32_y_MM + joffset, noise32_z_MM) >> 8; //WLEDMM SuperSync
+      uint8_t data = perlin16(noise32_x_MM + ioffset, noise32_y_MM + joffset, noise32_z_MM) >> 8; //WLEDMM SuperSync
       noise3d[XY(i,j)] = scale8(noise3d[XY(i,j)], smoothness) + scale8(data, 255 - smoothness);
     }
   }
@@ -9560,7 +9561,7 @@ uint16_t mode_particlefire(void) {
     if (SEGMENT.call % 10 == 0)
       SEGENV.aux1++; // move in noise y direction so noise does not repeat as often
     // add wind force to all particles
-    int8_t windspeed = ((int16_t)(inoise8(SEGENV.aux0, SEGENV.aux1) - 127) * SEGMENT.custom2) >> 7;
+    int8_t windspeed = ((int16_t)(perlin8(SEGENV.aux0, SEGENV.aux1) - 127) * SEGMENT.custom2) >> 7;
     PartSys->applyForce(windspeed, 0);
   }
   SEGENV.step++;
@@ -9569,7 +9570,7 @@ uint16_t mode_particlefire(void) {
     if (SEGMENT.call % map(firespeed, 0, 255, 4, 15) == 0) {
       for (i = 0; i < PartSys->usedParticles; i++) {
         if (PartSys->particles[i].y < PartSys->maxY / 4) { // do not apply turbulance everywhere -> bottom quarter seems a good balance
-          int32_t curl = ((int32_t)inoise8(PartSys->particles[i].x, PartSys->particles[i].y, SEGENV.step << 4) - 127);
+          int32_t curl = ((int32_t)perlin8(PartSys->particles[i].x, PartSys->particles[i].y, SEGENV.step << 4) - 127);
           PartSys->particles[i].vx += (curl * (firespeed + 10)) >> 9;
         }
       }
@@ -9786,8 +9787,8 @@ uint16_t mode_particlebox(void) {
       SEGENV.aux0 -= increment;
 
     if (SEGMENT.check1) { // random, use perlin noise
-      xgravity = ((int16_t)inoise8(SEGENV.aux0) - 127);
-      ygravity = ((int16_t)inoise8(SEGENV.aux0 + 10000) - 127);
+      xgravity = ((int16_t)perlin8(SEGENV.aux0) - 127);
+      ygravity = ((int16_t)perlin8(SEGENV.aux0 + 10000) - 127);
       // scale the gravity force
       xgravity = (xgravity * SEGMENT.custom1) / 128;
       ygravity = (ygravity * SEGMENT.custom1) / 128;
@@ -9858,11 +9859,11 @@ uint16_t mode_particleperlin(void) {
     uint32_t scale = 16 - ((31 - SEGMENT.custom3) >> 1);
     uint16_t xnoise = PartSys->particles[i].x / scale; // position in perlin noise, scaled by slider
     uint16_t ynoise = PartSys->particles[i].y / scale;
-    int16_t baseheight = inoise8(xnoise, ynoise, SEGENV.aux0); // noise value at particle position
+    int16_t baseheight = perlin8(xnoise, ynoise, SEGENV.aux0); // noise value at particle position
     PartSys->particles[i].hue = baseheight; // color particles to perlin noise value
     if (SEGMENT.call % 8 == 0) { // do not apply the force every frame, is too chaotic
-      int8_t xslope = (baseheight + (int16_t)inoise8(xnoise - 10, ynoise, SEGENV.aux0));
-      int8_t yslope = (baseheight + (int16_t)inoise8(xnoise, ynoise - 10, SEGENV.aux0));
+      int8_t xslope = (baseheight + (int16_t)perlin8(xnoise - 10, ynoise, SEGENV.aux0));
+      int8_t yslope = (baseheight + (int16_t)perlin8(xnoise, ynoise - 10, SEGENV.aux0));
       PartSys->applyForce(i, xslope, yslope);
     }
   }
@@ -11230,7 +11231,7 @@ uint16_t mode_particleBalance(void) {
     int32_t increment = (SEGMENT.speed >> 6) + 1;
     SEGENV.aux0 += increment;
     if (SEGMENT.check3) // random, use perlin noise
-      xgravity = ((int16_t)inoise8(SEGENV.aux0) - 128);
+      xgravity = ((int16_t)perlin8(SEGENV.aux0) - 128);
     else // sinusoidal
       xgravity = (int16_t)cos8_t(SEGENV.aux0) - 128;//((int32_t)(SEGMENT.custom3 << 2) * cos8(SEGENV.aux0)
     // scale the force
@@ -11609,7 +11610,7 @@ uint16_t mode_particle1DsonicStream(void) {
     }
     if (SEGMENT.check1) { // modulate colors by mid frequencies
       int mids = sqrt16((int)fftResult[5] + (int)fftResult[6] + (int)fftResult[7] + (int)fftResult[8] + (int)fftResult[9] + (int)fftResult[10]); // average the mids, bin 5 is ~500Hz, bin 10 is ~2kHz (see audio_reactive.h)
-      PartSys->particles[i].hue += (mids * inoise8(PartSys->particles[i].x << 2, SEGMENT.step << 2)) >> 9; // color by perlin noise from mid frequencies
+      PartSys->particles[i].hue += (mids * perlin8(PartSys->particles[i].x << 2, SEGMENT.step << 2)) >> 9; // color by perlin noise from mid frequencies
     }
   }
 
@@ -11697,7 +11698,7 @@ uint16_t mode_particle1DsonicBoom(void) {
   for (uint32_t i = 0; i < PartSys->usedParticles; i++) {
     if (SEGMENT.check1) { // modulate colors by mid frequencies
       int mids = sqrt16((int)fftResult[5] + (int)fftResult[6] + (int)fftResult[7] + (int)fftResult[8] + (int)fftResult[9] + (int)fftResult[10]); // average the mids, bin 5 is ~500Hz, bin 10 is ~2kHz (see audio_reactive.h)
-      PartSys->particles[i].hue += (mids * inoise8(PartSys->particles[i].x << 2, SEGMENT.step << 2)) >> 9; // color by perlin noise from mid frequencies
+      PartSys->particles[i].hue += (mids * perlin8(PartSys->particles[i].x << 2, SEGMENT.step << 2)) >> 9; // color by perlin noise from mid frequencies
     }
     if (PartSys->particles[i].ttl > 16) {
       PartSys->particles[i].ttl -= 16; //ttl is linked to brightness, this allows to use higher brightness but still a (very) short lifespan
