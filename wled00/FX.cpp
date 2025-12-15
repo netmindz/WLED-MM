@@ -5166,7 +5166,7 @@ uint16_t mode_shimmer() {
         if (SEGMENT.check1) {
           modVal = (sin16_t((i * SEGMENT.custom2 << 6) + (strip.now * SEGMENT.custom3 << 5)) >> 8) + 128; // sine modulation: regular "Zebra" stripes
         } else {
-          modVal = perlin16((i * SEGMENT.custom2 << 7), strip.now * SEGMENT.custom3 << 5) >> 8; // perlin noise modulation
+          modVal = inoise16((i * SEGMENT.custom2 << 7), strip.now * SEGMENT.custom3 << 5) >> 8; // perlin noise modulation
         }
         color = color_fade(color, modVal, true); // dim by modulator value
       }
