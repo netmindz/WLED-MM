@@ -89,6 +89,9 @@ extern uint8_t gammaT[256];    // colors.cpp
 inline uint8_t gamma8(uint8_t value) { return gammaT[value];}           // WLEDMM inlined for speed
 inline uint8_t fast_unGamma8(uint8_t value) { return gammaTinv[value];}
 
+#define gamma32inv(c) unGamma24(c)      // WLEDMM alias for upstream compatibility
+#define gamma8inv(c)  fast_unGamma8(c)  // WLEDMM alias for upstream compatibility
+
 //dmx_output.cpp
 void initDMXOutput();
 void handleDMXOutput();
