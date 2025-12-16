@@ -1860,13 +1860,13 @@ void WS2812FX::finalizeInit(void)
     // problem: suspendStripService provides interlocking, but there’s a window before service() observes it, 
     //          and ESP32 is dual-core. A critical section closes that window so the pointer swap is atomic across cores.
 #if defined(ARDUINO_ARCH_ESP32)
-    taskENTER_CRITICAL(&s_wled_strip_mux);
+    portENTER_CRITICAL(&s_wled_strip_mux);
 #endif
     free(Segment::_globalLeds);
     Segment::_globalLeds = nullptr;
     purgeSegments(true);   // WLEDMM moved here, because it seems to improve stability.
 #if defined(ARDUINO_ARCH_ESP32)
-    taskEXIT_CRITICAL(&s_wled_strip_mux);
+    portEXIT_CRITICAL(&s_wled_strip_mux);
 #endif
   }
   if (useLedsArray && getLengthTotal()>0) { // WLEDMM avoid malloc(0)
