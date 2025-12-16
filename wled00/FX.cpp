@@ -879,7 +879,7 @@ uint16_t mode_android(void) {
   }
   uint32_t start = SEGENV.aux0;
   uint32_t end = (SEGENV.aux0 + size) % SEGLEN;
-  for (unsigned i = 0; i < SEGLEN; i++) {
+  for (int i = 0; i < SEGLEN; i++) {
     if ((start < end && i >= start && i < end) || (start >= end && (i >= start || i < end)))
       SEGMENT.setPixelColor(i, SEGCOLOR(0));
     else
@@ -8651,6 +8651,10 @@ uint16_t mode_2Ddistortionwaves() {
 
   const uint16_t cols = SEGMENT.virtualWidth();
   const uint16_t rows = SEGMENT.virtualHeight();
+  if (SEGENV.call == 0) {
+    SEGMENT.setUpLeds();
+    SEGMENT.fill(BLACK);
+  }
 
   uint8_t speed = SEGMENT.speed/32;
   uint8_t scale = SEGMENT.intensity/32;
@@ -8933,23 +8937,28 @@ static const char _data_FX_MODE_2DOCTOPUS[] PROGMEM = "Octopus@!,,Offset X,Offse
 
 //Waving Cell
 //@Stepko (https://editor.soulmatelights.com/gallery/1704-wavingcells)
-// adapted for WLED by @blazoncek
+// adapted for WLED by @blazoncek, improvements by @dedehai
 uint16_t mode_2Dwavingcell() {
   if (!strip.isMatrix) return mode_oops(); // not a 2D set-up
 
   const uint16_t cols = SEGMENT.virtualWidth();
   const uint16_t rows = SEGMENT.virtualHeight();
 
-  uint32_t t = strip.now/(257-SEGMENT.speed);
-  uint8_t aX = SEGMENT.custom1/16 + 9;
-  uint8_t aY = SEGMENT.custom2/16 + 1;
-  uint8_t aZ = SEGMENT.custom3 + 1;
-  for (int x = 0; x < cols; x++) for (int y = 0; y <rows; y++)
-    SEGMENT.setPixelColorXY(x, y, ColorFromPalette(SEGPALETTE, ((sin8_t((x*aX)+sin8_t((y+t)*aY))+cos8_t(y*aZ))+1)+t));
-
+  uint32_t t = (strip.now*(SEGMENT.speed + 1))>>3;
+  uint32_t aX = SEGMENT.custom1/16 + 9;
+  uint32_t aY = SEGMENT.custom2/16 + 1;
+  uint32_t aZ = SEGMENT.custom3 + 1;
+   for (int x = 0; x < cols; x++) {
+    for (int y = 0; y < rows; y++) {
+      uint32_t wave = sin8_t((x * aX) + sin8_t((((y<<8) + t) * aY)>>8)) + cos8_t(y * aZ); // bit shifts to increase temporal resolution
+      uint8_t colorIndex = wave + (t>>(8-(SEGMENT.check2*3)));
+      SEGMENT.setPixelColorXY(x, y, ColorFromPalette(SEGPALETTE, colorIndex));
+    }
+  }
+  SEGMENT.blur(SEGMENT.intensity);
   return FRAMETIME;
 }
-static const char _data_FX_MODE_2DWAVINGCELL[] PROGMEM = "Waving Cell@!,,Amplitude 1,Amplitude 2,Amplitude 3;;!;2";
+static const char _data_FX_MODE_2DWAVINGCELL[] PROGMEM = "Waving Cell@!,Blur,Amplitude 1,Amplitude 2,Amplitude 3,,Flow;;!;2;ix=0";
 
 /* 
    @title     MoonModules WLED - GEQ 3D Effect
