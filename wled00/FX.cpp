@@ -5883,8 +5883,8 @@ static const char _data_FX_MODE_2DSNOWFALL[] PROGMEM = "Snow Fall ☾@!,Spawn Ra
 uint16_t mode_2DHiphotic() {                        //  By: ldirko  https://editor.soulmatelights.com/gallery/810 , Modified by: Andrew Tuline
   if (!strip.isMatrix) return mode_oops(); // not a 2D set-up
 
-  const uint16_t cols = SEGMENT.virtualWidth();
-  const uint16_t rows = SEGMENT.virtualHeight();
+  const uint_fast16_t cols = SEGMENT.virtualWidth();
+  const uint_fast16_t rows = SEGMENT.virtualHeight();
   const uint32_t a = strip.now / ((SEGMENT.custom3>>1)+1);
 
   for (int x = 0; x < cols; x++) {
@@ -8654,10 +8654,10 @@ static const char _data_FX_MODE_2DAKEMI[] PROGMEM = "Akemi@Color speed,Dance;Hea
 uint16_t mode_2Ddistortionwaves() {
   if (!strip.isMatrix) return mode_oops(); // not a 2D set-up
 
-  const uint16_t cols = SEGMENT.virtualWidth();
-  const uint16_t rows = SEGMENT.virtualHeight();
+  const uint_fast16_t cols = SEGMENT.virtualWidth();
+  const uint_fast16_t rows = SEGMENT.virtualHeight();
   if (SEGENV.call == 0) {
-    SEGMENT.setUpLeds();
+    //SEGMENT.setUpLeds();
     SEGMENT.fill(BLACK);
   }
 
