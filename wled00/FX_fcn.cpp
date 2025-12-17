@@ -230,6 +230,9 @@ bool Segment::allocateData(size_t len, bool allowOverdraft) {  // WLEDMM allowOv
   //DEBUG_PRINTF("allocateData(%u) start %d, stop %d, vlen %d\n", len, start, stop, virtualLength());
   deallocateData();
   if (len == 0) return false; // nothing to do
+
+  // limit to MAX_SEGMENT_DATA if there is no PSRAM, otherwise prefer functionality over speed
+  #ifndef BOARD_HAS_PSRAM
   if (Segment::getUsedSegmentData() + len > MAX_SEGMENT_DATA) {
     if (!allowOverdraft || (Segment::getUsedSegmentData() + len > MAX_SEGMENT_OVERDATA)) { // WLEDMM 50% overdraft allowed temporarily
       static unsigned lastMsgTime = 0;
@@ -241,6 +244,8 @@ bool Segment::allocateData(size_t len, bool allowOverdraft) {  // WLEDMM allowOv
       return false; //not enough memory
     }
   }
+  #endif
+
   // do not use SPI RAM on ESP32 since it is slow
   //#if defined(ARDUINO_ARCH_ESP32) && defined(BOARD_HAS_PSRAM) && defined(WLED_USE_PSRAM)
   //if (psramFound())
