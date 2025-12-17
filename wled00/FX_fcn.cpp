@@ -232,7 +232,11 @@ bool Segment::allocateData(size_t len, bool allowOverdraft) {  // WLEDMM allowOv
   if (len == 0) return false; // nothing to do
   if (Segment::getUsedSegmentData() + len > MAX_SEGMENT_DATA) {
     if (!allowOverdraft || (Segment::getUsedSegmentData() + len > MAX_SEGMENT_OVERDATA)) { // WLEDMM 50% overdraft allowed temporarily
-      //USER_PRINTF("Segment::allocateData: Segment data quota exceeded! used:%u request:%u max:%d\n", Segment::getUsedSegmentData(), len, MAX_SEGMENT_DATA);
+      static unsigned lastMsgTime = 0;
+      if (millis() - lastMsgTime > 5000) {
+        USER_PRINTF("Segment::allocateData: Segment data quota exceeded! used:%u request:%u max:%d\n", Segment::getUsedSegmentData(), len, MAX_SEGMENT_DATA);
+        lastMsgTime = millis();
+      }
       if (len > 0) errorFlag = ERR_LOW_SEG_MEM;  // WLEDMM raise errorflag
       return false; //not enough memory
     }
