@@ -479,8 +479,8 @@ void initServer()
 
   //called when the url is not defined here, ajax-in; get-settings
   server.onNotFound([](AsyncWebServerRequest *request){
-    USER_PRINT("Not-Found HTTP call: ");
-    USER_PRINTLN("URI: " + request->url());
+    DEBUG_PRINT("Not-Found HTTP call: ");
+    DEBUG_PRINTLN("URI: " + request->url());
     if (captivePortal(request)) return;
 
     //make API CORS compatible

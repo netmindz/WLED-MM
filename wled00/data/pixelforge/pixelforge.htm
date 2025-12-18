@@ -321,6 +321,7 @@ button, .btn {
 	</div>
 </div>
 
+<!-- WLED-MM not yet supported -->
 <div id="xTab" class="tabc">
 	<h3 style="margin-top:20px;">Target Segment</h3>
 	<select id="segT"></select>
@@ -388,6 +389,8 @@ button, .btn {
 	</div>
 	<div id="ti1D" style="display:none;">Not available in 1D</div>
 </div>
+<!-- WLEDMM end -->
+
 <div id="oTab" class="tabc">
 	<div class="ed active">
 		<div>
@@ -444,7 +447,8 @@ let fL; // file list
 /* update file list */
 async function flU(){
 	try{
-		const r = await fetch(`${wu}/edit?func=list`);
+		//const r = await fetch(`${wu}/edit?func=list`);
+		const r = await fetch(`${wu}/edit?list=/`);
 		fL = await r.json();
 	}catch(e){console.error(e);}
 }
@@ -1097,7 +1101,10 @@ async function imgDel(){
 	if(!confirm(`Delete ${sI.name}?`))return;
 	ovShow();
 	try{
-		const r = await fetch(`${wu}/edit?func=delete&path=/${sI.name}`);
+		//const r = await fetch(`${wu}/edit?func=delete&path=/${sI.name}`);
+		const fd = new FormData();
+		fd.append('path', `/${sI.name}`);
+		const r = await fetch(`${wu}/edit`, {method:'DELETE', body: fd});
 		if(r.ok){ msg('Deleted'); imgRm(sI.name); }
 		else msg('Delete failed! File in use?','err');
 	}catch(e){msg('Delete failed','err');}

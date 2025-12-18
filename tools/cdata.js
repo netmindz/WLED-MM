@@ -100,7 +100,7 @@ function adoptVersionAndRepo(html) {
   if (repoUrl) {
     repoUrl = repoUrl.replace(/^git\+/, "");
     repoUrl = repoUrl.replace(/\.git$/, "");
-    // html = strReplace(html, "https://github.com/wled-dev/WLED", repoUrl); // replacing upstream break "credits"
+    // html = html.replaceAll("https://github.com/wled-dev/WLED", repoUrl); // WLEDMM replacing upstream break "credits"
     html = html.replaceAll("https://github.com/atuline/WLED", repoUrl);
     html = html.replaceAll("https://github.com/Aircoookie/WLED", repoUrl);
   }
