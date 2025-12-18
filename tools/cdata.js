@@ -304,14 +304,12 @@ writeChunks(
         str
           .replace("%%", "%")
     },
-	/*
     {
       file: "common.js",
       name: "JS_common",
       method: "gzip",
       filter: "js-minify",
     },
-	*/
     {
       file: "settings.htm",
       name: "PAGE_settings",

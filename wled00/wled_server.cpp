@@ -462,6 +462,12 @@ void initServer()
     setStaticContentCacheHeaders(response);
     request->send(response);
   });
+  server.on("/common.js", HTTP_GET, [](AsyncWebServerRequest *request){
+    AsyncWebServerResponse *response = request->beginResponse_P(200, "application/javascript", JS_common, JS_common_length);
+    response->addHeader(FPSTR(s_content_enc),"gzip");
+    setStaticContentCacheHeaders(response);
+    request->send(response);
+  });
   #endif
 
   server.on("/cpal.htm", HTTP_GET, [](AsyncWebServerRequest *request){
