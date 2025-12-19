@@ -11,6 +11,8 @@
 #endif
 #ifdef WLED_ENABLE_PIXELFORGE
   #include "html_pixelforge.h"
+  static const char _pixelforge_htm[] PROGMEM = "/pixelforge.htm";
+  static const char _common_js[]      PROGMEM = "/common.js";
 #endif
 #include "html_cpal.h"
 
@@ -22,6 +24,7 @@ static const char s_unlock_cfg [] PROGMEM = "Please unlock settings using PIN co
 static const char s_cache_control[]  PROGMEM = "Cache-Control";
 //static const char s_no_store[]       PROGMEM = "no-store";
 //static const char s_expires[]        PROGMEM = "Expires";
+static const char enc_gzip[] PROGMEM = "gzip";
 
 /*
  * Integrated HTTP web server page declarations
@@ -452,19 +455,18 @@ void initServer()
   #endif
 
   #ifdef WLED_ENABLE_PIXELFORGE
-  static const char _pixelforge_htm[] PROGMEM = "/pixelforge.htm";
   server.on(_pixelforge_htm, HTTP_GET, [](AsyncWebServerRequest *request) {
     //handleStaticContent(request, FPSTR(_pixelforge_htm), 200, FPSTR(CONTENT_TYPE_HTML), PAGE_pixelforge, PAGE_pixelforge_length);
     if (handleFileRead(request, FPSTR(_pixelforge_htm))) return;
     if (handleIfNoneMatchCacheHeader(request)) return;
-    AsyncWebServerResponse *response = request->beginResponse_P(200, "text/html", PAGE_pixelforge, PAGE_pixelforge_L);
-    response->addHeader(FPSTR(s_content_enc),"gzip");
+    AsyncWebServerResponse *response = request->beginResponse_P(200, FPSTR(CONTENT_TYPE_HTML), PAGE_pixelforge, PAGE_pixelforge_L);
+    response->addHeader(FPSTR(s_content_enc),FPSTR(enc_gzip));
     setStaticContentCacheHeaders(response);
     request->send(response);
   });
-  server.on("/common.js", HTTP_GET, [](AsyncWebServerRequest *request){
-    AsyncWebServerResponse *response = request->beginResponse_P(200, "application/javascript", JS_common, JS_common_length);
-    response->addHeader(FPSTR(s_content_enc),"gzip");
+  server.on(_common_js, HTTP_GET, [](AsyncWebServerRequest *request){
+    AsyncWebServerResponse *response = request->beginResponse_P(200, FPSTR(CONTENT_TYPE_JAVASCRIPT), JS_common, JS_common_length);
+    response->addHeader(FPSTR(s_content_enc),FPSTR(enc_gzip));
     setStaticContentCacheHeaders(response);
     request->send(response);
   });
@@ -618,6 +620,18 @@ void serveSettingsJS(AsyncWebServerRequest* request)
 {
   char buf[SETTINGS_STACK_BUF_SIZE+37] = { '\0' }; // WLEDMM ensure buffer is cleared initially
   buf[0] = 0;
+
+  #ifdef WLED_ENABLE_PIXELFORGE
+   // serve common.js if requested by subPage = 254 (.js)
+  if (request->url().indexOf(FPSTR(_common_js)) > 0) {
+    AsyncWebServerResponse *response = request->beginResponse_P(200, FPSTR(CONTENT_TYPE_JAVASCRIPT), JS_common, JS_common_length);
+    response->addHeader(FPSTR(s_content_enc),FPSTR(enc_gzip));
+    setStaticContentCacheHeaders(response);
+    request->send(response);
+    return;
+  }
+  #endif
+
   byte subPage = request->arg(F("p")).toInt();
   if (subPage > 10) {
     strcpy_P(buf, PSTR("alert('Settings for this request are not implemented.');"));
