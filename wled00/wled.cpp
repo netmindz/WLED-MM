@@ -477,6 +477,11 @@ void WLED::setup()
   init_math();  // WLEDMM: pre-calculate some lookup tables
 
   #ifdef ARDUINO_ARCH_ESP32
+  busDrawMux = xSemaphoreCreateBinary();      // WLEDMM prevent concurrent running of strip.show and strip.service
+  xSemaphoreGive(busDrawMux);                 // init semaphores to initially allow drawing
+  #endif
+
+  #ifdef ARDUINO_ARCH_ESP32
   #if defined(WLED_DEBUG) && (defined(CONFIG_IDF_TARGET_ESP32S2) || defined(CONFIG_IDF_TARGET_ESP32C3) || ARDUINO_USB_CDC_ON_BOOT)
   if (!Serial) delay(2500);  // WLEDMM allow CDC USB serial to initialise (WLED_DEBUG only)
   #endif

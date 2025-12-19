@@ -16,6 +16,7 @@ void handleDDPPacket(e131_packet_t* p) {
   int lastPushSeq = e131LastSequenceNumber[0];
 
   //reject late packets belonging to previous frame (assuming 4 packets max. before push)
+#if 0  // WLEDMM fixme - we definitely have more than 5-10 packets per frame !!!
   if (e131SkipOutOfSequence && lastPushSeq) {
     int sn = p->sequenceNum & 0xF;
     if (sn) {
@@ -26,8 +27,14 @@ void handleDDPPacket(e131_packet_t* p) {
       }
     }
   }
+#endif
 
   uint8_t ddpChannelsPerLed = ((p->dataType & 0b00111000)>>3 == 0b011) ? 4 : 3; // data type 0x1B (formerly 0x1A) is RGBW (type 3, 8 bit/channel)
+
+  // WLEDMM for debugging
+  static unsigned lastPush = millis();
+  static unsigned packets = 0;
+  static unsigned pixels = 0;
 
   uint32_t start =  htonl(p->channelOffset) / ddpChannelsPerLed;
   start += DMXAddress / ddpChannelsPerLed;
@@ -48,15 +55,29 @@ void handleDDPPacket(e131_packet_t* p) {
   realtimeLock(realtimeTimeoutMs, REALTIME_MODE_DDP);
 
   if (!realtimeOverride || (realtimeMode && useMainSegmentOnly)) {
+    #if defined(ARDUINO_ARCH_ESP32)
+    if (xSemaphoreTake(busDrawMux, 200) != pdTRUE) { delay(1);}  // WLEDMM first acquire drawing permission (wait max 200ms)
+    #endif
     for (uint16_t i = start; i < stop; i++) {
       setRealtimePixel(i, data[c], data[c+1], data[c+2], ddpChannelsPerLed >3 ? data[c+3] : 0);
       c += ddpChannelsPerLed;
+      pixels++;
     }
+    packets ++;
+    #if defined(ARDUINO_ARCH_ESP32)
+    xSemaphoreGive(busDrawMux);                                  // WLEDMM release drawing permissions
+    #endif
   }
 
   bool push = p->flags & DDP_PUSH_FLAG;
   ddpSeenPush |= push;
   if (!ddpSeenPush || push) { // if we've never seen a push, or this is one, render display
+    #ifdef WLED_DEBUG
+      if (push) { USER_PRINT("-P-");} else { USER_PRINT("--");}
+      USER_PRINTF("> %dms (%upck, %upix) ", int(millis() - lastPush), packets, pixels);
+      lastPush = millis();
+      pixels = packets = 0;
+    #endif
     e131NewData = true;
     byte sn = p->sequenceNum & 0xF;
     if (sn) e131LastSequenceNumber[0] = sn;

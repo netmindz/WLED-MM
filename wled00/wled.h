@@ -765,6 +765,11 @@ WLED_GLOBAL volatile bool loadLedmap _INIT(false);          // WLEDMM use as boo
 WLED_GLOBAL volatile uint8_t loadedLedmap _INIT(0);         // WLEDMM default 0
 WLED_GLOBAL volatile bool suspendStripService _INIT(false); // WLEDMM temporarily prevent running strip.service, when strip or segments are "under update" and inconsistent
 WLED_GLOBAL volatile bool OTAisRunning _INIT(false);        // WLEDMM temporarily stop led updates during OTA
+
+#ifdef ARDUINO_ARCH_ESP32
+WLED_GLOBAL SemaphoreHandle_t busDrawMux _INIT(nullptr);    // WLEDMM prevent concurrent strip.show() and strip.service() -> for DDP over ws
+#endif
+
 #ifndef ESP8266
 WLED_GLOBAL char  *ledmapNames[WLED_MAX_LEDMAPS-1] _INIT_N(({nullptr}));
 #endif

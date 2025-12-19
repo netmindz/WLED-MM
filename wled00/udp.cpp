@@ -162,9 +162,8 @@ void realtimeLock(uint32_t timeoutMs, byte md)
 
     if (strip.isServicing()) {
       USER_PRINTLN(F("realtimeLock() entering RTM: strip is still drawing effects."));
-      strip.waitUntilIdle();
+      strip.waitUntilIdle(350);
     }
-    strip.service(); // WLEDMM make sure that all segments are properly initialized
     busses.invalidateCache(true);
     // WLEDMM end
 

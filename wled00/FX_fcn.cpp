@@ -116,9 +116,18 @@ void Segment::allocLeds() {
   }
   if ((size > 0) && (!ledsrgb || size > ledsrgbSize)) {    //softhack dont allocate zero bytes
     DEBUG_PRINTF("allocLeds (%d,%d to %d,%d), %u from %u\n", start, startY, stop, stopY, size, ledsrgb?ledsrgbSize:0);
+
+    #if defined(ARDUINO_ARCH_ESP32) // WLEDMM protect against parallel access
+    portENTER_CRITICAL(&s_wled_strip_mux);
+    #endif
     if (ledsrgb) free(ledsrgb);   // we need a bigger buffer, so free the old one first
+    ledsrgb = nullptr;
     ledsrgb = (CRGB*)calloc(size, 1);
     ledsrgbSize = ledsrgb?size:0;
+    #if defined(ARDUINO_ARCH_ESP32) // WLEDMM protect against parallel access
+    portEXIT_CRITICAL(&s_wled_strip_mux);
+    #endif
+
     if (ledsrgb == nullptr) {
       USER_PRINTLN("allocLeds failed!!");
       errorFlag = ERR_LOW_BUF; // WLEDMM raise errorflag
@@ -1904,14 +1913,15 @@ void WS2812FX::finalizeInit(void)
 // on 8266 this function does nothing, because we can only do "busy waiting" on ESP32
 //#define MAX_IDLE_WAIT_MS 50  // seems to work in most cases
 #define MAX_IDLE_WAIT_MS 120   // better safe than sorry - similar to the timeout used by upstream WLED
-void WS2812FX::waitUntilIdle(void) {
+void WS2812FX::waitUntilIdle(unsigned timeout) {
 #if defined(ARDUINO_ARCH_ESP32) && defined(WLEDMM_PROTECT_SERVICE)
+  if (timeout < MAX_IDLE_WAIT_MS) timeout = MAX_IDLE_WAIT_MS;
   if (isServicing()) {
     unsigned long waitStarted = millis();
     do {
       delay(2);  // Suspending for 1 tick (or more) gives other tasks a chance to run.
       //yield(); // seems to be a no-op on esp32
-    } while (isServicing() && (millis() - waitStarted < MAX_IDLE_WAIT_MS));
+    } while (isServicing() && (millis() - waitStarted < timeout));
     DEBUG_PRINTF("strip.waitUntilIdle(): strip %sidle after %d ms. (task %s with prio=%d)\n", isServicing()?"not ":"", int(millis() - waitStarted), pcTaskGetTaskName(NULL), uxTaskPriorityGet(NULL));
     if (isServicing()) USER_PRINTF("strip.waitUntilIdle(): strip NOT idle after %d ms - overriding access. (task %s with prio=%d)\n", int(millis() - waitStarted), pcTaskGetTaskName(NULL), uxTaskPriorityGet(NULL));
   }
@@ -1924,6 +1934,10 @@ void WS2812FX::waitUntilIdle(void) {
 void WS2812FX::service() {
   unsigned long nowUp = millis(); // Be aware, millis() rolls over every 49 days // WLEDMM avoid losing precision
   if (OTAisRunning) return; // WLEDMM avoid flickering during OTA
+ 
+  //#ifdef ARDUINO_ARCH_ESP32
+  //if ((_isServicing == true) && (strncmp(pcTaskGetTaskName(NULL), "loopTask", 8) != 0)) return; // WLEDMM experimental: not in looptask context - avoid self-blocking (DDP over webSockets)
+  //#endif
 
   now = nowUp + timebase;
   unsigned long elapsed = nowUp - _lastServiceShow;
@@ -1980,6 +1994,9 @@ void WS2812FX::service() {
         // effect blending (execute previous effect)
         // actual code may be a bit more involved as effects have runtime data including allocated memory
         //if (seg.transitional && seg._modeP) (*_mode[seg._modeP])(progress());
+        #if defined(ARDUINO_ARCH_ESP32) // WLEDMM protect against parallel drawing
+        if (xSemaphoreTake(busDrawMux, 200) != pdTRUE) { delay(1); continue;}      // WLEDMM first acquire draw mutex
+        #endif
         frameDelay = (*_mode[seg.currentMode(seg.mode)])();
 
         if (frameDelay < speedLimit) frameDelay = FRAMETIME;                    // WLEDMM limit effects that want to go faster than target FPS
@@ -1990,6 +2007,9 @@ void WS2812FX::service() {
 
         seg.lastBri = seg.currentBri(seg.on ? seg.opacity:0);                   // WLEDMM remember for next time
         seg.handleTransition();
+        #if defined(ARDUINO_ARCH_ESP32)
+        xSemaphoreGive(busDrawMux); // WLEDMM unlock mutex
+        #endif
       }
 
       seg.next_time = nowUp + frameDelay;
@@ -2129,7 +2149,14 @@ void WS2812FX::show(void) {
   // some buses send asynchronously and this method will return before
   // all of the data has been sent.
   // See https://github.com/Makuna/NeoPixelBus/wiki/ESP32-NeoMethods#neoesp32rmt-methods
+
+  #if defined(ARDUINO_ARCH_ESP32) // WLEDMM protect against parallel access
+  if (xSemaphoreTake(busDrawMux, 200) != pdTRUE) { delay(1); return;}      // WLEDMM first acquire drawing permission (mutex), wait max 200ms
+  #endif
   busses.show();
+  #if defined(ARDUINO_ARCH_ESP32)
+  xSemaphoreGive(busDrawMux);                                              // WLEDMM return permissions
+  #endif
 
   unsigned long diff = showNow - _lastShow;
   uint16_t fpsCurr = 200;
@@ -2464,6 +2491,9 @@ void WS2812FX::makeAutoSegments(bool forceReset) {
 }
 
 void WS2812FX::fixInvalidSegments() {
+  #if defined(ARDUINO_ARCH_ESP32)          // WLEDMM protect against parallel access
+  portENTER_CRITICAL(&s_wled_strip_mux);   // this locks out all parallel tasks, including PSRAM and flash filesystem access
+  #endif
   //make sure no segment is longer than total (sanity check)
   for (size_t i = getSegmentsNum()-1; i > 0; i--) {
     if (isMatrix) {
@@ -2488,6 +2518,10 @@ void WS2812FX::fixInvalidSegments() {
   // this is always called as the last step after finalizeInit(), update covered bus types
   for (segment &seg : _segments)
     seg.refreshLightCapabilities();
+
+  #if defined(ARDUINO_ARCH_ESP32)
+  portEXIT_CRITICAL(&s_wled_strip_mux);
+  #endif
 }
 
 //true if all segments align with a bus, or if a segment covers the total length
@@ -2505,6 +2539,7 @@ bool WS2812FX::checkSegmentAlignment() {
   return true;
 }
 
+#if 0 // WLEDMM dead code
 //After this function is called, setPixelColor() will use that segment (offsets, grouping, ... will apply)
 //Note: If called in an interrupt (e.g. JSON API), original segment must be restored,
 //otherwise it can lead to a crash on ESP32 because _segment_index is modified while in use by the main thread
@@ -2516,6 +2551,7 @@ uint8_t WS2812FX::setPixelSegment(uint8_t n) {
   }
   return prevSegId;
 }
+#endif
 
 void WS2812FX::setRange(uint16_t i, uint16_t i2, uint32_t col) {
   if (i2 >= i)
