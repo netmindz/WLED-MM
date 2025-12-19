@@ -91,6 +91,8 @@ void handleE131Packet(e131_packet_t* p, IPAddress clientIP, byte protocol){
   uint8_t* e131_data = nullptr;
   uint8_t seq = 0, mde = REALTIME_MODE_E131;
 
+  if (!receiveDirect) { exitRealtime(); return; } // WLEDMM kill switch
+
   if (protocol == P_ARTNET)
   {
     if (p->art_opcode == ARTNET_OPCODE_OPPOLL) {
