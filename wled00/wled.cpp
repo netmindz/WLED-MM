@@ -477,8 +477,8 @@ void WLED::setup()
   init_math();  // WLEDMM: pre-calculate some lookup tables
 
   #ifdef ARDUINO_ARCH_ESP32
-  busDrawMux = xSemaphoreCreateBinary();      // WLEDMM prevent concurrent running of strip.show and strip.service
-  xSemaphoreGive(busDrawMux);                 // init semaphores to initially allow drawing
+  busDrawMux = xSemaphoreCreateRecursiveMutex();       // WLEDMM prevent concurrent running of strip.show and strip.service
+  xSemaphoreGiveRecursive(busDrawMux);                 // init semaphores to initially allow drawing
   #endif
 
   #ifdef ARDUINO_ARCH_ESP32
@@ -1103,15 +1103,15 @@ bool WLED::initEthernet()
 
 void WLED::initConnection()
 {
+  #ifdef WLED_ENABLE_WEBSOCKETS
+  ws.onEvent(wsEvent);
+  #endif
+
 #ifdef ARDUINO_ARCH_ESP32
   unsigned long t_wait = millis();
   while(strip.isUpdating() && (millis() - t_wait < 86)) delay(1); // WLEDMM try to catch a moment when strip is idle
   //if (strip.isUpdating()) USER_PRINTLN("WLED::initConnection: strip still updating.");
 #endif
-
-  #ifdef WLED_ENABLE_WEBSOCKETS
-  ws.onEvent(wsEvent);
-  #endif
 
   WiFi.disconnect(true);        // close old connections
 #ifdef ESP8266

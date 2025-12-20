@@ -353,8 +353,9 @@ bool deserializeSegment(JsonObject elem, byte it, byte presetId)
       USER_PRINTLN(F("deserializeSegment() image: strip is still drawing effects."));
       strip.waitUntilIdle();
     }
+    // WLEDMM protect against parallel drawing
+    if (esp32SemTake(busDrawMux, 250) == pdTRUE) {      // WLEDMM first acquire draw mutex, start of critical section
     seg.startFrame();
-    // WLEDMM end
 
     // set brightness immediately and disable transition
     transitionDelayTemp = 0;
@@ -404,6 +405,9 @@ bool deserializeSegment(JsonObject elem, byte it, byte presetId)
         set = 0;
       }
     }
+    esp32SemGive(busDrawMux); // release lock
+    } // end of critical section
+
     seg.map1D2D = oldMap1D2D; // restore mapping
     strip.trigger(); // force segment update
     suspendStripService = oldLock; // restore previous lock status

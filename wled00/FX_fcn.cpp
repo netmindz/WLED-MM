@@ -117,17 +117,11 @@ void Segment::allocLeds() {
   if ((size > 0) && (!ledsrgb || size > ledsrgbSize)) {    //softhack dont allocate zero bytes
     DEBUG_PRINTF("allocLeds (%d,%d to %d,%d), %u from %u\n", start, startY, stop, stopY, size, ledsrgb?ledsrgbSize:0);
 
-    #if defined(ARDUINO_ARCH_ESP32) // WLEDMM protect against parallel access
-    portENTER_CRITICAL(&s_wled_strip_mux);
-    #endif
-    if (ledsrgb) free(ledsrgb);   // we need a bigger buffer, so free the old one first
+    CRGB* oldLedsRgb = ledsrgb; // WLEDMM this makes the re-allocation an anmost-atomic and more threadsafe operation
     ledsrgb = nullptr;
-    ledsrgb = (CRGB*)calloc(size, 1);
+    if (oldLedsRgb) free(oldLedsRgb);   // we need a bigger buffer, so free the old one first
+    ledsrgb = (CRGB*)calloc(size, 1);   // WLEDMM This is an OS call, so we should not wrap it in portEnterCRITICAL
     ledsrgbSize = ledsrgb?size:0;
-    #if defined(ARDUINO_ARCH_ESP32) // WLEDMM protect against parallel access
-    portEXIT_CRITICAL(&s_wled_strip_mux);
-    #endif
-
     if (ledsrgb == nullptr) {
       USER_PRINTLN("allocLeds failed!!");
       errorFlag = ERR_LOW_BUF; // WLEDMM raise errorflag
@@ -1877,15 +1871,16 @@ void WS2812FX::finalizeInit(void)
     // this is a critical section that will be removed with PR #278 which removes _globalLeds
     // problem: suspendStripService provides interlocking, but there’s a window before service() observes it, 
     //          and ESP32 is dual-core. A critical section closes that window so the pointer swap is atomic across cores.
+    CRGB* oldGLeds = Segment::_globalLeds;
 #if defined(ARDUINO_ARCH_ESP32)
     portENTER_CRITICAL(&s_wled_strip_mux);
 #endif
-    free(Segment::_globalLeds);
     Segment::_globalLeds = nullptr;
-    purgeSegments(true);   // WLEDMM moved here, because it seems to improve stability.
 #if defined(ARDUINO_ARCH_ESP32)
     portEXIT_CRITICAL(&s_wled_strip_mux);
 #endif
+    free(oldGLeds);
+    purgeSegments(true);   // WLEDMM moved here, because it seems to improve stability.
   }
   if (useLedsArray && getLengthTotal()>0) { // WLEDMM avoid malloc(0)
     size_t arrSize = sizeof(CRGB) * getLengthTotal();
@@ -1994,9 +1989,10 @@ void WS2812FX::service() {
         // effect blending (execute previous effect)
         // actual code may be a bit more involved as effects have runtime data including allocated memory
         //if (seg.transitional && seg._modeP) (*_mode[seg._modeP])(progress());
-        #if defined(ARDUINO_ARCH_ESP32) // WLEDMM protect against parallel drawing
-        if (xSemaphoreTake(busDrawMux, 200) != pdTRUE) { delay(1); continue;}      // WLEDMM first acquire draw mutex
-        #endif
+
+        // WLEDMM protect against parallel drawing
+        if (esp32SemTake(busDrawMux, 200) != pdTRUE) { delay(1); continue;}      // WLEDMM first acquire draw mutex
+
         frameDelay = (*_mode[seg.currentMode(seg.mode)])();
 
         if (frameDelay < speedLimit) frameDelay = FRAMETIME;                    // WLEDMM limit effects that want to go faster than target FPS
@@ -2007,9 +2003,8 @@ void WS2812FX::service() {
 
         seg.lastBri = seg.currentBri(seg.on ? seg.opacity:0);                   // WLEDMM remember for next time
         seg.handleTransition();
-        #if defined(ARDUINO_ARCH_ESP32)
-        xSemaphoreGive(busDrawMux); // WLEDMM unlock mutex
-        #endif
+
+        esp32SemGive(busDrawMux); // WLEDMM unlock mutex
       }
 
       seg.next_time = nowUp + frameDelay;
@@ -2150,13 +2145,10 @@ void WS2812FX::show(void) {
   // all of the data has been sent.
   // See https://github.com/Makuna/NeoPixelBus/wiki/ESP32-NeoMethods#neoesp32rmt-methods
 
-  #if defined(ARDUINO_ARCH_ESP32) // WLEDMM protect against parallel access
-  if (xSemaphoreTake(busDrawMux, 200) != pdTRUE) { delay(1); return;}      // WLEDMM first acquire drawing permission (mutex), wait max 200ms
-  #endif
+  // WLEDMM protect against parallel access
+  if (esp32SemTake(busDrawMux, 200) != pdTRUE) { delay(1); return;}      // WLEDMM first acquire drawing permission (mutex), wait max 200ms
   busses.show();
-  #if defined(ARDUINO_ARCH_ESP32)
-  xSemaphoreGive(busDrawMux);                                              // WLEDMM return permissions
-  #endif
+  esp32SemGive(busDrawMux);                                              // WLEDMM return permissions
 
   unsigned long diff = showNow - _lastShow;
   uint16_t fpsCurr = 200;
@@ -2355,15 +2347,19 @@ void WS2812FX::purgeSegments(bool force) {
   // remove all inactive segments (from the back)
   int deleted = 0;
   if (_segments.size() <= 1) return;
-  for (size_t i = _segments.size()-1; i > 0; i--)
+  // WLEDMM protect against parallel access while drawing
+  if (esp32SemTake(busDrawMux, 300) != pdTRUE) return;
+
+  for (size_t i = _segments.size()-1; i > 0; i--) {
     if (_segments[i].stop == 0 || force) {
       deleted++;
       _segments.erase(_segments.begin() + i);
-    }
+  } }
   if (deleted) {
     _segments.shrink_to_fit();
     /*if (_mainSegment >= _segments.size())*/ setMainSegmentId(0);
   }
+  esp32SemGive(busDrawMux);
 }
 
 Segment& WS2812FX::getSegment(uint8_t id) {
@@ -2391,6 +2387,9 @@ void WS2812FX::restartRuntime(bool doReset) {
 void WS2812FX::resetSegments(bool boundsOnly) { //WLEDMM add boundsonly
   DEBUG_PRINTF("resetSegments %d %dx%d\n", boundsOnly, Segment::maxWidth, Segment::maxHeight);
   if (!boundsOnly) {
+    // WLEDMM protect against parallel access while drawing
+    if (esp32SemTake(busDrawMux, portMAX_DELAY) != pdTRUE) return;  // warning: this waits until the mutex becomes availeable, no timeout
+
     _segments.clear(); // destructs all Segment as part of clearing
     #ifndef WLED_DISABLE_2D
     segment seg = isMatrix ? Segment(0, Segment::maxWidth, 0, Segment::maxHeight) : Segment(0, _length);
@@ -2399,6 +2398,7 @@ void WS2812FX::resetSegments(bool boundsOnly) { //WLEDMM add boundsonly
     #endif
     _segments.push_back(seg);
     _mainSegment = 0;
+    esp32SemGive(busDrawMux);
   } else { //WLEDMM boundsonly
     for (segment &seg : _segments) {
       #ifndef WLED_DISABLE_2D
@@ -2417,6 +2417,9 @@ void WS2812FX::resetSegments(bool boundsOnly) { //WLEDMM add boundsonly
 
 void WS2812FX::makeAutoSegments(bool forceReset) {
   if (autoSegments) { //make one segment per bus
+    // WLEDMM protect against parallel access while drawing
+    if (esp32SemTake(busDrawMux, portMAX_DELAY) != pdTRUE) return;  // warning: this waits until the mutex becomes availeable, no timeout
+
     uint16_t segStarts[MAX_NUM_SEGMENTS] = {0};
     uint16_t segStops [MAX_NUM_SEGMENTS] = {0};
     size_t s = 0;
@@ -2465,7 +2468,7 @@ void WS2812FX::makeAutoSegments(bool forceReset) {
     for (size_t i = 1; i < s; i++) {
       _segments.push_back(Segment(segStarts[i], segStops[i]));
     }
-
+    esp32SemGive(busDrawMux);
   } else {
 
     if (forceReset || getSegmentsNum() == 0) resetSegments();
@@ -2491,9 +2494,9 @@ void WS2812FX::makeAutoSegments(bool forceReset) {
 }
 
 void WS2812FX::fixInvalidSegments() {
-  #if defined(ARDUINO_ARCH_ESP32)          // WLEDMM protect against parallel access
-  portENTER_CRITICAL(&s_wled_strip_mux);   // this locks out all parallel tasks, including PSRAM and flash filesystem access
-  #endif
+  // WLEDMM protect against parallel access while drawing
+  if (esp32SemTake(busDrawMux, portMAX_DELAY) != pdTRUE) return;  // warning: this waits until the mutex becomes availeable, no timeout
+
   //make sure no segment is longer than total (sanity check)
   for (size_t i = getSegmentsNum()-1; i > 0; i--) {
     if (isMatrix) {
@@ -2513,15 +2516,13 @@ void WS2812FX::fixInvalidSegments() {
       if (_segments[i].stop  >  _length) _segments[i].stop = _length;
     }
   }
+  esp32SemGive(busDrawMux);  // give back the lock now, so purgeSegments can acquire it again
+
   // if any segments were deleted free memory
   purgeSegments();
   // this is always called as the last step after finalizeInit(), update covered bus types
   for (segment &seg : _segments)
     seg.refreshLightCapabilities();
-
-  #if defined(ARDUINO_ARCH_ESP32)
-  portEXIT_CRITICAL(&s_wled_strip_mux);
-  #endif
 }
 
 //true if all segments align with a bus, or if a segment covers the total length

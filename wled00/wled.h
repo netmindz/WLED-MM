@@ -766,8 +766,21 @@ WLED_GLOBAL volatile uint8_t loadedLedmap _INIT(0);         // WLEDMM default 0
 WLED_GLOBAL volatile bool suspendStripService _INIT(false); // WLEDMM temporarily prevent running strip.service, when strip or segments are "under update" and inconsistent
 WLED_GLOBAL volatile bool OTAisRunning _INIT(false);        // WLEDMM temporarily stop led updates during OTA
 
+// WLEDMM prevent concurrent strip.show() and strip.service() -> for DDP over ws, and other background tasks
 #ifdef ARDUINO_ARCH_ESP32
-WLED_GLOBAL SemaphoreHandle_t busDrawMux _INIT(nullptr);    // WLEDMM prevent concurrent strip.show() and strip.service() -> for DDP over ws
+WLED_GLOBAL SemaphoreHandle_t busDrawMux _INIT(nullptr);
+#define esp32SemTake(mux,timeout) xSemaphoreTakeRecursive(mux, timeout) // convenience macro that expands to xSemaphoreTakeRecursive
+#define esp32SemGive(mux)  xSemaphoreGiveRecursive(mux)                 // convenience macro that expands to xSemaphoreGiveRecursive
+#else
+// dummy for 8266
+#ifndef pdTRUE
+#define pdTRUE 1
+#endif
+#ifndef portMAX_DELAY
+#define portMAX_DELAY UINT32_MAX
+#endif
+#define esp32SemTake(mux,timeout) (pdTRUE)
+#define esp32SemGive(mux)
 #endif
 
 #ifndef ESP8266

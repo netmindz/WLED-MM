@@ -55,20 +55,16 @@ void handleDDPPacket(e131_packet_t* p) {
   realtimeLock(realtimeTimeoutMs, REALTIME_MODE_DDP);
 
   if (!realtimeOverride || (realtimeMode && useMainSegmentOnly)) {
-    #if defined(ARDUINO_ARCH_ESP32)
     // WLEDMM acquire drawing permission (wait max 200ms) before setting pixels
-    if (xSemaphoreTake(busDrawMux, 200) == pdTRUE) { 
-    #endif
+    if (esp32SemTake(busDrawMux, 200) == pdTRUE) { 
       for (uint16_t i = start; i < stop; i++) {
         setRealtimePixel(i, data[c], data[c+1], data[c+2], ddpChannelsPerLed >3 ? data[c+3] : 0);
         c += ddpChannelsPerLed;
         pixels++;
       }
       packets ++;
-    #if defined(ARDUINO_ARCH_ESP32)
-      xSemaphoreGive(busDrawMux);                                  // WLEDMM release drawing permissions
+      esp32SemGive(busDrawMux);                                  // WLEDMM release drawing permissions
     }
-    #endif
   }
 
   bool push = p->flags & DDP_PUSH_FLAG;
@@ -195,8 +191,11 @@ void handleDMXData(uint16_t uni, uint16_t dmxChannels, uint8_t* e131_data, uint8
       if (realtimeOverride && !(realtimeMode && useMainSegmentOnly)) return;
 
       wChannel = (availDMXLen > 3) ? e131_data[dataOffset+3] : 0;
-      for (uint16_t i = 0; i < totalLen; i++)
-        setRealtimePixel(i, e131_data[dataOffset+0], e131_data[dataOffset+1], e131_data[dataOffset+2], wChannel);
+      if (esp32SemTake(busDrawMux, 200) == pdTRUE) { // WLEDMM acquire drawing permission (wait max 200ms) before setting pixels
+        for (uint16_t i = 0; i < totalLen; i++)
+          setRealtimePixel(i, e131_data[dataOffset+0], e131_data[dataOffset+1], e131_data[dataOffset+2], wChannel);
+        esp32SemGive(busDrawMux);
+      }
       break;
 
     case DMX_MODE_SINGLE_DRGB:  // 4 channel: [Dimmer,R,G,B]
@@ -211,9 +210,11 @@ void handleDMXData(uint16_t uni, uint16_t dmxChannels, uint8_t* e131_data, uint8
         bri = e131_data[dataOffset+0];
         strip.setBrightness(bri, true);
       }
-
-      for (uint16_t i = 0; i < totalLen; i++)
-        setRealtimePixel(i, e131_data[dataOffset+1], e131_data[dataOffset+2], e131_data[dataOffset+3], wChannel);
+      if (esp32SemTake(busDrawMux, 200) == pdTRUE) { // WLEDMM acquire drawing permission (wait max 200ms) before setting pixels
+        for (uint16_t i = 0; i < totalLen; i++)
+          setRealtimePixel(i, e131_data[dataOffset+1], e131_data[dataOffset+2], e131_data[dataOffset+3], wChannel);
+        esp32SemGive(busDrawMux);
+      }
       break;
 
     case DMX_MODE_PRESET:       // 2 channel: [Dimmer,Preset]
@@ -357,16 +358,19 @@ void handleDMXData(uint16_t uni, uint16_t dmxChannels, uint8_t* e131_data, uint8
           }
         }
 
-        if (!is4Chan) {
-          for (uint16_t i = previousLeds; i < ledsTotal; i++) {
-            setRealtimePixel(i, e131_data[dmxOffset], e131_data[dmxOffset+1], e131_data[dmxOffset+2], 0);
-            dmxOffset+=3;
+        if (esp32SemTake(busDrawMux, 200) == pdTRUE) { // WLEDMM acquire drawing permission (wait max 200ms) before setting pixels
+          if (!is4Chan) {
+            for (uint16_t i = previousLeds; i < ledsTotal; i++) {
+              setRealtimePixel(i, e131_data[dmxOffset], e131_data[dmxOffset+1], e131_data[dmxOffset+2], 0);
+              dmxOffset+=3;
+            }
+          } else {
+            for (uint16_t i = previousLeds; i < ledsTotal; i++) {
+              setRealtimePixel(i, e131_data[dmxOffset], e131_data[dmxOffset+1], e131_data[dmxOffset+2], e131_data[dmxOffset+3]);
+              dmxOffset+=4;
+            }
           }
-        } else {
-          for (uint16_t i = previousLeds; i < ledsTotal; i++) {
-            setRealtimePixel(i, e131_data[dmxOffset], e131_data[dmxOffset+1], e131_data[dmxOffset+2], e131_data[dmxOffset+3]);
-            dmxOffset+=4;
-          }
+          esp32SemGive(busDrawMux);
         }
         break;
       }
