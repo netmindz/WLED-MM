@@ -56,16 +56,18 @@ void handleDDPPacket(e131_packet_t* p) {
 
   if (!realtimeOverride || (realtimeMode && useMainSegmentOnly)) {
     #if defined(ARDUINO_ARCH_ESP32)
-    if (xSemaphoreTake(busDrawMux, 200) != pdTRUE) { delay(1);}  // WLEDMM first acquire drawing permission (wait max 200ms)
+    // WLEDMM acquire drawing permission (wait max 200ms) before setting pixels
+    if (xSemaphoreTake(busDrawMux, 200) == pdTRUE) { 
     #endif
-    for (uint16_t i = start; i < stop; i++) {
-      setRealtimePixel(i, data[c], data[c+1], data[c+2], ddpChannelsPerLed >3 ? data[c+3] : 0);
-      c += ddpChannelsPerLed;
-      pixels++;
-    }
-    packets ++;
+      for (uint16_t i = start; i < stop; i++) {
+        setRealtimePixel(i, data[c], data[c+1], data[c+2], ddpChannelsPerLed >3 ? data[c+3] : 0);
+        c += ddpChannelsPerLed;
+        pixels++;
+      }
+      packets ++;
     #if defined(ARDUINO_ARCH_ESP32)
-    xSemaphoreGive(busDrawMux);                                  // WLEDMM release drawing permissions
+      xSemaphoreGive(busDrawMux);                                  // WLEDMM release drawing permissions
+    }
     #endif
   }
 
