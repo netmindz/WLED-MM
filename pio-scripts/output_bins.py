@@ -137,9 +137,12 @@ def bin_rename_copy(source, target, env):
     if os.path.isfile(source_map):
         print(f"Found linker mapfile {source_map}")
         shutil.copy(source_map, map_file)
-
-    # wledmm_print_all_defines(env)
-    # wledmm_print_build_info(env)
+    # Check if this is a release build (CI sets WLED_RELEASE=True)
+    is_release_build = os.environ.get('WLED_RELEASE', '').lower() in ('true', '1', 'yes')
+    # show build flags summary for github CI builds
+    if is_release_build:
+        # wledmm_print_all_defines(env)
+        wledmm_print_build_info(env)
 
 def bin_gzip(source, target, env):
     _create_dirs()
