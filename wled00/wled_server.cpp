@@ -6,14 +6,27 @@
 #endif
 #include "html_settings.h"
 #include "html_other.h"
+
 #ifdef WLED_ENABLE_PIXART
   #include "html_pixart.h"
 #endif
-#ifdef WLED_ENABLE_PIXELFORGE
+#ifdef WLED_ENABLE_PXMAGIC
+  //#include "html_pxmagic.h"
+  #if !defined(WLED_ENABLE_PIXART)
+  #error "PIXEL MAGIC Tool is not supported in WLED-MM. Please use Pixel Art Converter instead: add -D WLED_ENABLE_PIXART to your build_flags"
+  // PIXEL MAGIC has known problems when creating image presets for larger images.
+  // if you still want to use it, upload pxmagic.htm to your device (<WLED-IP>/edit) and then start <WLED-IP>/pxmagic.htm
+  #endif
+#endif
+#if defined(WLED_ENABLE_PIXELFORGE) && !defined(WLED_DISABLE_PIXELFORGE) // WLEDMM uses WLED_ENABLE_PIXELFORGE, upstream has WLED_DISABLE_PIXELFORGE
   #include "html_pixelforge.h"
   static const char _pixelforge_htm[] PROGMEM = "/pixelforge.htm";
   static const char _common_js[]      PROGMEM = "/common.js";
+  #if !defined(WLED_ENABLE_GIF)
+  #error "GIF image support is missing. Please add -D WLED_ENABLE_GIF to your build flags."
+  #endif
 #endif
+
 #include "html_cpal.h"
 
 // define flash strings once (saves flash memory)
@@ -454,7 +467,7 @@ void initServer()
   });
   #endif
 
-  #ifdef WLED_ENABLE_PIXELFORGE
+#if defined(WLED_ENABLE_PIXELFORGE) && !defined(WLED_DISABLE_PIXELFORGE)
   server.on(_pixelforge_htm, HTTP_GET, [](AsyncWebServerRequest *request) {
     //handleStaticContent(request, FPSTR(_pixelforge_htm), 200, FPSTR(CONTENT_TYPE_HTML), PAGE_pixelforge, PAGE_pixelforge_length);
     if (handleFileRead(request, FPSTR(_pixelforge_htm))) return;
@@ -621,7 +634,7 @@ void serveSettingsJS(AsyncWebServerRequest* request)
   char buf[SETTINGS_STACK_BUF_SIZE+37] = { '\0' }; // WLEDMM ensure buffer is cleared initially
   buf[0] = 0;
 
-  #ifdef WLED_ENABLE_PIXELFORGE
+#if defined(WLED_ENABLE_PIXELFORGE) && !defined(WLED_DISABLE_PIXELFORGE) 
    // serve common.js if requested by subPage = 254 (.js)
   if (request->url().indexOf(FPSTR(_common_js)) > 0) {
     AsyncWebServerResponse *response = request->beginResponse_P(200, FPSTR(CONTENT_TYPE_JAVASCRIPT), JS_common, JS_common_length);
