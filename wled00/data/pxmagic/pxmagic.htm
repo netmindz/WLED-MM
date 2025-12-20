@@ -1226,8 +1226,8 @@
     gId("segments").addEventListener("change", (e) => {
       const { width, height } = e.target.selectedOptions[0].dataset;
 
-      gId("width").value = w;
-      gId("height").value = h;
+      gId("width").value = width;
+      gId("height").value = height;
     });
 
     gId("output").addEventListener("change", (e) => {
@@ -1576,7 +1576,7 @@
           ctx.fillText(pixelId, offsetX, offsetY);
         }
       }
-
+      let i; // avoid inplicitly creating a global variable
       switch (pattern) {
         case "1":
           i = colors;
