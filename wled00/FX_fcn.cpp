@@ -117,10 +117,19 @@ void Segment::allocLeds() {
   if ((size > 0) && (!ledsrgb || size > ledsrgbSize)) {    //softhack dont allocate zero bytes
     DEBUG_PRINTF("allocLeds (%d,%d to %d,%d), %u from %u\n", start, startY, stop, stopY, size, ledsrgb?ledsrgbSize:0);
 
-    CRGB* oldLedsRgb = ledsrgb; // WLEDMM this makes the re-allocation an anmost-atomic and more threadsafe operation
+    // WLEDMM this looks a bit over-compilicated, but it makes the re-allocation step an atomic and threadsafe operation
+    CRGB* oldLedsRgb = ledsrgb;
     ledsrgb = nullptr;
     if (oldLedsRgb) free(oldLedsRgb);   // we need a bigger buffer, so free the old one first
-    ledsrgb = (CRGB*)calloc(size, 1);   // WLEDMM This is an OS call, so we should not wrap it in portEnterCRITICAL
+    CRGB* newLedsRgb = (CRGB*)calloc(1, size);   // WLEDMM This is an OS call, so we should not wrap it in portEnterCRITICAL
+    #if defined(ARDUINO_ARCH_ESP32)
+    portENTER_CRITICAL(&s_wled_strip_mux);
+    #endif
+      ledsrgb = newLedsRgb;
+    #if defined(ARDUINO_ARCH_ESP32)
+    portEXIT_CRITICAL(&s_wled_strip_mux);
+    #endif
+
     ledsrgbSize = ledsrgb?size:0;
     if (ledsrgb == nullptr) {
       USER_PRINTLN("allocLeds failed!!");
