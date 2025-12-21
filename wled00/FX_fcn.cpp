@@ -1443,8 +1443,9 @@ void Segment::refreshLightCapabilities() {
 void __attribute__((hot)) Segment::fill(uint32_t c) {
   if (!isActive()) return; // not active
 
-  const uint_fast16_t cols = is2D() ? virtualWidth() : virtualLength();             // WLEDMM use fast int types
-  const uint_fast16_t rows = virtualHeight(); // will be 1 for 1D
+  // WLEDMM use "calc_" functions because fill() is also called from json.cpp without previous seg.startFrame
+  const uint_fast16_t cols = is2D() ? calc_virtualWidth() : calc_virtualLength();             // WLEDMM use fast int types
+  const uint_fast16_t rows = calc_virtualHeight(); // will be 1 for 1D
 
   if (is2D()) {
     // pre-calculate scaled color
@@ -2013,6 +2014,9 @@ void WS2812FX::service() {
   }
   if (_triggered) doShow = true;      // WLEDMM "triggered" always means "show"
 
+  #ifdef WLEDMM_FASTPATH
+  _currentSeg = & strip.getMainSegment(); // WLEDMM safe default
+  #endif
   _virtualSegmentLength = 0;
   busses.setSegmentCCT(-1);
   if(doShow) {
