@@ -203,10 +203,15 @@ void realtimeLock(uint32_t timeoutMs, byte md)
   realtimeMode = md;
 
   // WLEDMM cache current "main segment"
-  Segment& mainSegRef = strip.getMainSegment();
-  theMainSeg = &mainSegRef; //convert from reference to pointer
-  theMainSegLength = realtimeOverride ? 0 : theMainSeg->length();
-  theStripLength = realtimeOverride ? 0 : strip.getLengthTotal();
+  if (esp32SemTake(busDrawMux, 1200) == pdTRUE) { // stupid long timeout, but we don't want to wait forever
+    // WLEDMM protect against parallel cache updates from different tasks
+    //   positive side-effect: this also introduces a wait if other bus activities are happeening in parallel
+    Segment& mainSegRef = strip.getMainSegment();
+    theMainSeg = &mainSegRef; //convert from reference to pointer
+    theMainSegLength = realtimeOverride ? 0 : theMainSeg->length();
+    theStripLength = realtimeOverride ? 0 : strip.getLengthTotal();
+    esp32SemGive(busDrawMux);
+  }
 
   if (realtimeOverride) return;
   if (arlsForceMaxBri) strip.setBrightness(scaledBri(255), true);
@@ -228,9 +233,13 @@ void exitRealtime() {
     strip.show(); // possible fix for #3589
   }
   // WLEDMM invalide cached main segment pointer and length
-  theMainSeg = nullptr;
-  theMainSegLength  = 0;
-  theStripLength = 0;
+  if (esp32SemTake(busDrawMux, 200) == pdTRUE) {
+    // WLEDMM protect against parallel cache updates from different tasks
+    theMainSeg = nullptr;
+    theMainSegLength  = 0;
+    theStripLength = 0;
+    esp32SemGive(busDrawMux);
+  }
   busses.invalidateCache(false);  // WLEDMM
   USER_PRINTLN(F("exitRealtime() realtime mode ended."));
   updateInterfaces(CALL_MODE_WS_SEND);
