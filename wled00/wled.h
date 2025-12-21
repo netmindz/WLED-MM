@@ -769,6 +769,7 @@ WLED_GLOBAL volatile bool OTAisRunning _INIT(false);        // WLEDMM temporaril
 // WLEDMM prevent concurrent strip.show() and strip.service() -> for DDP over ws, and other background tasks
 #ifdef ARDUINO_ARCH_ESP32
 WLED_GLOBAL SemaphoreHandle_t busDrawMux _INIT(nullptr);
+WLED_GLOBAL SemaphoreHandle_t segmentMux _INIT(nullptr);
 #define esp32SemTake(mux,timeout) xSemaphoreTakeRecursive(mux, timeout) // convenience macro that expands to xSemaphoreTakeRecursive
 #define esp32SemGive(mux)  xSemaphoreGiveRecursive(mux)                 // convenience macro that expands to xSemaphoreGiveRecursive
 #else

@@ -478,7 +478,9 @@ void WLED::setup()
 
   #ifdef ARDUINO_ARCH_ESP32
   busDrawMux = xSemaphoreCreateRecursiveMutex();       // WLEDMM prevent concurrent running of strip.show and strip.service
+  segmentMux = xSemaphoreCreateRecursiveMutex();       // WLEDMM prevent segment changes while effects are running
   xSemaphoreGiveRecursive(busDrawMux);                 // init semaphores to initially allow drawing
+  xSemaphoreGiveRecursive(segmentMux);
   #endif
 
   #ifdef ARDUINO_ARCH_ESP32

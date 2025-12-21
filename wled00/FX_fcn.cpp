@@ -561,21 +561,26 @@ void Segment::setUp(uint16_t i1, uint16_t i2, uint8_t grp, uint8_t spc, uint16_t
     markForReset();
     return;
   }
-  if (i1 < Segment::maxWidth || (i1 >= Segment::maxWidth*Segment::maxHeight && i1 < strip.getLengthTotal())) start = i1; // Segment::maxWidth equals strip.getLengthTotal() for 1D
-  stop = i2 > Segment::maxWidth*Segment::maxHeight ? min(i2,strip.getLengthTotal()) : (i2 > Segment::maxWidth ? Segment::maxWidth : max((uint16_t)1,i2));  // WLEDMM: use native min/max
-  startY = 0;
-  stopY  = 1;
-  #ifndef WLED_DISABLE_2D
-  if (Segment::maxHeight>1) { // 2D
-    if (i1Y < Segment::maxHeight) startY = i1Y;
-    stopY = i2Y > Segment::maxHeight ? Segment::maxHeight : max((uint16_t)1,i2Y);         // WLEDMM: use native min/max
+
+  if (esp32SemTake(segmentMux, portMAX_DELAY) == pdTRUE) {
+    // WLEDMM acquire lock before doing critical changes to segment
+    if (i1 < Segment::maxWidth || (i1 >= Segment::maxWidth*Segment::maxHeight && i1 < strip.getLengthTotal())) start = i1; // Segment::maxWidth equals strip.getLengthTotal() for 1D
+    stop = i2 > Segment::maxWidth*Segment::maxHeight ? min(i2,strip.getLengthTotal()) : (i2 > Segment::maxWidth ? Segment::maxWidth : max((uint16_t)1,i2));  // WLEDMM: use native min/max
+    startY = 0;
+    stopY  = 1;
+    #ifndef WLED_DISABLE_2D
+    if (Segment::maxHeight>1) { // 2D
+      if (i1Y < Segment::maxHeight) startY = i1Y;
+      stopY = i2Y > Segment::maxHeight ? Segment::maxHeight : max((uint16_t)1,i2Y);         // WLEDMM: use native min/max
+    }
+    #endif
+    if (grp) {
+      grouping = grp;
+      spacing = spc;
+    }
+    if (ofs < UINT16_MAX) offset = ofs;
+    esp32SemGive(segmentMux);
   }
-  #endif
-  if (grp) {
-    grouping = grp;
-    spacing = spc;
-  }
-  if (ofs < UINT16_MAX) offset = ofs;
 
   if (!boundsUnchanged) {
     markForReset();
@@ -1956,6 +1961,7 @@ void WS2812FX::service() {
 
   _isServicing = true;
   _segment_index = 0;
+  if (esp32SemTake(segmentMux, 250) == pdTRUE) {      // WLEDMM prevent changes to segments while servicing
   for (segment &seg : _segments) {
 #ifdef WLEDMM_FASTPATH
     _currentSeg = &seg;
@@ -2012,6 +2018,8 @@ void WS2812FX::service() {
     }
     _segment_index++;
   }
+  esp32SemGive(segmentMux);
+  } // end of critical section
   if (_triggered) doShow = true;      // WLEDMM "triggered" always means "show"
 
   #ifdef WLEDMM_FASTPATH
@@ -2352,7 +2360,7 @@ void WS2812FX::purgeSegments(bool force) {
   int deleted = 0;
   if (_segments.size() <= 1) return;
   // WLEDMM protect against parallel access while drawing
-  if (esp32SemTake(busDrawMux, 300) != pdTRUE) return;
+  if (esp32SemTake(segmentMux, 300) != pdTRUE) return;
 
   for (size_t i = _segments.size()-1; i > 0; i--) {
     if (_segments[i].stop == 0 || force) {
@@ -2363,7 +2371,7 @@ void WS2812FX::purgeSegments(bool force) {
     _segments.shrink_to_fit();
     /*if (_mainSegment >= _segments.size())*/ setMainSegmentId(0);
   }
-  esp32SemGive(busDrawMux);
+  esp32SemGive(segmentMux);
 }
 
 Segment& WS2812FX::getSegment(uint8_t id) {
@@ -2392,7 +2400,7 @@ void WS2812FX::resetSegments(bool boundsOnly) { //WLEDMM add boundsonly
   DEBUG_PRINTF("resetSegments %d %dx%d\n", boundsOnly, Segment::maxWidth, Segment::maxHeight);
   if (!boundsOnly) {
     // WLEDMM protect against parallel access while drawing
-    if (esp32SemTake(busDrawMux, portMAX_DELAY) != pdTRUE) return;  // warning: this waits until the mutex becomes availeable, no timeout
+    if (esp32SemTake(segmentMux, portMAX_DELAY) != pdTRUE) return;  // warning: this waits until the mutex becomes availeable, no timeout
 
     _segments.clear(); // destructs all Segment as part of clearing
     #ifndef WLED_DISABLE_2D
@@ -2402,7 +2410,7 @@ void WS2812FX::resetSegments(bool boundsOnly) { //WLEDMM add boundsonly
     #endif
     _segments.push_back(seg);
     _mainSegment = 0;
-    esp32SemGive(busDrawMux);
+    esp32SemGive(segmentMux);
   } else { //WLEDMM boundsonly
     for (segment &seg : _segments) {
       #ifndef WLED_DISABLE_2D
@@ -2422,7 +2430,7 @@ void WS2812FX::resetSegments(bool boundsOnly) { //WLEDMM add boundsonly
 void WS2812FX::makeAutoSegments(bool forceReset) {
   if (autoSegments) { //make one segment per bus
     // WLEDMM protect against parallel access while drawing
-    if (esp32SemTake(busDrawMux, portMAX_DELAY) != pdTRUE) return;  // warning: this waits until the mutex becomes availeable, no timeout
+    if (esp32SemTake(segmentMux, portMAX_DELAY) != pdTRUE) return;  // warning: this waits until the mutex becomes availeable, no timeout
 
     uint16_t segStarts[MAX_NUM_SEGMENTS] = {0};
     uint16_t segStops [MAX_NUM_SEGMENTS] = {0};
@@ -2472,7 +2480,7 @@ void WS2812FX::makeAutoSegments(bool forceReset) {
     for (size_t i = 1; i < s; i++) {
       _segments.push_back(Segment(segStarts[i], segStops[i]));
     }
-    esp32SemGive(busDrawMux);
+    esp32SemGive(segmentMux);
   } else {
 
     if (forceReset || getSegmentsNum() == 0) resetSegments();
@@ -2499,7 +2507,7 @@ void WS2812FX::makeAutoSegments(bool forceReset) {
 
 void WS2812FX::fixInvalidSegments() {
   // WLEDMM protect against parallel access while drawing
-  if (esp32SemTake(busDrawMux, portMAX_DELAY) != pdTRUE) return;  // warning: this waits until the mutex becomes availeable, no timeout
+  if (esp32SemTake(segmentMux, portMAX_DELAY) != pdTRUE) return;  // warning: this waits until the mutex becomes availeable, no timeout
 
   //make sure no segment is longer than total (sanity check)
   for (size_t i = getSegmentsNum()-1; i > 0; i--) {
@@ -2520,7 +2528,7 @@ void WS2812FX::fixInvalidSegments() {
       if (_segments[i].stop  >  _length) _segments[i].stop = _length;
     }
   }
-  esp32SemGive(busDrawMux);  // give back the lock now, so purgeSegments can acquire it again
+  esp32SemGive(segmentMux);  // give back the lock now, so purgeSegments can acquire it again
 
   // if any segments were deleted free memory
   purgeSegments();

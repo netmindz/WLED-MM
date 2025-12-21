@@ -94,7 +94,11 @@ bool deserializeSegment(JsonObject elem, byte it, byte presetId)
   // if using vectors use this code to append segment
   if (id >= strip.getSegmentsNum()) {
     if (stop <= 0) return false; // ignore empty/inactive segments
-    strip.appendSegment(Segment(0, strip.getLengthTotal()));
+    if (esp32SemTake(segmentMux, portMAX_DELAY) == pdTRUE) {
+      // WLEDMM make sure we have exclusive access to the segment list
+      strip.appendSegment(Segment(0, strip.getLengthTotal()));
+      esp32SemGive(segmentMux);
+    }
     id = strip.getSegmentsNum()-1; // segments are added at the end of list
     newSeg = true;
   }

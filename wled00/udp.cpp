@@ -184,7 +184,10 @@ void realtimeLock(uint32_t timeoutMs, byte md)
       stop  = strip.getLengthTotal();
     }
     // clear strip/segment
-    for (size_t i = start; i < stop; i++) strip.setPixelColor(i,BLACK);
+    if (esp32SemTake(busDrawMux, 200) == pdTRUE) { // WLEDMM acquire drawing permission (wait max 200ms) before setting pixels
+      for (size_t i = start; i < stop; i++) strip.setPixelColor(i,BLACK);
+      esp32SemGive(busDrawMux);
+    }
     // if WLED was off and using main segment only, freeze non-main segments so they stay off
     if (useMainSegmentOnly && bri == 0) {
       for (size_t s=0; s < strip.getSegmentsNum(); s++) {
@@ -326,10 +329,13 @@ void handleNotifications()
 #endif
       uint16_t id = 0;
       uint16_t totalLen = strip.getLengthTotal();
-      for (int i = 0; i < packetSize -2; i += 3)
-      {
-        setRealtimePixel(id, lbuf[i], lbuf[i+1], lbuf[i+2], 0);
-        id++; if (id >= totalLen) break;
+      if (esp32SemTake(busDrawMux, 200) == pdTRUE) { // WLEDMM acquire drawing permission (wait max 200ms) before setting pixels
+        for (int i = 0; i < packetSize -2; i += 3)
+        {
+          setRealtimePixel(id, lbuf[i], lbuf[i+1], lbuf[i+2], 0);
+          id++; if (id >= totalLen) break;
+        }
+        esp32SemGive(busDrawMux);
       }
       if (!(realtimeMode && useMainSegmentOnly)) strip.show();
       return;
@@ -573,14 +579,16 @@ void handleNotifications()
 
     uint16_t id = (tpmPayloadFrameSize/3)*(packetNum-1); //start LED
     uint16_t totalLen = strip.getLengthTotal();
-    for (size_t i = 6; i < tpmPayloadFrameSize + 4U; i += 3)
-    {
-      if (id < totalLen)
+    if (esp32SemTake(busDrawMux, 200) == pdTRUE) { // WLEDMM acquire drawing permission (wait max 200ms) before setting pixels
+      for (size_t i = 6; i < tpmPayloadFrameSize + 4U; i += 3)
       {
-        setRealtimePixel(id, udpIn[i], udpIn[i+1], udpIn[i+2], 0);
-        id++;
+        if (id < totalLen) {
+          setRealtimePixel(id, udpIn[i], udpIn[i+1], udpIn[i+2], 0);
+          id++;
+        }
+        else break;
       }
-      else break;
+      esp32SemGive(busDrawMux);
     }
     if (tpmPacketCount == numPackets) //reset packet count and show if all packets were received
     {
@@ -606,49 +614,40 @@ void handleNotifications()
     }
     if (realtimeOverride && !(realtimeMode && useMainSegmentOnly)) return;
 
-    uint16_t totalLen = strip.getLengthTotal();
-    if (udpIn[0] == 1 && packetSize > 5) //warls
-    {
-      for (int i = 2; i < packetSize -3; i += 4)
-      {
-        setRealtimePixel(udpIn[i], udpIn[i+1], udpIn[i+2], udpIn[i+3], 0);
+    if (esp32SemTake(busDrawMux, 250) == pdTRUE) { // WLEDMM acquire drawing permission (wait max 200ms) before setting pixels
+      uint16_t totalLen = strip.getLengthTotal();
+      if (udpIn[0] == 1 && packetSize > 5) { //warls
+        for (int i = 2; i < packetSize -3; i += 4) {
+          setRealtimePixel(udpIn[i], udpIn[i+1], udpIn[i+2], udpIn[i+3], 0);
+        }
+      } else if (udpIn[0] == 2 && packetSize > 4) { //drgb
+        uint16_t id = 0;
+        for (int i = 2; i < packetSize -2; i += 3) {
+          setRealtimePixel(id, udpIn[i], udpIn[i+1], udpIn[i+2], 0);
+          id++; if (id >= totalLen) break;
+        }
+      } else if (udpIn[0] == 3 && packetSize > 6) { //drgbw
+        uint16_t id = 0;
+        for (int i = 2; i < packetSize -3; i += 4) {
+          setRealtimePixel(id, udpIn[i], udpIn[i+1], udpIn[i+2], udpIn[i+3]);
+          id++; if (id >= totalLen) break;
+        }
+      } else if (udpIn[0] == 4 && packetSize > 7) { //dnrgb
+        uint16_t id = ((udpIn[3] << 0) & 0xFF) + ((udpIn[2] << 8) & 0xFF00);
+        for (int i = 4; i < packetSize -2; i += 3) {
+          if (id >= totalLen) break;
+          setRealtimePixel(id, udpIn[i], udpIn[i+1], udpIn[i+2], 0);
+          id++;
+        }
+      } else if (udpIn[0] == 5 && packetSize > 8) { //dnrgbw
+        uint16_t id = ((udpIn[3] << 0) & 0xFF) + ((udpIn[2] << 8) & 0xFF00);
+        for (int i = 4; i < packetSize -2; i += 4) {
+          if (id >= totalLen) break;
+          setRealtimePixel(id, udpIn[i], udpIn[i+1], udpIn[i+2], udpIn[i+3]);
+          id++;
+        }
       }
-    } else if (udpIn[0] == 2 && packetSize > 4) //drgb
-    {
-      uint16_t id = 0;
-      for (int i = 2; i < packetSize -2; i += 3)
-      {
-        setRealtimePixel(id, udpIn[i], udpIn[i+1], udpIn[i+2], 0);
-
-        id++; if (id >= totalLen) break;
-      }
-    } else if (udpIn[0] == 3 && packetSize > 6) //drgbw
-    {
-      uint16_t id = 0;
-      for (int i = 2; i < packetSize -3; i += 4)
-      {
-        setRealtimePixel(id, udpIn[i], udpIn[i+1], udpIn[i+2], udpIn[i+3]);
-
-        id++; if (id >= totalLen) break;
-      }
-    } else if (udpIn[0] == 4 && packetSize > 7) //dnrgb
-    {
-      uint16_t id = ((udpIn[3] << 0) & 0xFF) + ((udpIn[2] << 8) & 0xFF00);
-      for (int i = 4; i < packetSize -2; i += 3)
-      {
-        if (id >= totalLen) break;
-        setRealtimePixel(id, udpIn[i], udpIn[i+1], udpIn[i+2], 0);
-        id++;
-      }
-    } else if (udpIn[0] == 5 && packetSize > 8) //dnrgbw
-    {
-      uint16_t id = ((udpIn[3] << 0) & 0xFF) + ((udpIn[2] << 8) & 0xFF00);
-      for (int i = 4; i < packetSize -2; i += 4)
-      {
-        if (id >= totalLen) break;
-        setRealtimePixel(id, udpIn[i], udpIn[i+1], udpIn[i+2], udpIn[i+3]);
-        id++;
-      }
+      esp32SemGive(busDrawMux); // end of critical section
     }
     strip.show();
     return;
