@@ -2430,7 +2430,7 @@ void WS2812FX::resetSegments(bool boundsOnly) { //WLEDMM add boundsonly
 void WS2812FX::makeAutoSegments(bool forceReset) {
   if (autoSegments) { //make one segment per bus
     // WLEDMM protect against parallel access while drawing
-    if (esp32SemTake(segmentMux, 2100) != pdTRUE) return;  // warning: this waits until the mutex becomes availeable, no timeout
+    if (esp32SemTake(segmentMux, 2100) != pdTRUE) return;  // wait long, but don't wait forever
 
     uint16_t segStarts[MAX_NUM_SEGMENTS] = {0};
     uint16_t segStops [MAX_NUM_SEGMENTS] = {0};
