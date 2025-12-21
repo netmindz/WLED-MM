@@ -214,8 +214,14 @@ void realtimeLock(uint32_t timeoutMs, byte md)
     //   positive side-effect: this also introduces a wait if other bus activities are happeening in parallel
     Segment& mainSegRef = strip.getMainSegment();
     theMainSeg = &mainSegRef; //convert from reference to pointer
-    theMainSegLength = realtimeOverride ? 0 : theMainSeg->length();
-    theStripLength = realtimeOverride ? 0 : strip.getLengthTotal();
+    if (realtimeOverride && !(realtimeMode && useMainSegmentOnly)) {
+      // prevent drawing during user override
+      theMainSegLength = 0;
+      theStripLength = 0;
+    } else {
+      theMainSegLength = theMainSeg->length();
+      theStripLength = strip.getLengthTotal();
+    }
     esp32SemGive(busDrawMux);
   }
 
