@@ -154,6 +154,9 @@ void notify(byte callMode, bool followUp)
 static Segment* theMainSeg = nullptr;
 static int theMainSegLength = 0;
 static int theStripLength = 0;
+#ifdef ARDUINO_ARCH_ESP32
+static portMUX_TYPE critical_lock = portMUX_INITIALIZER_UNLOCKED; // to make cache clearing an atomic operation
+#endif
 
 void realtimeLock(uint32_t timeoutMs, byte md)
 {
@@ -236,13 +239,15 @@ void exitRealtime() {
     strip.show(); // possible fix for #3589
   }
   // WLEDMM invalide cached main segment pointer and length
-  if (esp32SemTake(busDrawMux, 200) == pdTRUE) {
-    // WLEDMM protect against parallel cache updates from different tasks
+  #ifdef ARDUINO_ARCH_ESP32
+  portENTER_CRITICAL(&critical_lock); // critical section to make cache reset atomic and thread-safe
+  #endif
     theMainSeg = nullptr;
     theMainSegLength  = 0;
     theStripLength = 0;
-    esp32SemGive(busDrawMux);
-  }
+  #ifdef ARDUINO_ARCH_ESP32
+  portEXIT_CRITICAL(&critical_lock); // end of critical section
+  #endif
   busses.invalidateCache(false);  // WLEDMM
   USER_PRINTLN(F("exitRealtime() realtime mode ended."));
   updateInterfaces(CALL_MODE_WS_SEND);
