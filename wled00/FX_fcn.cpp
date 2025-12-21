@@ -589,6 +589,9 @@ void Segment::setUp(uint16_t i1, uint16_t i2, uint8_t grp, uint8_t spc, uint16_t
     }
     if (ofs < UINT16_MAX) offset = ofs;
     esp32SemGive(segmentMux);
+  } else {
+    DEBUG_PRINTLN(F("Segment::setUp: Failed to acquire segmentMux, skipping bounds update."));
+    boundsUnchanged = true;
   }
 
   if (!boundsUnchanged) {
