@@ -97,10 +97,10 @@ bool deserializeSegment(JsonObject elem, byte it, byte presetId)
     if (esp32SemTake(segmentMux, 2100) == pdTRUE) { // wait long, but don't wait forever
       // WLEDMM make sure we have exclusive access to the segment list
       strip.appendSegment(Segment(0, strip.getLengthTotal()));
+      id = strip.getSegmentsNum()-1; // segments are added at the end of list
+      newSeg = true;
       esp32SemGive(segmentMux);
     }
-    id = strip.getSegmentsNum()-1; // segments are added at the end of list
-    newSeg = true;
   }
 
   // WLEDMM: before changing segments, make sure our strip is _not_ servicing effects in parallel
