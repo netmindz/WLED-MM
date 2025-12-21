@@ -562,7 +562,7 @@ void Segment::setUp(uint16_t i1, uint16_t i2, uint8_t grp, uint8_t spc, uint16_t
     return;
   }
 
-  if (esp32SemTake(segmentMux, portMAX_DELAY) == pdTRUE) {
+  if (esp32SemTake(segmentMux, 2100) == pdTRUE) { // wait long, but don't wait forever
     // WLEDMM acquire lock before doing critical changes to segment
     if (i1 < Segment::maxWidth || (i1 >= Segment::maxWidth*Segment::maxHeight && i1 < strip.getLengthTotal())) start = i1; // Segment::maxWidth equals strip.getLengthTotal() for 1D
     stop = i2 > Segment::maxWidth*Segment::maxHeight ? min(i2,strip.getLengthTotal()) : (i2 > Segment::maxWidth ? Segment::maxWidth : max((uint16_t)1,i2));  // WLEDMM: use native min/max
@@ -2400,7 +2400,7 @@ void WS2812FX::resetSegments(bool boundsOnly) { //WLEDMM add boundsonly
   DEBUG_PRINTF("resetSegments %d %dx%d\n", boundsOnly, Segment::maxWidth, Segment::maxHeight);
   if (!boundsOnly) {
     // WLEDMM protect against parallel access while drawing
-    if (esp32SemTake(segmentMux, portMAX_DELAY) != pdTRUE) return;  // warning: this waits until the mutex becomes availeable, no timeout
+    if (esp32SemTake(segmentMux, 2100) != pdTRUE) return;  // wait long, but don't wait forever
 
     _segments.clear(); // destructs all Segment as part of clearing
     #ifndef WLED_DISABLE_2D
@@ -2430,7 +2430,7 @@ void WS2812FX::resetSegments(bool boundsOnly) { //WLEDMM add boundsonly
 void WS2812FX::makeAutoSegments(bool forceReset) {
   if (autoSegments) { //make one segment per bus
     // WLEDMM protect against parallel access while drawing
-    if (esp32SemTake(segmentMux, portMAX_DELAY) != pdTRUE) return;  // warning: this waits until the mutex becomes availeable, no timeout
+    if (esp32SemTake(segmentMux, 2100) != pdTRUE) return;  // warning: this waits until the mutex becomes availeable, no timeout
 
     uint16_t segStarts[MAX_NUM_SEGMENTS] = {0};
     uint16_t segStops [MAX_NUM_SEGMENTS] = {0};
@@ -2507,7 +2507,7 @@ void WS2812FX::makeAutoSegments(bool forceReset) {
 
 void WS2812FX::fixInvalidSegments() {
   // WLEDMM protect against parallel access while drawing
-  if (esp32SemTake(segmentMux, portMAX_DELAY) != pdTRUE) return;  // warning: this waits until the mutex becomes availeable, no timeout
+  if (esp32SemTake(segmentMux, 2100) != pdTRUE) return; // wait long, but don't wait forever
 
   //make sure no segment is longer than total (sanity check)
   for (size_t i = getSegmentsNum()-1; i > 0; i--) {
