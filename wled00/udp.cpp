@@ -150,6 +150,11 @@ void notify(byte callMode, bool followUp)
   notificationCount = followUp ? notificationCount + 1 : 0;
 }
 
+// WLEDMM cache current main segment: updated in realtimeLock, reset in exitRealtime, used in setRealTimePixel
+static Segment* theMainSeg = nullptr;
+static int theMainSegLength = 0;
+static int theStripLength = 0;
+
 void realtimeLock(uint32_t timeoutMs, byte md)
 {
   if (!realtimeMode && !realtimeOverride) {
@@ -197,6 +202,12 @@ void realtimeLock(uint32_t timeoutMs, byte md)
   }
   realtimeMode = md;
 
+  // WLEDMM cache current "main segment"
+  Segment& mainSegRef = strip.getMainSegment();
+  theMainSeg = &mainSegRef; //convert from reference to pointer
+  theMainSegLength = realtimeOverride ? 0 : theMainSeg->length();
+  theStripLength = realtimeOverride ? 0 : strip.getLengthTotal();
+
   if (realtimeOverride) return;
   if (arlsForceMaxBri) strip.setBrightness(scaledBri(255), true);
   if (briT > 0 && md == REALTIME_MODE_GENERIC) strip.show();
@@ -216,6 +227,10 @@ void exitRealtime() {
   } else {
     strip.show(); // possible fix for #3589
   }
+  // WLEDMM invalide cached main segment pointer and length
+  theMainSeg = nullptr;
+  theMainSegLength  = 0;
+  theStripLength = 0;
   busses.invalidateCache(false);  // WLEDMM
   USER_PRINTLN(F("exitRealtime() realtime mode ended."));
   updateInterfaces(CALL_MODE_WS_SEND);
@@ -650,8 +665,8 @@ void handleNotifications()
 
 void setRealtimePixel(uint16_t i, byte r, byte g, byte b, byte w)
 {
-  uint16_t pix = i + arlsOffset;
-  if (pix < strip.getLengthTotal()) {
+  int pix = i + arlsOffset;
+  if (pix < theStripLength) { // WLEDMM use cached length
     if (!arlsDisableGammaCorrection && gammaCorrectCol) {
       r = gamma8(r);
       g = gamma8(g);
@@ -659,8 +674,8 @@ void setRealtimePixel(uint16_t i, byte r, byte g, byte b, byte w)
       w = gamma8(w);
     }
     if (useMainSegmentOnly) {
-      Segment &seg = strip.getMainSegment();
-      if (pix<seg.length()) seg.setPixelColor(pix, r, g, b, w);
+      //Segment &seg = strip.getMainSegment();
+      if ((theMainSeg) && (pix < theMainSegLength)) theMainSeg->setPixelColor(pix, r, g, b, w); // WLEDMM used cached main segment
     } else {
       strip.setPixelColor(pix, r, g, b, w);
     }
