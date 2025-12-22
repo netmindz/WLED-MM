@@ -692,7 +692,7 @@ void handleNotifications()
 void setRealtimePixel(uint16_t i, byte r, byte g, byte b, byte w)
 {
   int pix = i + arlsOffset;
-  if (pix < theStripLength) { // WLEDMM use cached length
+  if (unsigned(pix) < theStripLength) { // WLEDMM use cached length
     if (!arlsDisableGammaCorrection && gammaCorrectCol) {
       r = gamma8(r);
       g = gamma8(g);
@@ -701,7 +701,7 @@ void setRealtimePixel(uint16_t i, byte r, byte g, byte b, byte w)
     }
     if (useMainSegmentOnly) {
       //Segment &seg = strip.getMainSegment();
-      if ((theMainSeg) && (pix < theMainSegLength)) theMainSeg->setPixelColor(pix, r, g, b, w); // WLEDMM used cached main segment
+      if ((theMainSeg) && (unsigned(pix) < theMainSegLength)) theMainSeg->setPixelColor(pix, r, g, b, w); // WLEDMM used cached main segment
     } else {
       strip.setPixelColor(pix, r, g, b, w);
     }
