@@ -2405,6 +2405,8 @@ void WS2812FX::resetSegments(bool boundsOnly) { //WLEDMM add boundsonly
     _mainSegment = 0;
     esp32SemGive(segmentMux);
   } else { //WLEDMM boundsonly
+    // WLEDMM protect against parallel access while drawing
+    if (esp32SemTake(segmentMux, 2100) != pdTRUE) return;  // wait long, but don't wait forever
     for (segment &seg : _segments) {
       #ifndef WLED_DISABLE_2D
       seg.start = 0;
@@ -2417,6 +2419,7 @@ void WS2812FX::resetSegments(bool boundsOnly) { //WLEDMM add boundsonly
       #endif
       seg.allocLeds();
     }
+    esp32SemGive(segmentMux);
   }
 }
 
