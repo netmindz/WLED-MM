@@ -659,7 +659,7 @@ void handleNotifications()
         }
       } else if (udpIn[0] == 5 && packetSize > 8) { //dnrgbw
         uint16_t id = ((udpIn[3] << 0) & 0xFF) + ((udpIn[2] << 8) & 0xFF00);
-        for (int i = 4; i < packetSize -2; i += 4) {
+        for (int i = 4; i < packetSize -3; i += 4) {
           if (id >= totalLen) break;
           setRealtimePixel(id, udpIn[i], udpIn[i+1], udpIn[i+2], udpIn[i+3]);
           id++;
