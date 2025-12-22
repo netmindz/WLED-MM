@@ -238,7 +238,9 @@ bool requestJSONBufferLock(uint8_t module)
   #endif
 
   if (jsonBufferLock || !haveLock) {
+    #ifdef ARDUINO_ARCH_ESP32
     if (haveLock) esp32SemGive(jsonBufferLockMutex);  // we got the mutex, but jsonBufferLock says the opposite -> give up
+    #endif
     USER_PRINT(F("ERROR: Locking JSON buffer failed! (still locked by "));
     USER_PRINT(jsonBufferLock);
     USER_PRINTLN(")");
@@ -263,7 +265,9 @@ void releaseJSONBufferLock()
   DEBUG_PRINTLN(")");
   fileDoc = nullptr;
   jsonBufferLock = 0;
+  #ifdef ARDUINO_ARCH_ESP32
   esp32SemGive(jsonBufferLockMutex); // return the mutex
+  #endif
 }
 
 
