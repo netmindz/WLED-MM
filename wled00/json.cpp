@@ -100,6 +100,9 @@ bool deserializeSegment(JsonObject elem, byte it, byte presetId)
       id = strip.getSegmentsNum()-1; // segments are added at the end of list
       newSeg = true;
       esp32SemGive(segmentMux);
+    } else {
+      USER_PRINTLN(F("deserializeSegment(): segment not added - failed to acquire segmentMux."));
+      return false;      
     }
   }
 
@@ -358,6 +361,7 @@ bool deserializeSegment(JsonObject elem, byte it, byte presetId)
       strip.waitUntilIdle();
     }
     // WLEDMM protect against parallel drawing
+    bool drawSuccess = false;
     if (esp32SemTake(busDrawMux, 250) == pdTRUE) {      // WLEDMM first acquire draw mutex, start of critical section
     seg.startFrame();
 
@@ -409,11 +413,13 @@ bool deserializeSegment(JsonObject elem, byte it, byte presetId)
         set = 0;
       }
     }
+    drawSuccess = true;
     esp32SemGive(busDrawMux); // release lock
     } // end of critical section
 
     seg.map1D2D = oldMap1D2D; // restore mapping
-    strip.trigger(); // force segment update
+    if (drawSuccess) strip.trigger(); // force segment update
+    else USER_PRINTLN(F("deserializeSegment() image drawing failed, cannot not to acquire busDrawMux.")); // log failure messaage
     suspendStripService = oldLock; // restore previous lock status
   }
   // send UDP/WS if segment options changed (except selection; will also deselect current preset)

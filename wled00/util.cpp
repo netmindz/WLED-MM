@@ -239,7 +239,6 @@ bool requestJSONBufferLock(uint8_t module)
 
   if (jsonBufferLock || !haveLock) {
     if (haveLock) esp32SemGive(jsonBufferLockMutex);  // we got the mutex, but jsonBufferLock says the opposite -> give up
-    delay(10); // WLEDMM experimental: small extra wait, in case that esp32 cores temporarily disagree on the value of jsonBufferLock
     USER_PRINT(F("ERROR: Locking JSON buffer failed! (still locked by "));
     USER_PRINT(jsonBufferLock);
     USER_PRINTLN(")");
