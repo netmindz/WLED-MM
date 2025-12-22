@@ -11,7 +11,7 @@
 #include <esp_timer.h>     // WLEDMM to get esp_timer_get_time()
 #include "freertos/FreeRTOS.h"
 #include "freertos/portmacro.h"
-static portMUX_TYPE s_wled_strip_mux = portMUX_INITIALIZER_UNLOCKED; // to protect deleting Segment::_globalLeds
+WLED_create_spinlock(ledsrgb_mux); // to protect deleting Segment::_globalLeds and Segment::ledsrgb
 #endif
 
 /*
@@ -117,18 +117,19 @@ void Segment::allocLeds() {
   if ((size > 0) && (!ledsrgb || size > ledsrgbSize)) {    //softhack dont allocate zero bytes
     DEBUG_PRINTF("allocLeds (%d,%d to %d,%d), %u from %u\n", start, startY, stop, stopY, size, ledsrgb?ledsrgbSize:0);
 
+    // DONG - Valkyrie needs food, badly     [Gauntlet, 1985]
     // WLEDMM this looks a bit over-compilicated, but it makes the re-allocation step an atomic and threadsafe operation
     CRGB* oldLedsRgb = ledsrgb;
+    portENTER_CRITICAL(&ledsrgb_mux);
     ledsrgb = nullptr;
+    portEXIT_CRITICAL(&ledsrgb_mux);
+
     if (oldLedsRgb) free(oldLedsRgb);   // we need a bigger buffer, so free the old one first
     CRGB* newLedsRgb = (CRGB*)calloc(1, size);   // WLEDMM This is an OS call, so we should not wrap it in portEnterCRITICAL
-    #if defined(ARDUINO_ARCH_ESP32)
-    portENTER_CRITICAL(&s_wled_strip_mux);
-    #endif
-      ledsrgb = newLedsRgb;
-    #if defined(ARDUINO_ARCH_ESP32)
-    portEXIT_CRITICAL(&s_wled_strip_mux);
-    #endif
+
+    portENTER_CRITICAL(&ledsrgb_mux);
+    ledsrgb = newLedsRgb;
+    portEXIT_CRITICAL(&ledsrgb_mux);
 
     ledsrgbSize = ledsrgb?size:0;
     if (ledsrgb == nullptr) {
@@ -1885,18 +1886,14 @@ void WS2812FX::finalizeInit(void)
 
   //initialize leds array. TBD: realloc if nr of leds change
   if (Segment::_globalLeds) {
-    // DONG - Valkyrie is about to die
+    // DONG - Valkyrie is about to die     [Gauntlet, 1985]
     // this is a critical section that will be removed with PR #278 which removes _globalLeds
     // problem: suspendStripService provides interlocking, but there’s a window before service() observes it, 
     //          and ESP32 is dual-core. A critical section closes that window so the pointer swap is atomic across cores.
     CRGB* oldGLeds = Segment::_globalLeds;
-#if defined(ARDUINO_ARCH_ESP32)
-    portENTER_CRITICAL(&s_wled_strip_mux);
-#endif
+    portENTER_CRITICAL(&ledsrgb_mux);
     Segment::_globalLeds = nullptr;
-#if defined(ARDUINO_ARCH_ESP32)
-    portEXIT_CRITICAL(&s_wled_strip_mux);
-#endif
+    portEXIT_CRITICAL(&ledsrgb_mux);
     free(oldGLeds);
     purgeSegments(true);   // WLEDMM moved here, because it seems to improve stability.
   }

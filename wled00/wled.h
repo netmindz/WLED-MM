@@ -772,8 +772,9 @@ WLED_GLOBAL SemaphoreHandle_t busDrawMux _INIT(nullptr);
 WLED_GLOBAL SemaphoreHandle_t segmentMux _INIT(nullptr);
 #define esp32SemTake(mux,timeout) xSemaphoreTakeRecursive(mux, timeout) // convenience macro that expands to xSemaphoreTakeRecursive
 #define esp32SemGive(mux)  xSemaphoreGiveRecursive(mux)                 // convenience macro that expands to xSemaphoreGiveRecursive
+#define WLED_create_spinlock(theSname) static portMUX_TYPE theSname = portMUX_INITIALIZER_UNLOCKED
 #else
-// dummy for 8266
+// dummy semaphores for 8266
 #ifndef pdTRUE
 #define pdTRUE 1
 #endif
@@ -782,6 +783,10 @@ WLED_GLOBAL SemaphoreHandle_t segmentMux _INIT(nullptr);
 #endif
 #define esp32SemTake(mux,timeout) (pdTRUE)
 #define esp32SemGive(mux)
+// dummy critical section for 8266
+#define WLED_create_spinlock(sname)
+#define portENTER_CRITICAL(sname)
+#define portEXIT_CRITICAL(sname)
 #endif
 
 #ifndef ESP8266
