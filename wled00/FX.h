@@ -1247,14 +1247,12 @@ class WS2812FX {  // 96 bytes
 #endif
 
     // will require only 1 byte
-    volatile bool _isServicing; // WLEDMM moved out of struct, so the flag can be updated in one atomic access
     struct {
-      //bool _isServicing          : 1;
-      bool bullshit              : 1;
+      bool _isServicing          : 1; // can stay inside the bitfield - not critical any more since we have a mutex 
       bool _isOffRefreshRequired : 1; //periodic refresh is required for the strip to remain off.
       bool _hasWhiteChannel      : 1;
       //bool _triggered            : 1;
-      bool bullshit2             : 1;
+      bool unusedBit             : 1;
     };
     volatile bool _triggered;   // WLEDMM moved out of struct, so the flag can be updated in one atomic access
 

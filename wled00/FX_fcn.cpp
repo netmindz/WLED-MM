@@ -1955,11 +1955,7 @@ void WS2812FX::service() {
   //if (_suspend) return;
   if (elapsed < 2) return;                                                       // keep wifi alive
   if ( !_triggered && (_targetFps != FPS_UNLIMITED) && (_targetFps != FPS_UNLIMITED_AC)) {
-#if 0
-    if (elapsed < MIN_SHOW_DELAY) return;                                        // WLEDMM too early for service - delivers higher fps
-#else
     if ((elapsed+1) < _frametime) return;                                            // code from upstream - stricter on FPS
-#endif
   }
   #else  // legacy
   if (elapsed < _frametime) return;
@@ -1997,9 +1993,6 @@ void WS2812FX::service() {
 
         if (!cctFromRgb || correctWB) busses.setSegmentCCT(seg.currentBri(seg.cct, true), correctWB);
         for (uint8_t c = 0; c < NUM_COLORS; c++) _colors_t[c] = gamma32(_colors_t[c]);
-#if 0  // WARNING this would kill _supersync_
-        now = millis() + timebase;
-#endif
         seg.startFrame();   // WLEDMM
         if (!_triggered && (seg.currentBri(seg.opacity) == 0) && (seg.lastBri == 0)) continue; // WLEDMM skip totally black segments
         // effect blending (execute previous effect)
@@ -2029,23 +2022,14 @@ void WS2812FX::service() {
   }
   esp32SemGive(segmentMux);
   } // end of critical section
-  if (_triggered) doShow = true;      // WLEDMM "triggered" always means "show"
 
   #ifdef WLEDMM_FASTPATH
   _currentSeg = & strip.getMainSegment(); // WLEDMM safe default
   #endif
   _virtualSegmentLength = 0;
   busses.setSegmentCCT(-1);
-  if(doShow) {
-#if 0 && defined(ARDUINO_ARCH_ESP32)      // EXPERIMENTAL - enabled this to enforce stricter frametime limits
-    static unsigned long lastTimeShow = 0;
-    long tdelta = millis() - lastTimeShow;
-    if ((lastTimeShow > 0) && (tdelta > 1) && (tdelta < _frametime))  // too early - release CPU to slow down
-      vTaskDelay((tdelta-1) / portTICK_PERIOD_MS);                    // "-1" because vTaskDelay() may actually delay longer than requested
-    lastTimeShow = millis();
-#else
+  if(doShow || _triggered) {
     yield();
-#endif
     show();
     _lastServiceShow = nowUp; // WLEDMM use correct timestamp
   }
