@@ -211,7 +211,7 @@ void realtimeLock(uint32_t timeoutMs, byte md)
   // WLEDMM cache current "main segment"
   if (esp32SemTake(busDrawMux, 1200) == pdTRUE) { // stupid long timeout, but we don't want to wait forever
     // WLEDMM protect against parallel cache updates from different tasks
-    //   positive side-effect: this also introduces a wait if other bus activities are happeening in parallel
+    //   positive side effect: this also introduces a wait if other bus activities are happening in parallel
     Segment& mainSegRef = strip.getMainSegment();
     theMainSeg = &mainSegRef; //convert from reference to pointer
     if (realtimeOverride && !(realtimeMode && useMainSegmentOnly)) {
@@ -223,6 +223,13 @@ void realtimeLock(uint32_t timeoutMs, byte md)
       theStripLength = strip.getLengthTotal();
     }
     esp32SemGive(busDrawMux);
+  } else {
+    // mutex acquisition failed, log debug message and pretend we are in override mode
+    DEBUG_PRINTLN(F("realtimeLock: failed to acquire busDrawMux for cache update."));
+    // clear cache to prevent stale pointer usage
+    theMainSeg = nullptr;
+    theMainSegLength = 0;
+    theStripLength = 0;
   }
 
   if (realtimeOverride) return;
@@ -244,7 +251,7 @@ void exitRealtime() {
   } else {
     strip.show(); // possible fix for #3589
   }
-  // WLEDMM invalide cached main segment pointer and length
+  // WLEDMM invalidate cached main segment pointer and length
   #ifdef ARDUINO_ARCH_ESP32
   portENTER_CRITICAL(&critical_lock); // critical section to make cache reset atomic and thread-safe
   #endif
