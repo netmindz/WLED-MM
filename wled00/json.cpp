@@ -645,10 +645,12 @@ bool deserializeState(JsonObject root, byte callMode, byte presetId)
 
   doAdvancePlaylist = root[F("np")] | doAdvancePlaylist; //advances to next preset in playlist when true
   
+  // WLEDMM: Release suspendStripService before stateUpdated() to avoid timeout
+  if (iAmGroot) suspendStripService = false;
+
   stateUpdated(callMode);
   if (presetToRestore) currentPreset = presetToRestore;
 
-  if (iAmGroot) suspendStripService = false; // WLEDMM release lock
   return stateResponse;
 }
 
@@ -727,9 +729,11 @@ void serializeSegment(JsonObject& root, Segment& seg, byte id, bool forPreset, b
 void serializeState(JsonObject root, bool forPreset, bool includeBri, bool segmentBounds, bool selectedSegmentsOnly)
 {
   //WLEDMM add DEBUG_PRINT (not USER_PRINT)
+  #ifdef WLED_DEBUG
   String temp;
   serializeJson(root, temp);
   DEBUG_PRINTF("serializeState %d %s\n", forPreset, temp.c_str());
+  #endif
 
   if (includeBri) {
     root["on"] = (bri > 0);
