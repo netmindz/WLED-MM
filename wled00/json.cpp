@@ -493,16 +493,15 @@ bool deserializeState(JsonObject root, byte callMode, byte presetId)
     }
   }
 
-#ifdef ARDUINO_ARCH_ESP32
-  delay(2); // WLEDMM experimental - de-serialize takes time, so allow other tasks to run
-#endif
-
+  // esp32: suspendStripService is deferred until the first segment operation
+#ifndef ARDUINO_ARCH_ESP32
   // WLEDMM: before changing strip, make sure our strip is _not_ servicing effects in parallel
   suspendStripService = true; // temporarily lock out strip updates
   if (strip.isServicing()) {
     USER_PRINTLN(F("deserializeState(): strip is still drawing effects."));
     strip.waitUntilIdle();
   }
+#endif
 
   // temporary transition (applies only once)
   tr = root[F("tt")] | -1;
@@ -537,6 +536,16 @@ bool deserializeState(JsonObject root, byte callMode, byte presetId)
   }
 
   if (root[F("psave")].isNull()) doReboot = root[F("rb")] | doReboot;
+
+#ifdef ARDUINO_ARCH_ESP32
+  // WLEDMM: Acquire strip lock right before segment operations (deferred for better UX)
+  suspendStripService = true; // temporarily lock out strip updates
+  delay(2); // WLEDMM experimental - de-serialize takes time, so allow other tasks to run
+  if (strip.isServicing()) {
+    USER_PRINTLN(F("deserializeState(): strip is still drawing effects."));
+    strip.waitUntilIdle();
+  }
+#endif
 
   // do not allow changing main segment while in realtime mode (may get odd results else)
   if (!realtimeMode) strip.setMainSegmentId(root[F("mainseg")] | strip.getMainSegmentId()); // must be before realtimeLock() if "live"
