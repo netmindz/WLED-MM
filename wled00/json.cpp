@@ -548,6 +548,7 @@ bool deserializeState(JsonObject root, byte callMode, byte presetId)
 #endif
 
   // do not allow changing main segment while in realtime mode (may get odd results else)
+  // esp32: safe to change MainSegment without having segmentMux - strip.service() is already suspended
   if (!realtimeMode) strip.setMainSegmentId(root[F("mainseg")] | strip.getMainSegmentId()); // must be before realtimeLock() if "live"
 
   realtimeOverride = root[F("lor")] | realtimeOverride;
