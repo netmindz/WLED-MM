@@ -560,7 +560,13 @@ bool deserializeState(JsonObject root, byte callMode, byte presetId)
     if (root["live"].as<bool>()) {
       transitionDelayTemp = 0;
       jsonTransitionOnce = true;
+#ifdef WLED_ENABLE_JSONLIVE
+      // infinite timeout only when JSON LIVE leds preview is enabled
       realtimeLock(65000);
+#else
+      // more meaningful timeout : use configurable timeout; *3 for some safety margin without staying "live" forever
+      realtimeLock(realtimeTimeoutMs *3);  // Use configurable timeout like other protocols 
+#endif
     } else {
       exitRealtime();
     }
