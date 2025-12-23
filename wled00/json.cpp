@@ -419,7 +419,7 @@ bool deserializeSegment(JsonObject elem, byte it, byte presetId)
 
     seg.map1D2D = oldMap1D2D; // restore mapping
     if (drawSuccess) strip.trigger(); // force segment update
-    else USER_PRINTLN(F("deserializeSegment() image drawing failed, cannot not to acquire busDrawMux.")); // log failure messaage
+    else USER_PRINTLN(F("deserializeSegment() image drawing failed, cannot to acquire busDrawMux.")); // log failure messaage
     suspendStripService = oldLock; // restore previous lock status
   }
   // send UDP/WS if segment options changed (except selection; will also deselect current preset)
