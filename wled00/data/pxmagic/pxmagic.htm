@@ -1053,7 +1053,7 @@
 
           select.innerHTML = "";
 
-          options.forEach(({ text, value }) => {
+          options.forEach(({ text, value }, index) => {
             const option = new Option(text, value);
 
             if (index === 0) {
