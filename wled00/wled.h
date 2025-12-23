@@ -771,7 +771,7 @@ WLED_GLOBAL volatile bool OTAisRunning _INIT(false);        // WLEDMM temporaril
 WLED_GLOBAL SemaphoreHandle_t busDrawMux _INIT(nullptr);
 WLED_GLOBAL SemaphoreHandle_t segmentMux _INIT(nullptr);
 WLED_GLOBAL SemaphoreHandle_t jsonBufferLockMutex _INIT(nullptr);
-#define esp32SemTake(mux,timeout) xSemaphoreTakeRecursive(mux, timeout) // convenience macro that expands to xSemaphoreTakeRecursive
+#define esp32SemTake(mux,timeout) xSemaphoreTakeRecursive(mux, pdMS_TO_TICKS(timeout)) // convenience macro that expands to xSemaphoreTakeRecursive - timeout is in milliseconds
 #define esp32SemGive(mux)  xSemaphoreGiveRecursive(mux)                 // convenience macro that expands to xSemaphoreGiveRecursive
 #define WLED_create_spinlock(theSname) static portMUX_TYPE theSname = portMUX_INITIALIZER_UNLOCKED
 #else

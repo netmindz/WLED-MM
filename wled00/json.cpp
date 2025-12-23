@@ -540,9 +540,9 @@ bool deserializeState(JsonObject root, byte callMode, byte presetId)
 #ifdef ARDUINO_ARCH_ESP32
   // WLEDMM: Acquire strip lock right before segment operations (deferred for better UX)
   suspendStripService = true; // temporarily lock out strip updates
-  delay(2); // WLEDMM experimental - de-serialize takes time, so allow other tasks to run
+  vTaskDelay(pdMS_TO_TICKS(2)); // WLEDMM trigger a short task context switch
   if (strip.isServicing()) {
-    USER_PRINTLN(F("deserializeState(): strip is still drawing effects."));
+    DEBUG_PRINTLN(F("deserializeState(): strip is still drawing effects."));
     strip.waitUntilIdle();
   }
 #endif
