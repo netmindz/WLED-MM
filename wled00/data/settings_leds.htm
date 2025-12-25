@@ -464,6 +464,7 @@ ${i+1}:
 <div id="dig${i}a" style="display:inline"><br>Auto-calculate white channel from RGB:<br><select name="AW${i}"><option value=0>None</option><option value=1>Brighter</option><option value=2>Accurate</option><option value=3>Dual</option><option value=4>Max</option></select>&nbsp;</div>
 </div>`;
 				f.insertAdjacentHTML("beforeend", cn);
+				hideHub75(); // remove Hub75 options if not supported
 			}
 			if (n==-1) {
 				o[--i].remove();--i;
