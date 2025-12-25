@@ -5,12 +5,28 @@ This directory contains end-to-end tests for the WLED web UI using Playwright.
 ## Overview
 
 The E2E tests validate that the WLED web interface works correctly when served from an ESP32 device. The tests use:
-- **Wokwi** - ESP32 simulator that runs the actual WLED firmware
-- **Playwright** - Browser automation tool for testing the web UI
+- **Wokwi CLI** - ESP32 simulator that runs the actual WLED firmware in a virtual environment
+- **Playwright** - Browser automation tool for testing the web UI served by the simulated ESP32
+
+Unlike traditional web UI tests that use a separate HTTP server, these tests connect to the actual web server running on the simulated ESP32, ensuring end-to-end validation of the firmware and web interface integration.
 
 ## Test Structure
 
 - `ui-pages.spec.js` - Tests that all main UI pages load without JavaScript errors
+
+## Running Tests in CI
+
+The GitHub Actions workflow automatically:
+1. Builds the WLED firmware for ESP32
+2. Starts Wokwi simulator with the firmware
+3. Waits for the web server to be ready on port 8180
+4. Runs Playwright tests against the simulated device
+5. Collects and uploads test reports
+
+### Required Secrets
+
+The Wokwi CLI requires a license token for CI usage. Repository administrators need to add:
+- `WOKWI_CLI_TOKEN` - Wokwi CLI license token (get from https://wokwi.com/dashboard/ci)
 
 ## Running Tests Locally
 
@@ -40,25 +56,53 @@ npx playwright install chromium
 5. Install Wokwi CLI:
 ```bash
 curl -L https://wokwi.com/ci/install.sh | sh
+export PATH="$HOME/.wokwi/bin:$PATH"
 ```
 
 ### Running the Tests
 
-The easiest way is to use the GitHub Actions workflow, but you can also run locally:
+1. Create `wokwi.toml` configuration:
+```toml
+[wokwi]
+version = 1
+elf = ".pio/build/esp32dev_compat/firmware.elf"
+firmware = ".pio/build/esp32dev_compat/firmware.bin"
 
-1. Create `wokwi.toml` configuration (see workflow file for example)
-2. Create `diagram.json` for ESP32 board definition
-3. Start the Wokwi simulator
-4. Run tests: `WLED_URL=http://localhost:8180 npm test`
+[[net.forward]]
+host = "0.0.0.0"
+guest = 80
+port = 8180
+```
 
-## CI/CD Integration
+2. Create `diagram.json` for ESP32 board:
+```json
+{
+  "version": 1,
+  "author": "WLED E2E Tests",
+  "editor": "wokwi",
+  "parts": [
+    { 
+      "type": "wokwi-esp32-devkit-v1", 
+      "id": "esp", 
+      "top": 0, 
+      "left": 0, 
+      "attrs": {} 
+    }
+  ],
+  "connections": [],
+  "dependencies": {}
+}
+```
 
-The E2E tests run automatically on:
-- Push to `mdev` or `main` branches
-- Pull requests to `mdev` or `main` branches
-- Manual workflow dispatch
+3. Start the Wokwi simulator:
+```bash
+wokwi-cli --timeout 600000 .
+```
 
-See `.github/workflows/e2e-test.yml` for the complete workflow.
+4. In another terminal, run tests:
+```bash
+WLED_URL=http://localhost:8180 npm test
+```
 
 ## Writing New Tests
 
@@ -86,13 +130,21 @@ test('my new test', async ({ page }) => {
 - Ensure the Wokwi simulator is running and accessible
 - Check that port forwarding is configured correctly (port 8180)
 - Verify the firmware built successfully
+- Check Wokwi logs for startup errors
 
 ### JavaScript errors in tests
 - Check the browser console output in the test report
-- Verify the web UI was built before running tests
+- Verify the web UI was built before running tests (`npm run build`)
 - Look at the Playwright HTML report for details
+- Review the actual page source served by the simulator
 
 ### Simulator doesn't start
-- Check that the firmware binary exists at the expected path
-- Verify Wokwi CLI is installed correctly
-- Check the Wokwi logs for error messages
+- Check that the firmware binary exists at `.pio/build/esp32dev_compat/firmware.elf`
+- Verify Wokwi CLI is installed correctly (`which wokwi-cli`)
+- Ensure you have a valid WOKWI_CLI_TOKEN set (for CI/licensed features)
+- Check the Wokwi logs (`wokwi.log` in CI) for error messages
+
+### Wokwi CLI License
+- Wokwi CLI is free for individual use but requires a license for CI/CD
+- Get a license from https://wokwi.com/dashboard/ci
+- Add the token to GitHub Secrets as `WOKWI_CLI_TOKEN`
