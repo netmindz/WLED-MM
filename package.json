@@ -9,7 +9,10 @@
   },
   "scripts": {
     "build": "node tools/cdata.js",
-    "dev": "nodemon -e js,html,htm,css,png,jpg,gif,ico,js -w tools/ -w wled00/data/ -x node tools/cdata.js"
+    "dev": "nodemon -e js,html,htm,css,png,jpg,gif,ico,js -w tools/ -w wled00/data/ -x node tools/cdata.js",
+    "test": "playwright test",
+    "test:ui": "playwright test --ui",
+    "test:report": "playwright show-report"
   },
   "repository": {
     "type": "git",
@@ -27,5 +30,9 @@
     "inliner": "^1.13.1",
     "nodemon": "^2.0.20",
     "zlib": "^1.0.5"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.57.0",
+    "playwright": "^1.57.0"
   }
 }
