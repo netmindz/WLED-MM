@@ -1,0 +1,237 @@
+name: End-to-End Testing with ESP32 Emulation
+
+on:
+  push:
+    branches: [ mdev, main ]
+  pull_request:
+    branches: [ mdev, main ]
+  workflow_dispatch:
+
+jobs:
+  e2e-test:
+    name: E2E Tests with ESP32 Emulation
+    runs-on: ubuntu-22.04
+    timeout-minutes: 45
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      
+    - name: Cache pip
+      uses: actions/cache@v4
+      with:
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
+        restore-keys: |
+          ${{ runner.os }}-pip-
+          
+    - name: Cache PlatformIO
+      uses: actions/cache@v4
+      with:
+        path: ~/.platformio
+        key: ${{ runner.os }}-platformio-e2e-${{ hashFiles('**/platformio.ini') }}
+        restore-keys: |
+          ${{ runner.os }}-platformio-e2e-
+          
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.9'
+        
+    - name: Set up Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+        cache: 'npm'
+        
+    - name: Install PlatformIO
+      run: pip install -r requirements.txt
+      
+    - name: Install Node.js dependencies
+      run: npm ci
+      
+    - name: Build Web UI
+      run: npm run build
+      
+    - name: Configure WiFi for Wokwi
+      run: |
+        # Create my_config.h to connect to Wokwi-GUEST network
+        cat > wled00/my_config.h << 'EOF'
+        #pragma once
+        // Configuration for Wokwi ESP32 Simulator
+        // Wokwi provides a simulated WiFi network called "Wokwi-GUEST"
+        #define CLIENT_SSID "Wokwi-GUEST"
+        #define CLIENT_PASS ""
+        EOF
+        
+        echo "Created my_config.h for Wokwi WiFi:"
+        cat wled00/my_config.h
+      
+    - name: Build firmware for ESP32 (basic build for testing)
+      env:
+        WLED_RELEASE: True
+      run: |
+        # Build a simple ESP32 environment for testing
+        # Using esp32dev_compat as it's a basic ESP32 build
+        echo "Building ESP32 firmware for emulation testing..."
+        pio run -e esp32dev_compat
+        
+        # Verify the build artifacts exist
+        ls -lh .pio/build/esp32dev_compat/
+        
+    - name: Install Playwright browsers
+      run: npx playwright install --with-deps chromium
+      
+    - name: Set up Wokwi CLI for ESP32 simulation
+      env:
+        WOKWI_CLI_TOKEN: ${{ secrets.WOKWI_CLI_TOKEN }}
+      run: |
+        # Install Wokwi CLI for ESP32 emulation
+        curl -L https://wokwi.com/ci/install.sh | sh
+        
+    - name: Add Wokwi to PATH
+      run: |
+        echo "$HOME/.wokwi/bin" >> $GITHUB_PATH
+        
+    - name: Create Wokwi project configuration
+      run: |
+        cat > wokwi.toml << 'EOF'
+        [wokwi]
+        version = 1
+        elf = ".pio/build/esp32dev_compat/firmware.elf"
+        firmware = ".pio/build/esp32dev_compat/firmware.bin"
+        
+        [[net.forward]]
+        host = "0.0.0.0"
+        guest = 80
+        port = 8180
+        EOF
+        
+        echo "Created wokwi.toml:"
+        cat wokwi.toml
+        
+    - name: Create diagram.json for Wokwi
+      run: |
+        cat > diagram.json << 'EOF'
+        {
+          "version": 1,
+          "author": "WLED E2E Tests",
+          "editor": "wokwi",
+          "parts": [
+            { 
+              "type": "wokwi-esp32-devkit-v1", 
+              "id": "esp", 
+              "top": 0, 
+              "left": 0, 
+              "attrs": {} 
+            }
+          ],
+          "connections": [],
+          "dependencies": {}
+        }
+        EOF
+        
+        echo "Created diagram.json:"
+        cat diagram.json
+        
+    - name: Start ESP32 simulator
+      env:
+        WOKWI_CLI_TOKEN: ${{ secrets.WOKWI_CLI_TOKEN }}
+      run: |
+        echo "Starting Wokwi ESP32 simulator..."
+        
+        # Start Wokwi simulator in background with proper timeout
+        nohup wokwi-cli --timeout 600000 . > wokwi.log 2>&1 &
+        WOKWI_PID=$!
+        echo "WOKWI_PID=$WOKWI_PID" >> $GITHUB_ENV
+        echo "Started Wokwi with PID: $WOKWI_PID"
+        
+        # Wait for the simulator to initialize and web server to start
+        echo "Waiting for WLED web server to start on port 8180..."
+        MAX_ATTEMPTS=90
+        ATTEMPT=0
+        
+        while [ $ATTEMPT -lt $MAX_ATTEMPTS ]; do
+          ATTEMPT=$((ATTEMPT + 1))
+          
+          # Check if process is still running
+          if ! kill -0 $WOKWI_PID 2>/dev/null; then
+            echo "ERROR: Wokwi process died. Log output:"
+            cat wokwi.log
+            exit 1
+          fi
+          
+          # Try to connect to the web server
+          if curl -s -f -m 5 http://localhost:8180/ > /dev/null 2>&1; then
+            echo "✓ WLED web server is ready and responding!"
+            echo "Test response:"
+            curl -s http://localhost:8180/ | head -n 20 || true
+            break
+          fi
+          
+          echo "Attempt $ATTEMPT/$MAX_ATTEMPTS: Waiting for web server..."
+          
+          # Show last few lines of log every 10 attempts
+          if [ $((ATTEMPT % 10)) -eq 0 ]; then
+            echo "Current Wokwi log:"
+            tail -n 20 wokwi.log || true
+          fi
+          
+          sleep 5
+        done
+        
+        # Final verification
+        if [ $ATTEMPT -eq $MAX_ATTEMPTS ]; then
+          echo "ERROR: Web server did not start within expected time"
+          echo "Final Wokwi log:"
+          cat wokwi.log
+          exit 1
+        fi
+        
+    - name: Show Wokwi status before tests
+      if: always()
+      run: |
+        echo "Wokwi process status:"
+        ps aux | grep wokwi || true
+        echo ""
+        echo "Port 8180 status:"
+        netstat -tuln | grep 8180 || true
+        echo ""
+        echo "Recent Wokwi log:"
+        tail -n 50 wokwi.log || true
+        
+    - name: Run Playwright tests
+      env:
+        WLED_URL: http://localhost:8180
+      run: |
+        echo "Running Playwright tests against $WLED_URL"
+        npx playwright test --reporter=list,html
+        
+    - name: Upload Playwright report
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: playwright-report
+        path: playwright-report/
+        retention-days: 30
+        
+    - name: Upload Wokwi logs
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: wokwi-logs
+        path: wokwi.log
+        retention-days: 7
+        
+    - name: Stop simulator
+      if: always()
+      run: |
+        if [ ! -z "$WOKWI_PID" ] && kill -0 $WOKWI_PID 2>/dev/null; then
+          echo "Stopping Wokwi process $WOKWI_PID"
+          kill $WOKWI_PID || true
+          sleep 2
+          kill -9 $WOKWI_PID 2>/dev/null || true
+        fi
+        
+        # Also kill any remaining wokwi processes
+        pkill -f wokwi-cli || true
