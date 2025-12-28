@@ -61,14 +61,17 @@ The automated tests validate:
 ## How It Works
 
 ```
-Build Web UI → Build Firmware → Start Simulator → Run Tests → Report Results
-   (npm)         (PlatformIO)      (Wokwi)       (Playwright)   (Artifacts)
+Build Web UI → Configure WiFi → Build Firmware → Start Simulator → Run Tests → Report Results
+   (npm)        (my_config.h)    (PlatformIO)      (Wokwi)       (Playwright)   (Artifacts)
 ```
 
 1. **Build Phase**: Compiles web UI and ESP32 firmware
-2. **Simulation Phase**: Starts Wokwi with firmware, forwards port 80→8180
-3. **Test Phase**: Playwright opens Chromium and tests each page
-4. **Report Phase**: Generates HTML reports, collects logs, uploads artifacts
+2. **WiFi Configuration**: Creates `my_config.h` to connect to Wokwi-GUEST network
+3. **Simulation Phase**: Starts Wokwi with firmware, connects to WiFi, forwards port 80→8180
+4. **Test Phase**: Playwright opens Chromium and tests each page
+5. **Report Phase**: Generates HTML reports, collects logs, uploads artifacts
+
+**Important**: The firmware must be configured to connect to Wokwi's simulated WiFi network (`Wokwi-GUEST`) for the web server to be accessible. This is automatically configured in the CI workflow via `my_config.h`.
 
 ## Required Setup (Action Needed! 🚨)
 

@@ -76,6 +76,13 @@ Quick start:
 npm ci
 pip install -r requirements.txt
 
+# Configure WiFi for Wokwi
+cat > wled00/my_config.h << 'EOF'
+#pragma once
+#define CLIENT_SSID "Wokwi-GUEST"
+#define CLIENT_PASS ""
+EOF
+
 # Build everything
 npm run build
 pio run -e esp32dev_compat

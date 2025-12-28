@@ -53,6 +53,20 @@ jobs:
     - name: Build Web UI
       run: npm run build
       
+    - name: Configure WiFi for Wokwi
+      run: |
+        # Create my_config.h to connect to Wokwi-GUEST network
+        cat > wled00/my_config.h << 'EOF'
+        #pragma once
+        // Configuration for Wokwi ESP32 Simulator
+        // Wokwi provides a simulated WiFi network called "Wokwi-GUEST"
+        #define CLIENT_SSID "Wokwi-GUEST"
+        #define CLIENT_PASS ""
+        EOF
+        
+        echo "Created my_config.h for Wokwi WiFi:"
+        cat wled00/my_config.h
+      
     - name: Build firmware for ESP32 (basic build for testing)
       env:
         WLED_RELEASE: True

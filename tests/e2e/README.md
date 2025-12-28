@@ -94,12 +94,22 @@ port = 8180
 }
 ```
 
-3. Start the Wokwi simulator:
+3. Configure WiFi credentials for Wokwi:
+```bash
+# Create my_config.h to connect to Wokwi-GUEST network
+cat > wled00/my_config.h << 'EOF'
+#pragma once
+#define CLIENT_SSID "Wokwi-GUEST"
+#define CLIENT_PASS ""
+EOF
+```
+
+4. Start the Wokwi simulator:
 ```bash
 wokwi-cli --timeout 600000 .
 ```
 
-4. In another terminal, run tests:
+5. In another terminal, run tests:
 ```bash
 WLED_URL=http://localhost:8180 npm test
 ```
