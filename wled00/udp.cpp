@@ -452,8 +452,8 @@ void handleNotifications()
               selseg.custom2 = udpIn[30+ofs];
               selseg.custom3 = udpIn[31+ofs] & 0x1F;
               selseg.check1  = (udpIn[31+ofs]>>5) & 0x1;
-              selseg.check1  = (udpIn[31+ofs]>>6) & 0x1;
-              selseg.check1  = (udpIn[31+ofs]>>7) & 0x1;
+              selseg.check2  = (udpIn[31+ofs]>>6) & 0x1;
+              selseg.check3  = (udpIn[31+ofs]>>7) & 0x1;
             }
             startY = (udpIn[32+ofs] << 8 | udpIn[33+ofs]);
             stopY  = (udpIn[34+ofs] << 8 | udpIn[35+ofs]);
