@@ -38,7 +38,14 @@ static void doSaveState() {
   bool persist = (presetToSave < 251);
   const char *filename = getFileName(persist);
 
-  if (!requestJSONBufferLock(10)) return; // will set fileDoc
+  if (!requestJSONBufferLock(10)) return; // will set fileDoc // async write
+
+  // WLEDMM Acquire file mutex before writing presets.json or tmp.json
+  if (esp32SemTake(presetFileMux, 2500) != pdTRUE) {
+    USER_PRINTLN(F("doSaveState(): preset file busy, cannot write"));
+    releaseJSONBufferLock();
+    return;
+  }
 
   initPresetsFile(); // just in case if someone deleted presets.json using /edit
   JsonObject sObj = doc.to<JsonObject>();
@@ -82,6 +89,8 @@ static void doSaveState() {
   writeObjectToFileUsingId(filename, presetToSave, fileDoc);
 
   if (persist) presetsModifiedTime = toki.second(); //unix time
+
+  esp32SemGive(presetFileMux);  // Release file mutex
   releaseJSONBufferLock();
   updateFSInfo();
 
@@ -316,7 +325,14 @@ void savePreset(byte index, const char* pname, JsonObject sObj)
   } else {
     // this is a playlist or API call
     if (sObj[F("playlist")].isNull()) {
-      // we will save API call immediately (often causes presets.json corruption)
+      // we will save API call immediately (often causes presets.json corruption in the past)
+
+      // WLEDMM Acquire file mutex before writing presets.json, to prevent presets.json corruption
+      if (esp32SemTake(presetFileMux, 2500) != pdTRUE) {
+          USER_PRINTLN(F("doSaveState(): preset file busy, cannot write"));
+          return; // early exit, no change
+      }
+
       presetToSave = 0;
       if (index > 250 || !fileDoc) return; // cannot save API calls to temporary preset (255)
       sObj.remove("o");
@@ -325,8 +341,11 @@ void savePreset(byte index, const char* pname, JsonObject sObj)
       sObj.remove(F("error"));
       sObj.remove(F("psave"));
       if (sObj["n"].isNull()) sObj["n"] = saveName;
+
       initPresetsFile(); // just in case if someone deleted presets.json using /edit
       writeObjectToFileUsingId(getFileName(index<255), index, fileDoc);
+
+      esp32SemGive(presetFileMux);  // Release file mutex
       presetsModifiedTime = toki.second(); //unix time
       updateFSInfo();
     } else {

@@ -7,7 +7,7 @@
  */
 
 // version code in format yymmddb (b = daily build)
-#define VERSION 2512291
+#define VERSION 2512292
 
 // WLEDMM  - you can check for this define in usermods, to only enabled WLEDMM specific code in the "right" fork. Its not defined in AC WLED.
 #define _MoonModules_WLED_
@@ -771,6 +771,7 @@ WLED_GLOBAL volatile bool OTAisRunning _INIT(false);        // WLEDMM temporaril
 WLED_GLOBAL SemaphoreHandle_t busDrawMux _INIT(nullptr);
 WLED_GLOBAL SemaphoreHandle_t segmentMux _INIT(nullptr);
 WLED_GLOBAL SemaphoreHandle_t jsonBufferLockMutex _INIT(nullptr);
+WLED_GLOBAL SemaphoreHandle_t presetFileMux _INIT(nullptr); // Protects presets.json file writes
 #define esp32SemTake(mux,timeout) xSemaphoreTakeRecursive(mux, pdMS_TO_TICKS(timeout)) // convenience macro that expands to xSemaphoreTakeRecursive - timeout is in milliseconds
 #define esp32SemGive(mux)  xSemaphoreGiveRecursive(mux)                 // convenience macro that expands to xSemaphoreGiveRecursive
 #define WLED_create_spinlock(theSname) static portMUX_TYPE theSname = portMUX_INITIALIZER_UNLOCKED

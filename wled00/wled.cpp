@@ -480,11 +480,14 @@ void WLED::setup()
   busDrawMux = xSemaphoreCreateRecursiveMutex();       // WLEDMM prevent concurrent running of strip.show and strip.service
   segmentMux = xSemaphoreCreateRecursiveMutex();       // WLEDMM prevent segment changes while effects are running
   jsonBufferLockMutex = xSemaphoreCreateRecursiveMutex(); // WLEDMM prevent concurrent JSON buffer writing
-  if ((busDrawMux == nullptr) || (segmentMux == nullptr) || (jsonBufferLockMutex == nullptr))
+  presetFileMux = xSemaphoreCreateRecursiveMutex();   // WLEDMM prevent concurrent presets.json file writing
+  if ((busDrawMux == nullptr) || (segmentMux == nullptr) || (jsonBufferLockMutex == nullptr) || (presetFileMux == nullptr)) {
     USER_PRINTLN(F("setup error: xSemaphoreCreateRecursiveMutex failed.")); // should never happen.
+  }
   xSemaphoreGiveRecursive(busDrawMux);                 // init semaphores to initially allow drawing
   xSemaphoreGiveRecursive(segmentMux);
   xSemaphoreGiveRecursive(jsonBufferLockMutex);
+  xSemaphoreGiveRecursive(presetFileMux);
   #endif
 
   #ifdef ARDUINO_ARCH_ESP32
