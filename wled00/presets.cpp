@@ -329,7 +329,7 @@ void savePreset(byte index, const char* pname, JsonObject sObj)
 
       // WLEDMM Acquire file mutex before writing presets.json, to prevent presets.json corruption
       if (esp32SemTake(presetFileMux, 2500) != pdTRUE) {
-          USER_PRINTLN(F("doSaveState(): preset file busy, cannot write"));
+          USER_PRINTLN(F("savePreset(): preset file busy, cannot write"));
           return; // early exit, no change
       }
 
