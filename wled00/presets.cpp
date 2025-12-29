@@ -313,6 +313,7 @@ void savePreset(byte index, const char* pname, JsonObject sObj)
 
   DEBUG_PRINT(F("Saving preset (")); DEBUG_PRINT(index); DEBUG_PRINT(F(") ")); DEBUG_PRINTLN(saveName);
   auto oldpresetToSave = presetToSave; // for recovery in case that esp32SemTake(presetFileMux) fails
+  auto oldplaylistSave = playlistSave;
 
   presetToSave = index;
   playlistSave = false;
@@ -332,6 +333,7 @@ void savePreset(byte index, const char* pname, JsonObject sObj)
       if (esp32SemTake(presetFileMux, 2500) != pdTRUE) {
           USER_PRINTLN(F("savePreset(): preset file busy, cannot write"));
           presetToSave = oldpresetToSave;
+          playlistSave = oldplaylistSave;
           return; // early exit, no change
       }
 
