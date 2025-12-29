@@ -340,6 +340,8 @@ void savePreset(byte index, const char* pname, JsonObject sObj)
       presetToSave = 0;
       if (index > 250 || !fileDoc) {
         esp32SemGive(presetFileMux);  // Release file mutex
+        presetToSave = oldpresetToSave; // bugfix: restore previous state on error exit
+        playlistSave = oldplaylistSave;
         return; // cannot save API calls to temporary preset (255)
       }
       sObj.remove("o");
