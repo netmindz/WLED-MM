@@ -336,7 +336,10 @@ void savePreset(byte index, const char* pname, JsonObject sObj)
       }
 
       presetToSave = 0;
-      if (index > 250 || !fileDoc) return; // cannot save API calls to temporary preset (255)
+      if (index > 250 || !fileDoc) {
+        esp32SemGive(presetFileMux);  // Release file mutex
+        return; // cannot save API calls to temporary preset (255)
+      }
       sObj.remove("o");
       sObj.remove("v");
       sObj.remove("time");
