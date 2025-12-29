@@ -358,8 +358,16 @@ void savePreset(byte index, const char* pname, JsonObject sObj)
 }
 
 void deletePreset(byte index) {
+  // WLEDMM Acquire file mutex before writing presets.json, to prevent presets.json corruption
+  if (esp32SemTake(presetFileMux, 2500) != pdTRUE) {
+    USER_PRINTLN(F("deletePreset(): preset file busy, cannot write"));
+    return; // early exit, no change
+  }
+
   StaticJsonDocument<24> empty;
   writeObjectToFileUsingId(getFileName(), index, &empty);
+
+  esp32SemGive(presetFileMux);  // Release file mutex
   presetsModifiedTime = toki.second(); //unix time
   updateFSInfo();
 }
