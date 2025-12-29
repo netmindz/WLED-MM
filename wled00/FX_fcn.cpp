@@ -1373,9 +1373,9 @@ uint8_t Segment::differs(Segment& b) const {
   if (custom1 != b.custom1)     d |= SEG_DIFFERS_FX;
   if (custom2 != b.custom2)     d |= SEG_DIFFERS_FX;
   if (custom3 != b.custom3)     d |= SEG_DIFFERS_FX;
-  if (a.check1 != b.check1)       d |= SEG_DIFFERS_FX;
-  if (a.check2 != b.check2)       d |= SEG_DIFFERS_FX;
-  if (a.check3 != b.check3)       d |= SEG_DIFFERS_FX;
+  if (check1 != b.check1)       d |= SEG_DIFFERS_FX;
+  if (check2 != b.check2)       d |= SEG_DIFFERS_FX;
+  if (check3 != b.check3)       d |= SEG_DIFFERS_FX;
   if (startY != b.startY)       d |= SEG_DIFFERS_BOUNDS;
   if (stopY != b.stopY)         d |= SEG_DIFFERS_BOUNDS;
 
