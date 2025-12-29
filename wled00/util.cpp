@@ -311,7 +311,7 @@ uint8_t extractModeName(uint8_t mode, const char *src, char *dest, uint8_t maxLe
 }
 
 
-// extracts effect slider data (1st group after @)
+// extracts effect slider data (1st group after @) -> maxLen is (buffersize - 1)
 uint8_t extractModeSlider(uint8_t mode, uint8_t slider, char *dest, uint8_t maxLen, uint8_t *var)
 {
   dest[0] = '\0'; // start by clearing buffer
@@ -378,7 +378,7 @@ uint8_t extractModeSlider(uint8_t mode, uint8_t slider, char *dest, uint8_t maxL
           case 0:  strncpy_P(dest, PSTR("FX Speed"), maxLen); break;
           case 1:  strncpy_P(dest, PSTR("FX Intensity"), maxLen); break;
         }
-        dest[maxLen-1] = '\0'; // strncpy does not necessarily null terminate string
+        dest[maxLen] = '\0'; // strncpy does not necessarily null terminate string
       }
     }
     return strlen(dest);
