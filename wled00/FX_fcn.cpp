@@ -2709,7 +2709,8 @@ bool WS2812FX::deserializeMap(uint8_t n) {
     for (unsigned i=0; i<customMappingTableSize; i++) customMappingTable[i]=i;     // "neutral" 1:1 mapping
 
     //WLEDMM: find the map values
-    f.find("\"map\":[");
+    f.find("\"map\":");
+    f.readBytesUntil('[', fileName, sizeof(fileName)-1); // drop everything until "["
     uint16_t i=0;
     do { //for each element in the array
       int mapi = f.readStringUntil(',').toInt();
