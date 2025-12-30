@@ -220,19 +220,19 @@ bool isAsterisksOnly(const char* str, byte maxLen)
 
 
 //threading/network callback details: https://github.com/Aircoookie/WLED/pull/2336#discussion_r762276994
-bool requestJSONBufferLock(uint8_t module)
+bool requestJSONBufferLock(uint8_t module, unsigned timeoutMS)
 {
   bool haveLock = false;
   #ifdef ARDUINO_ARCH_ESP32
     // We use a recursive mutex to prevent parallel JSON writes from parallel tasks.
     // This also fixes hanging up for the full timeout interval in cases when the contention is from the same task.
     // see https://github.com/wled/WLED/pull/4089 for more details.
-    if (esp32SemTake(jsonBufferLockMutex, 1800) == pdTRUE) haveLock = true;  // WLEDMM must wait longer than suspendStripService timeout = 1500ms
+    if (esp32SemTake(jsonBufferLockMutex, timeoutMS) == pdTRUE) haveLock = true;  // WLEDMM must wait longer than suspendStripService timeout = 1500ms
   #else
     // 8266: only wait in case that can_yield() tells us we can yield and delay
     if (can_yield()) {
       unsigned long now = millis();
-      while (jsonBufferLock && millis()-now < 1800) delay(1); // wait for fraction for buffer lock // WLEDMM must wait longer than suspendStripService timeout = 1500ms
+      while (jsonBufferLock && millis()-now < timeoutMS) delay(1); // wait for fraction for buffer lock // WLEDMM must wait longer than suspendStripService timeout = 1500ms
       if (!jsonBufferLock) haveLock = true;
     }
   #endif
