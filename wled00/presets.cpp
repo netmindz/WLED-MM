@@ -12,8 +12,10 @@ static volatile byte presetToApply = 0;
 static volatile byte callModeToApply = 0;
 static volatile byte presetToSave = 0;
 static volatile int8_t saveLedmap = -1;
-static char quickLoad[12]; // WLEDMM 9->12 to prevent crashing with unicode
-static char saveName[33];
+#define QLOAD_BUFFER 12 // string needed for quickload // WLEDMM 9->12 to prevent crashing with unicode
+#define FNAME_BUFFER 32 // string needed for saveName
+static char quickLoad[QLOAD_BUFFER+1] = {'\0'}; // 1 extra byte for '\0'
+static char saveName[FNAME_BUFFER+1]  = {'\0'}; // 1 extra byte for '\0'
 static bool includeBri = true, segBounds = true, selectedOnly = false, playlistSave = false;
 
 static const char *getFileName(bool persist = true) {
@@ -305,15 +307,17 @@ void handlePresets()
 void savePreset(byte index, const char* pname, JsonObject sObj)
 {
   if (index == 0 || (index > 250 && index < 255)) return;
-  if (pname) strlcpy(saveName, pname, 33);
+  if (pname) strlcpy(saveName, pname, FNAME_BUFFER+1);
   else {
-    if (sObj["n"].is<const char*>()) strlcpy(saveName, sObj["n"].as<const char*>(), 33);
+    if (sObj["n"].is<const char*>()) strlcpy(saveName, sObj["n"].as<const char*>(), FNAME_BUFFER+1);
     else                             sprintf_P(saveName, PSTR("Preset %d"), index);
   }
 
   DEBUG_PRINT(F("Saving preset (")); DEBUG_PRINT(index); DEBUG_PRINT(F(") ")); DEBUG_PRINTLN(saveName);
   auto oldpresetToSave = presetToSave; // for recovery in case that esp32SemTake(presetFileMux) fails
   auto oldplaylistSave = playlistSave;
+  char oldQuickLoad[QLOAD_BUFFER+1];
+  strlcpy(oldQuickLoad, quickLoad, sizeof(oldQuickLoad));
 
   presetToSave = index;
   playlistSave = false;
@@ -334,6 +338,7 @@ void savePreset(byte index, const char* pname, JsonObject sObj)
           USER_PRINTLN(F("savePreset(): preset file busy, cannot write"));
           presetToSave = oldpresetToSave;
           playlistSave = oldplaylistSave;
+          strlcpy(quickLoad, oldQuickLoad, sizeof(quickLoad));
           return; // early exit, no change
       }
 
@@ -342,6 +347,7 @@ void savePreset(byte index, const char* pname, JsonObject sObj)
         esp32SemGive(presetFileMux);  // Release file mutex
         presetToSave = oldpresetToSave; // bugfix: restore previous state on error exit
         playlistSave = oldplaylistSave;
+        strlcpy(quickLoad, oldQuickLoad, sizeof(quickLoad));
         return; // cannot save API calls to temporary preset (255)
       }
       sObj.remove("o");
