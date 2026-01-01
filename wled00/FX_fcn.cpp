@@ -125,7 +125,7 @@ void Segment::allocLeds() {
     portEXIT_CRITICAL(&ledsrgb_mux);
 
     if (oldLedsRgb) free(oldLedsRgb);   // we need a bigger buffer, so free the old one first
-    CRGB* newLedsRgb = (CRGB*)calloc(1, size);   // WLEDMM This is an OS call, so we should not wrap it in portEnterCRITICAL
+    CRGB* newLedsRgb = (CRGB*)calloc(size, 1);   // WLEDMM This is an OS call, so we should not wrap it in portEnterCRITICAL
 
     portENTER_CRITICAL(&ledsrgb_mux);
     ledsrgb = newLedsRgb;
