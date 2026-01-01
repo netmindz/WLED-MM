@@ -2705,6 +2705,7 @@ bool WS2812FX::deserializeMap(uint8_t n) {
     //DEBUG_PRINTF(" (\"width\": %s) ", fileName)
 
     memset(fileName, 0, sizeof(fileName));              // clear old buffer
+    f.seek(0);                                          // rewind to start
     f.find("\"height\":");
     f.readBytesUntil('\n', fileName, sizeof(fileName)-1);
     uint16_t maxHeight = atoi(cleanUpName(fileName));
@@ -2722,7 +2723,7 @@ bool WS2812FX::deserializeMap(uint8_t n) {
     #endif
   }
 
-  USER_PRINTF("deserializeMap %d x %d\n", Segment::maxWidth, Segment::maxHeight);
+  DEBUG_PRINTF("deserializeMap %d x %d\n", Segment::maxWidth, Segment::maxHeight);
 
   //WLEDMM recreate customMappingTable if more space needed
   if (Segment::maxWidth * Segment::maxHeight > customMappingTableSize) {
@@ -2752,20 +2753,27 @@ bool WS2812FX::deserializeMap(uint8_t n) {
     // WLEDMM reset mapping table before loading
     //memset(customMappingTable, 0xFF, customMappingTableSize * sizeof(uint16_t)); // FFFF = no pixel
     for (unsigned i=0; i<customMappingTableSize; i++) customMappingTable[i]=i;     // "neutral" 1:1 mapping
-
     //WLEDMM: find the map values
-    f.find("\"map\":[");
+    f.seek(0);                                           // rewind to start
+    f.find("\"map\":");
+    f.readBytesUntil('[', fileName, sizeof(fileName)-1); // drop everything until "["
     uint16_t i=0;
+    bool endOfArray = false;
     do { //for each element in the array
-      int mapi = f.readStringUntil(',').toInt();
-      // USER_PRINTF(", %d(%d)", mapi, i);
+      String entry = f.readStringUntil(',');
+      int mapi = entry.toInt();
+      //DEBUG_PRINTF("%c %d(%d)", i>0?',':' ', mapi, i);
       if (i < customMappingSize) customMappingTable[i++] = (uint16_t) (mapi<0 ? 0xFFFFU : mapi);  // WLEDMM do not write past array bounds
-    } while (f.available() && (i < customMappingSize));
+      endOfArray  = entry.indexOf("]") >= 0;             // if we hit "]", stop reading
+    } while (f.available() && (i < customMappingSize) && !endOfArray);
+    //DEBUG_PRINTLN("");
 
     loadedLedmap = n;
     f.close();
 
-    USER_PRINTF("Custom ledmap: %d size=%d\n", loadedLedmap, customMappingSize);
+    if ((customMappingTable != nullptr) && (customMappingSize>0)) { 
+      USER_PRINTF(PSTR("Ledmap #%d read. Size=%d (%d x %d); %d items found.\n"), loadedLedmap, customMappingSize, Segment::maxWidth, Segment::maxHeight, i);
+    }
     #ifdef WLED_DEBUG_MAPS
       for (uint16_t j=0; j<customMappingSize; j++) { // fixing a minor warning: declaration of 'i' shadows a previous local
         if (!(j%Segment::maxWidth)) DEBUG_PRINTLN();
