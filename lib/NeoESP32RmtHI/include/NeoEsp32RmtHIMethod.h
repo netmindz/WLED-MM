@@ -33,6 +33,24 @@ License along with NeoPixel.  If not, see
 // Use the NeoEspRmtSpeed types from the driver-based implementation
 #include <NeoPixelBus.h>
 
+#if !defined(ESP_ERROR_CHECK_WITHOUT_ABORT_SILENT_TIMEOUT)
+// macro backported from NPB 2.8.3
+#if defined NDEBUG || defined CONFIG_COMPILER_OPTIMIZATION_ASSERTIONS_SILENT
+#define ESP_ERROR_CHECK_WITHOUT_ABORT_SILENT_TIMEOUT(x) ({                                         \
+        esp_err_t err_rc_ = (x);                                                    \
+        err_rc_;                                                                    \
+    })
+#else
+#define ESP_ERROR_CHECK_WITHOUT_ABORT_SILENT_TIMEOUT(x) ({                                         \
+        esp_err_t err_rc_ = (x);                                                    \
+        if (unlikely(err_rc_ != ESP_OK && err_rc_ != ESP_ERR_TIMEOUT)) {                                          \
+            _esp_error_check_failed_without_abort(err_rc_, __FILE__, __LINE__,      \
+                                                  __ASSERT_FUNC, #x);               \
+        }                                                                           \
+        err_rc_;                                                                    \
+    })
+#endif // NDEBUG
+#endif
 
 namespace NeoEsp32RmtHiMethodDriver {
     // Install the driver for a specific channel, specifying timing properties
