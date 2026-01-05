@@ -184,7 +184,7 @@ bool canUseSerial(void);   // WLEDMM (wled_serial.cpp) returns true if Serial ca
 #endif
 
 
-// RMT driver selection
+// RMT driver selection - only for Xtensa and ESP-IDF 4.x
 #if !defined(WLED_USE_SHARED_RMT)  && !defined(__riscv) && defined(ARDUINO_ARCH_ESP32) && (ESP_IDF_VERSION_MAJOR >= 4)
 
 #include <NeoEsp32RmtHIMethod.h>
