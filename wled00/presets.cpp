@@ -49,6 +49,12 @@ static void doSaveState() {
     return;
   }
 
+  // wait for strip to finish updating, accessing FS during sendout causes glitches
+  #ifdef ARDUINO_ARCH_ESP32
+  unsigned wait_start = millis();
+  while (strip.isUpdating() && (millis() - wait_start < 40)) delay(1); // wait max 40ms
+  #endif
+
   initPresetsFile(); // just in case if someone deleted presets.json using /edit
   JsonObject sObj = doc.to<JsonObject>();
 
@@ -356,6 +362,12 @@ void savePreset(byte index, const char* pname, JsonObject sObj)
       sObj.remove(F("error"));
       sObj.remove(F("psave"));
       if (sObj["n"].isNull()) sObj["n"] = saveName;
+
+      // wait for strip to finish updating, accessing FS during sendout causes glitches
+      #ifdef ARDUINO_ARCH_ESP32
+      unsigned wait_start = millis();
+      while (strip.isUpdating() && (millis() - wait_start < 40)) delay(1); // wait max 40ms
+      #endif
 
       initPresetsFile(); // just in case if someone deleted presets.json using /edit
       writeObjectToFileUsingId(getFileName(index<255), index, fileDoc);

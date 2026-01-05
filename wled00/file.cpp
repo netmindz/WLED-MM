@@ -547,6 +547,12 @@ bool handleFileRead(AsyncWebServerRequest* request, String path){
   }
   #endif
 
+  // wait for strip to finish updating, accessing FS during sendout causes glitches
+  #ifdef ARDUINO_ARCH_ESP32
+  unsigned wait_start = millis();
+  while (strip.isUpdating() && (millis() - wait_start < 40)) delay(1); // wait max 40ms
+  #endif
+
   if(WLED_FS.exists(path) || WLED_FS.exists(path + ".gz")) {
       request->send(WLED_FS, path, String(), request->hasArg(F("download")));
     return true;
