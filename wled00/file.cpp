@@ -50,7 +50,7 @@ void closeFile() {
   if (!f) {doCloseFile = false; return;} // WLEDMM only do all this hick-hack when f is an open file
 
   bool oldLock = suspendStripService;
-  #if !defined(WLEDMM_NO_FILEWAIT) // not necessary if we have the flicker-free RMTHI driver
+  #if defined(WLEDMM_FILEWAIT) // only wait if we don't have the flicker-free RMTHI driver
   unsigned long t_wait = millis();
   if (strip.isUpdating()) suspendStripService = true;             // WLEDMM schedule short pause to prevent LEDs glitching during flash write
   while(strip.isUpdating() && (millis() - t_wait < 72)) delay(1); // WLEDMM try to catch a moment when strip is idle
@@ -550,7 +550,7 @@ bool handleFileRead(AsyncWebServerRequest* request, String path){
   #endif
 
   // wait for strip to finish updating, accessing FS during sendout causes glitches
-  #if defined(ARDUINO_ARCH_ESP32) && !defined(WLEDMM_NO_FILEWAIT) // not necessary if we have the flicker-free RMTHI driver
+  #if defined(ARDUINO_ARCH_ESP32) && defined(WLEDMM_FILEWAIT)  // only wait if we don't have the flicker-free RMTHI driver
   unsigned wait_start = millis();
   while (strip.isUpdating() && (millis() - wait_start < 40)) delay(1); // wait max 40ms
   #endif

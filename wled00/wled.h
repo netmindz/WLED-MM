@@ -182,9 +182,9 @@
 
 
 // WLEDMM: Do we have the flicker-free RMTHI driver?
-#if defined(ARDUINO_ARCH_ESP32)
-#if !defined(WLED_USE_SHARED_RMT) && !defined(__riscv) && (ESP_IDF_VERSION_MAJOR >= 4)
-#define WLEDMM_NO_FILEWAIT 1
+#if !defined(ARDUINO_ARCH_ESP32) || (defined(WLED_USE_SHARED_RMT) || defined(__riscv) || (ESP_IDF_VERSION_MAJOR < 4))
+#ifndef WLEDMM_FILEWAIT
+#define WLEDMM_FILEWAIT 1 // wait for LEDs output completion before file reading/writing
 #endif
 #endif
 
