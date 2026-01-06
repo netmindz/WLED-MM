@@ -7,7 +7,7 @@
  */
 
 // version code in format yymmddb (b = daily build)
-#define VERSION 2601051
+#define VERSION 2601061
 
 // WLEDMM  - you can check for this define in usermods, to only enabled WLEDMM specific code in the "right" fork. Its not defined in AC WLED.
 #define _MoonModules_WLED_
@@ -179,6 +179,14 @@
 #define ARDUINOJSON_DECODE_UNICODE 0   // WLEDMM enables support for unicode HEX strings - deserializeJson(doc, "{'firstname':'Beno\\u00EEt'}"); --> not needed - disable saves 1.2KB flash
 #include "src/dependencies/json/AsyncJson-v6.h"
 #include "src/dependencies/json/ArduinoJson-v6.h"
+
+
+// WLEDMM: Do we have the flicker-free RMTHI driver?
+#if defined(ARDUINO_ARCH_ESP32)
+#if !defined(WLED_USE_SHARED_RMT) && !defined(__riscv) && (ESP_IDF_VERSION_MAJOR >= 4)
+#define WLEDMM_NO_FILEWAIT 1
+#endif
+#endif
 
 // ESP32-WROVER features SPI RAM (aka PSRAM) which can be allocated using ps_malloc()
 // we can create custom PSRAMDynamicJsonDocument to use such feature (replacing DynamicJsonDocument)
