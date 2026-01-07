@@ -690,7 +690,7 @@ void WLED::setup()
 #if defined(ALL_JSON_TO_PSRAM) && defined(BOARD_HAS_PSRAM) && (defined(WLED_USE_PSRAM_JSON) || defined(WLED_USE_PSRAM))
   if (psramFound()) {
     DEBUG_PRINT(F("\nfree heap ")); DEBUG_PRINTLN(ESP.getFreeHeap());
-    USER_PRINTLN(F("JSON gabage collection (initial)."));
+    USER_PRINTLN(F("JSON garbage collection (initial)."));
     doc.garbageCollect();   // WLEDMM experimental - this seems to move the complete doc[] into PSRAM
 	  USER_PRINT(F("PSRAM in use:")); USER_PRINT(int(ESP.getPsramSize() - ESP.getFreePsram())); USER_PRINTLN(F(" Bytes."));
     DEBUG_PRINT(F("free heap ")); DEBUG_PRINTLN(ESP.getFreeHeap());
