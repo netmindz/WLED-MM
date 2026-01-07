@@ -102,7 +102,7 @@ bool deserializeSegment(JsonObject elem, byte it, byte presetId)
       esp32SemGive(segmentMux);
     } else {
       USER_PRINTLN(F("deserializeSegment(): segment not added - failed to acquire segmentMux."));
-      return false;      
+      return false;
     }
   }
 
@@ -452,7 +452,7 @@ bool deserializeState(JsonObject root, byte callMode, byte presetId)
 
   bool stateResponse = root[F("v")] | false;
 
-  //WLEDMM: store netDebug, also if not WLED_DEBUG 
+  //WLEDMM: store netDebug, also if not WLED_DEBUG
   #if defined(WLED_DEBUG_HOST)
   bool oldValue = netDebugEnabled;
   netDebugEnabled = root[F("netDebug")] | netDebugEnabled;
@@ -566,7 +566,7 @@ bool deserializeState(JsonObject root, byte callMode, byte presetId)
       realtimeLock(65000);
 #else
       // more meaningful timeout : use configurable timeout; *3 for some safety margin without staying "live" forever
-      realtimeLock(realtimeTimeoutMs *3);  // Use configurable timeout like other protocols 
+      realtimeLock(realtimeTimeoutMs *3);  // Use configurable timeout like other protocols
 #endif
     } else {
       exitRealtime();
@@ -764,7 +764,7 @@ void serializeState(JsonObject root, bool forPreset, bool includeBri, bool segme
   }
 
   if (!forPreset) {
-    //WLEDMM: store netDebug 
+    //WLEDMM: store netDebug
     #if defined(WLED_DEBUG_HOST)
       root[F("netDebug")] = netDebugEnabled;
     // USER_PRINTF("serializeState %d\n", netDebugEnabled);
@@ -876,7 +876,7 @@ String resetCode2Info(int reason) {
     // unknown reason code
     case 0:
       return F(""); break;
-    default: 
+    default:
       return F("unknown"); break;
   }
 }
@@ -954,7 +954,7 @@ void serializeInfo(JsonObject root)
   //root[F("cn")] = F(WLED_CODENAME);    //WLEDMM removed
   root[F("release")] = FPSTR(releaseString);
   root[F("rel")] = FPSTR(releaseString); //WLEDMM to add bin name
-  //root[F("repo")] = repoString;        // WLEDMM not availeable
+  root[F("repo")] = repoString;
   root[F("deviceId")] = getDeviceId();
 
   JsonObject leds = root.createNestedObject("leds");
@@ -1157,8 +1157,8 @@ void serializeInfo(JsonObject root)
   // use the full revision if we can
     esp_chip_info_t chip_info;
     esp_chip_info(&chip_info);
-    snprintf(msgbuf, sizeof(msgbuf)-1, "%s v%u.%u", 
-        ESP.getChipModel(), 
+    snprintf(msgbuf, sizeof(msgbuf)-1, "%s v%u.%u",
+        ESP.getChipModel(),
         unsigned(chip_info.full_revision / 100),   // full revision is in (major * 100 + minor) format
         unsigned(chip_info.full_revision % 100));
 #else
@@ -1406,7 +1406,7 @@ void serializePalettes(JsonObject root, AsyncWebServerRequest* request)
           // WLEDMM workaround for palettes index overflow at i=74 -> gGradientPalettes index=61 out of bounds.
           int palIndex = i-13;
           constexpr int palMax = sizeof(gGradientPalettes)/sizeof(gGradientPalettes[0]) -1;
-          if ((palIndex < 0) || (palIndex > palMax)) { 
+          if ((palIndex < 0) || (palIndex > palMax)) {
             DEBUG_PRINTF("WARNING gGradientPalettes[%d] is out of bounds! max=%d. (json.cpp)\n", palIndex, palMax);
             palIndex = palMax;  // use last valid array item
           }
@@ -1638,7 +1638,7 @@ bool serveLiveLeds(AsyncWebServerRequest* request, uint32_t wsClient)
   }
 #endif
 
-  DynamicBuffer buffer(9 + (9*MAX_LIVE_LEDS) + 7 + 5 + 6 + 5 + 6 + 5 + 2);  
+  DynamicBuffer buffer(9 + (9*MAX_LIVE_LEDS) + 7 + 5 + 6 + 5 + 6 + 5 + 2);
   char* buf = buffer.data();      // assign buffer for oappnd() functions
   strncpy_P(buffer.data(), PSTR("{\"leds\":["), buffer.size());
   buf += 9; // sizeof(PSTR()) from last line
