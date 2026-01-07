@@ -253,6 +253,12 @@ bool deserializeSegment(JsonObject elem, byte it, byte presetId)
       // segment has RGB or White
       for (size_t i = 0; i < 3; i++)
       {
+        // JSON "col" array can contain the following values for each of segment's colors (primary, background, custom):
+        // "col":[int|string|object|array, int|string|object|array, int|string|object|array]
+        //   int = Kelvin temperature or 0 for black
+        //   string = hex representation of [WW]RRGGBB or "r" for random color
+        //   object = individual channel control {"r":0,"g":127,"b":255,"w":255}, each being optional (valid to send {})
+        //   array = direct channel values [r,g,b,w] (w element being optional)
         int rgbw[] = {0,0,0,0};
         bool colValid = false;
         JsonArray colX = colarr[i];
@@ -265,6 +271,9 @@ bool deserializeSegment(JsonObject elem, byte it, byte presetId)
             if (kelvin == 0) seg.setColor(i, 0);
             if (kelvin >  0) colorKtoRGB(kelvin, brgbw);
             colValid = true;
+            } else if (hexCol[0] == 'r' && hexCol[1] == '\0') { // Random colors via JSON API in Segment object like col=["r","r","r"] · Issue #4996
+              setRandomColor(brgbw);
+              colValid = true;
           } else { //HEX string, e.g. "FFAA00"
             colValid = colorFromHexString(brgbw, hexCol);
           }
