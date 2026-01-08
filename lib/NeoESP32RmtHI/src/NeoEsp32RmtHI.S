@@ -5,8 +5,12 @@
  *
  */
 
+#if !defined(ESP32) && !defined(ESP8266)   // WLEDMM buildenv sanity check (experimental)
+#error neither ESP32 nor ESP8266, don't know what to do
+#endif
+
 #if defined(__XTENSA__) && defined(ESP32) && !defined(CONFIG_BTDM_CTRL_HLI)
-#if !defined(WLED_USE_SHARED_RMT)  && !defined(__riscv) && defined(ARDUINO_ARCH_ESP32) && (ESP_IDF_VERSION_MAJOR >= 4) // WLEDMM don't compile this file on unsupported platforms
+#if !defined(WLED_USE_SHARED_RMT) // WLEDMM don't compile this file on unsupported platforms
 
 #include <freertos/xtensa_context.h>
 #include "sdkconfig.h"
@@ -261,5 +265,5 @@ ld_include_hli_vectors_rmt:
 
 
 #endif // CONFIG_BTDM_CTRL_HLI
-#endif // WLEDMM
+#endif // WLED_USE_SHARED_RMT
 #endif // XTensa

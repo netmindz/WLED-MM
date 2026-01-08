@@ -29,7 +29,7 @@ License along with NeoPixel.  If not, see
 #pragma once
 
 #if defined(ARDUINO_ARCH_ESP32)
-#if !defined(WLED_USE_SHARED_RMT)  && !defined(__riscv) && (ESP_IDF_VERSION_MAJOR >= 4) // WLEDMM don't compile this file on unsupported platforms
+#if !defined(WLED_USE_SHARED_RMT) // WLEDMM don't compile this file on unsupported platforms
 
 // Use the NeoEspRmtSpeed types from the driver-based implementation
 #include <NeoPixelBus.h>

@@ -30,7 +30,7 @@ License along with NeoPixel.  If not, see
 #include <Arduino.h>
 
 #if defined(ARDUINO_ARCH_ESP32)
-#if !defined(WLED_USE_SHARED_RMT)  && !defined(__riscv) && (ESP_IDF_VERSION_MAJOR >= 4) // WLEDMM don't compile this file on unsupported platforms
+#if !defined(WLED_USE_SHARED_RMT) // WLEDMM don't compile this file on unsupported platforms
 
 #include <algorithm>  
 #include "esp_idf_version.h"
