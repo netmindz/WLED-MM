@@ -1636,15 +1636,16 @@ void __attribute__((hot)) Segment::blur(uint8_t blur_amount, bool smear) {
  */
 uint32_t Segment::color_wheel(uint8_t pos) {
   if (palette) return color_from_palette(pos, false, true, 0);
+  uint8_t w = W(currentColor(0, colors[0])); // extract white channel
   pos = 255 - pos;
-  if(pos < 85) {
-    return ((uint32_t)(255 - pos * 3) << 16) | ((uint32_t)(0) << 8) | (pos * 3);
+  if (pos < 85) {
+    return RGBW32((255 - pos * 3), 0, (pos * 3), w);
   } else if(pos < 170) {
     pos -= 85;
-    return ((uint32_t)(0) << 16) | ((uint32_t)(pos * 3) << 8) | (255 - pos * 3);
+    return RGBW32(0, (pos * 3), (255 - pos * 3), w);
   } else {
     pos -= 170;
-    return ((uint32_t)(pos * 3) << 16) | ((uint32_t)(255 - pos * 3) << 8) | (0);
+    return RGBW32((pos * 3), (255 - pos * 3), 0, w);
   }
 }
 
@@ -1674,10 +1675,9 @@ uint8_t Segment::get_random_wheel_index(uint8_t pos) const { // WLEDMM use fast 
  */
 uint32_t __attribute__((hot)) Segment::color_from_palette(uint_fast16_t i, bool mapping, bool wrap, uint8_t mcol, uint8_t pbri) // WLEDMM use fast int types
 {
+  uint32_t color = gamma32(currentColor(mcol, colors[mcol]));
   // default palette or no RGB support on segment
   if ((palette == 0 && mcol < NUM_COLORS) || !_isRGB) {
-    uint32_t color = currentColor(mcol, colors[mcol]);
-    color = gamma32(color);
     if (pbri == 255) return color;
     return RGBW32(scale8_video(R(color),pbri), scale8_video(G(color),pbri), scale8_video(B(color),pbri), scale8_video(W(color),pbri));
   }
@@ -1688,7 +1688,8 @@ uint32_t __attribute__((hot)) Segment::color_from_palette(uint_fast16_t i, bool 
   if (!wrap) paletteIndex = scale8(paletteIndex, 240); //cut off blend at palette "end"
   CRGB fastled_col = ColorFromPalette(_currentPalette, paletteIndex, pbri, (strip.paletteBlend == 3)? NOBLEND:LINEARBLEND); // NOTE: paletteBlend should be global
 
-  return RGBW32(fastled_col.r, fastled_col.g, fastled_col.b, 0);
+  uint8_t w = W(color); // extract white channel
+  return RGBW32(fastled_col.r, fastled_col.g, fastled_col.b, w);
 }
 
  //WLEDMM netmindz ar palette
