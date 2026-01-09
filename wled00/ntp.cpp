@@ -180,6 +180,7 @@ void updateTimezone() {
       tcrDaylight = {Last, Sun, Mar, 1, 480};     //AWST = UTC + 8 hours
       tcrStandard = tcrDaylight;                  //AWST = UTC + 8 hours (no DST)
       break;
+    }
   }
 
   tzCurrent = currentTimezone;
