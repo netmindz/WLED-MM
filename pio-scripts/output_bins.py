@@ -100,7 +100,7 @@ def wledmm_print_build_info(env):
 
     first = True
     for item in all_flags:
-        if  'PIN' in item[0] or 'PIN' in item or 'DMTYPE' in item[0]:
+        if  'PIN' in item[0] or 'PIN' in item or 'DMTYPE' in item[0] or 'STATUSLED'  in item[0]:
             if first: print("Default PINs:")
             print_my_item(item)
             first = False
