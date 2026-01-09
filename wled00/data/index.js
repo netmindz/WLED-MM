@@ -676,7 +676,7 @@ function parseInfo(i) {
 function populateInfo(i)
 {
 	var cn="";
-	var heap = i.freeheap/1000;
+	//var heap = i.freeheap/1000;
 	var heap = Math.round(i.freeheap/100)/10;        // WLEDMM bugfix
 	var theap = (i.totalheap>0)?i.totalheap/1000:-1; //WLEDMM - total heap is not available on 8266
 	var flashsize = i.getflash/1000; //WLEDMM and Athom
@@ -1839,8 +1839,8 @@ function updateSelectedFx()
 		var selectedName = selectedEffect.querySelector(".lstIname").innerText;
 		var segs = gId("segcont").querySelectorAll(`div[data-map="map2D"]`);
 		for (const seg of segs) if (selectedName.indexOf("\u25A6")<0) seg.classList.remove('hide'); else seg.classList.add('hide');
-		var segs = gId("segcont").querySelectorAll(`div[data-snd="si"]`);
-		for (const seg of segs) if (selectedName.indexOf("\u266A")<0 && selectedName.indexOf("\u266B")<0) seg.classList.add('hide'); else seg.classList.remove('hide'); // also "♫ "?
+		var segs2 = gId("segcont").querySelectorAll(`div[data-snd="si"]`);
+		for (const seg2 of segs2) if (selectedName.indexOf("\u266A")<0 && selectedName.indexOf("\u266B")<0) seg2.classList.add('hide'); else seg2.classList.remove('hide'); // also "♫ "?
 	}
 }
 
