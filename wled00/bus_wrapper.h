@@ -183,10 +183,21 @@ bool canUseSerial(void);   // WLEDMM (wled_serial.cpp) returns true if Serial ca
 #define B_8266_BB_UCS_4 NeoPixelBusLg<NeoRgbwUcs8904Feature, NeoEsp8266BitBang800KbpsMethod, NeoGammaNullMethod> //4 chan, esp8266, bb (any pin)
 #endif
 
+
+// RMT driver selection - only for Xtensa and ESP-IDF 4.x
+#if !defined(WLED_USE_SHARED_RMT)  && !defined(__riscv) && defined(ARDUINO_ARCH_ESP32) && (ESP_IDF_VERSION_MAJOR >= 4)
+
+#include <NeoEsp32RmtHIMethod.h>
+#define NeoEsp32RmtMethod(x) NeoEsp32RmtHIN ## x ## Method
+#else
+#define NeoEsp32RmtMethod(x) NeoEsp32RmtN ## x ## Method
+#endif
+
+
 /*** ESP32 Neopixel methods ***/
 #ifdef ARDUINO_ARCH_ESP32
 //RGB
-#define B_32_RN_NEO_3 NeoPixelBusLg<NeoGrbFeature, NeoEsp32RmtNWs2812xMethod, NeoGammaNullMethod>
+#define B_32_RN_NEO_3 NeoPixelBusLg<NeoGrbFeature, NeoEsp32RmtMethod(Ws2812x), NeoGammaNullMethod>
 #ifndef WLED_NO_I2S0_PIXELBUS
 #define B_32_I0_NEO_3 NeoPixelBusLg<NeoGrbFeature, NeoEsp32I2s0800KbpsMethod, NeoGammaNullMethod>
 #endif
@@ -195,7 +206,7 @@ bool canUseSerial(void);   // WLEDMM (wled_serial.cpp) returns true if Serial ca
 #endif
 //#define B_32_BB_NEO_3 NeoPixelBrightnessBus<NeoGrbFeature, NeoEsp32BitBang800KbpsMethod> // NeoEsp8266BitBang800KbpsMethod
 //RGBW
-#define B_32_RN_NEO_4 NeoPixelBusLg<NeoGrbwFeature, NeoEsp32RmtNWs2812xMethod, NeoGammaNullMethod>
+#define B_32_RN_NEO_4 NeoPixelBusLg<NeoGrbwFeature, NeoEsp32RmtMethod(Ws2812x), NeoGammaNullMethod>
 #ifndef WLED_NO_I2S0_PIXELBUS
 #define B_32_I0_NEO_4 NeoPixelBusLg<NeoGrbwFeature, NeoEsp32I2s0800KbpsMethod, NeoGammaNullMethod>
 #endif
@@ -204,7 +215,7 @@ bool canUseSerial(void);   // WLEDMM (wled_serial.cpp) returns true if Serial ca
 #endif
 //#define B_32_BB_NEO_4 NeoPixelBrightnessBus<NeoGrbwFeature, NeoEsp32BitBang800KbpsMethod> // NeoEsp8266BitBang800KbpsMethod
 //400Kbps
-#define B_32_RN_400_3 NeoPixelBusLg<NeoGrbFeature, NeoEsp32RmtN400KbpsMethod, NeoGammaNullMethod>
+#define B_32_RN_400_3 NeoPixelBusLg<NeoGrbFeature, NeoEsp32RmtMethod(400Kbps), NeoGammaNullMethod>
 #ifndef WLED_NO_I2S0_PIXELBUS
 #define B_32_I0_400_3 NeoPixelBusLg<NeoGrbFeature, NeoEsp32I2s0400KbpsMethod, NeoGammaNullMethod>
 #endif
@@ -213,7 +224,7 @@ bool canUseSerial(void);   // WLEDMM (wled_serial.cpp) returns true if Serial ca
 #endif
 //#define B_32_BB_400_3 NeoPixelBrightnessBus<NeoGrbFeature, NeoEsp32BitBang400KbpsMethod> // NeoEsp8266BitBang400KbpsMethod
 //TM1814 (RGBW)
-#define B_32_RN_TM1_4 NeoPixelBusLg<NeoWrgbTm1814Feature, NeoEsp32RmtNTm1814Method, NeoGammaNullMethod>
+#define B_32_RN_TM1_4 NeoPixelBusLg<NeoWrgbTm1814Feature, NeoEsp32RmtMethod(Tm1814), NeoGammaNullMethod>
 #ifndef WLED_NO_I2S0_PIXELBUS
 #define B_32_I0_TM1_4 NeoPixelBusLg<NeoWrgbTm1814Feature, NeoEsp32I2s0Tm1814Method, NeoGammaNullMethod>
 #endif
@@ -222,7 +233,7 @@ bool canUseSerial(void);   // WLEDMM (wled_serial.cpp) returns true if Serial ca
 #endif
 //Bit Bang theoratically possible, but very undesirable and not needed (no pin restrictions on RMT and I2S)
 //TM1829 (RGB)
-#define B_32_RN_TM2_3 NeoPixelBusLg<NeoBrgFeature, NeoEsp32RmtNTm1829Method, NeoGammaNullMethod>
+#define B_32_RN_TM2_3 NeoPixelBusLg<NeoBrgFeature, NeoEsp32RmtMethod(Tm1829), NeoGammaNullMethod>
 #ifndef WLED_NO_I2S0_PIXELBUS
 #define B_32_I0_TM2_3 NeoPixelBusLg<NeoBrgFeature, NeoEsp32I2s0Tm1829Method, NeoGammaNullMethod>
 #endif
@@ -231,7 +242,7 @@ bool canUseSerial(void);   // WLEDMM (wled_serial.cpp) returns true if Serial ca
 #endif
 //Bit Bang theoratically possible, but very undesirable and not needed (no pin restrictions on RMT and I2S)
 //UCS8903
-#define B_32_RN_UCS_3 NeoPixelBusLg<NeoRgbUcs8903Feature, NeoEsp32RmtNWs2812xMethod, NeoGammaNullMethod>
+#define B_32_RN_UCS_3 NeoPixelBusLg<NeoRgbUcs8903Feature, NeoEsp32RmtMethod(Ws2812x), NeoGammaNullMethod>
 #ifndef WLED_NO_I2S0_PIXELBUS
 #define B_32_I0_UCS_3 NeoPixelBusLg<NeoRgbUcs8903Feature, NeoEsp32I2s0800KbpsMethod, NeoGammaNullMethod>
 #endif
@@ -240,7 +251,7 @@ bool canUseSerial(void);   // WLEDMM (wled_serial.cpp) returns true if Serial ca
 #endif
 //Bit Bang theoratically possible, but very undesirable and not needed (no pin restrictions on RMT and I2S)
 //UCS8904
-#define B_32_RN_UCS_4 NeoPixelBusLg<NeoRgbwUcs8904Feature, NeoEsp32RmtNWs2812xMethod, NeoGammaNullMethod>
+#define B_32_RN_UCS_4 NeoPixelBusLg<NeoRgbwUcs8904Feature, NeoEsp32RmtMethod(Ws2812x), NeoGammaNullMethod>
 #ifndef WLED_NO_I2S0_PIXELBUS
 #define B_32_I0_UCS_4 NeoPixelBusLg<NeoRgbwUcs8904Feature, NeoEsp32I2s0800KbpsMethod, NeoGammaNullMethod>
 #endif
