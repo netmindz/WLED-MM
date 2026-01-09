@@ -321,9 +321,19 @@ function showToast(text, error = false)
 	if (error) console.log(text);
 }
 
-function showErrorToast()
+function showErrorToast(ereason=0)
 {
-	showToast('Connection to light failed!', true);
+	var etext = 'Connection to light failed!';
+	switch(ereason) {
+	case 1: etext = '(loadPalettes) ' + etext; break;
+	case 2: etext = '(loadFX) ' + etext; break;
+	case 3: etext = '(loadFXData) ' + etext; break;
+	case 4: etext = '(requestJson) ' + etext; break;
+	case 5: etext = '(requestJson urlfetch) ' + etext; break;
+	case 6: etext = '(getPalettesData) ' + etext; break;
+	default: break;
+	}
+	showToast(etext,true);
 }
 
 function clearErrorToast(n=5000)
@@ -487,7 +497,7 @@ function loadPalettes(callback = null)
 		method: 'get'
 	})
 	.then((res)=>{
-		if (!res.ok) showErrorToast();
+		if (!res.ok) showErrorToast(1);
 		return res.json();
 	})
 	.then((json)=>{
@@ -511,7 +521,7 @@ function loadFX(callback = null)
 		method: 'get'
 	})
 	.then((res)=>{
-		if (!res.ok) showErrorToast();
+		if (!res.ok) showErrorToast(2);
 		return res.json();
 	})
 	.then((json)=>{
@@ -535,7 +545,7 @@ function loadFXData(callback = null)
 		method: 'get'
 	})
 	.then((res)=>{
-		if (!res.ok) showErrorToast();
+		if (!res.ok) showErrorToast(3);
 		return res.json();
 	})
 	.then((json)=>{
@@ -2182,7 +2192,7 @@ function requestJson(command=null)
 {
 	gId('connind').style.backgroundColor = "var(--c-y)";
 	if (command && !reqsLegal) return; // stop post requests from chrome onchange event on page restore
-	if (!jsonTimeout) jsonTimeout = setTimeout(()=>{if (ws) ws.close(); ws=null; showErrorToast()}, 3000);
+	if (!jsonTimeout) jsonTimeout = setTimeout(()=>{if (ws) ws.close(); ws=null; showErrorToast(4)}, 3000);
 	var req = null;
 	var url = (loc?`http://${locip}`:'') + '/json/si';
 	var useWs = (ws && ws.readyState === WebSocket.OPEN);
@@ -2198,7 +2208,7 @@ function requestJson(command=null)
 		req = JSON.stringify(command);
 		if (req.length > 1340) useWs = false; // do not send very long requests over websocket
 		if (req.length >  500 && lastinfo && lastinfo.arch == "esp8266") useWs = false; // esp8266 can only handle 500 bytes
-	};
+	}
 
 	if (useWs) {
 		// console.log("requestJson ws.send", command); //WLEDMM Debug
@@ -2217,7 +2227,7 @@ function requestJson(command=null)
 	.then(res => {
 		clearTimeout(jsonTimeout);
 		jsonTimeout = null;
-		if (!res.ok) showErrorToast();
+		if (!res.ok) showErrorToast(5);
 		return res.json();
 	})
 	.then(json => {
@@ -3452,7 +3462,7 @@ function getPalettesData(page, callback)
 		}
 	})
 	.then(res => {
-		if (!res.ok) showErrorToast();
+		if (!res.ok) showErrorToast(6);
 		return res.json();
 	})
 	.then(json => {
