@@ -3821,7 +3821,8 @@ function reportUpgradeEvent(oldVersion, newVersion) {
 				bootloaderSHA256: infoData.bootloaderSHA256 || '',   // Bootloader SHA256 hash - not yet availeable in WLEDMM
 				brand: infoData.brand,                           // Device brand (always present)
 				product: infoData.product,                       // Product name (always present)
-				flashSize: infoData.flash                        // Flash size (always present)
+				flashSize: infoData.flash,                       // Flash size (always present)
+				repo: infoData.repo                              // GitHub repository (always present)
 		};
 		// Add optional fields if available
 		if (infoData.tpsram !== undefined) upgradeData.psramSize = Math.round(infoData.tpsram / (1024 * 1024));  // convert bytes to MB - tpsram is MM specific
