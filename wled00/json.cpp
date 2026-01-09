@@ -336,7 +336,10 @@ bool deserializeSegment(JsonObject elem, byte it, byte presetId)
   // end fix
   if (getVal(elem["fx"], &fx, 0, last)) { //load effect ('r' random, '~' inc/dec, 0-255 exact value, 5~10r pick random between 5 & 10)
     if (!presetId && currentPlaylist>=0) unloadPlaylist();
-    if (fx != seg.mode) seg.setMode(fx, elem[F("fxdef")], elem[F("fxdef2")]); // WLEDMM fxdef2 added
+    bool doLoadDefault = elem[F("fxdef")] == true;
+    if (fx == FX_MODE_IMAGE) doLoadDefault = true;        // WLEDMM quick fix: when called from PixelForge, images were always shown with blur
+    if (fx == FX_MODE_2DSCROLLTEXT) doLoadDefault = true; //        same hack for scrolling text 
+    if (fx != seg.mode) seg.setMode(fx, doLoadDefault, elem[F("fxdef2")]); // WLEDMM fxdef2 added
   }
 
   //getVal also supports inc/decrementing and random
