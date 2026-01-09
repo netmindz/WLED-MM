@@ -1464,7 +1464,7 @@ void WLED::handleStatusLED()
   if (ledStatusType) {
     if (millis() - ledStatusLastMillis >= (1000/ledStatusType)) {
       ledStatusLastMillis = millis();
-#if 0
+#if 1
       // WLEDMM un-comment this to stop the blinking
       if ((ledStatusType != 2) && (ledStatusType != 4))
         ledStatusState = !ledStatusState;
