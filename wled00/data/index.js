@@ -2308,7 +2308,8 @@ function toggleLiveview()
 	if (isM) {
 		//WLEDMM adding liveview2D support on main ui
 		isLv = !isLv;
-		gId("colorGFX").style.display = isLv? "inline":"none"; //WLEDMM: set off if explicitly gfx pushed
+		//WLEDMM: set off if explicitly gfx pushed
+		gId("colorGFX").style.display = "inline"; // always keep colors visible
 		gId("effectGFX").style.display = isLv? "inline":"none";
 		gId("segGFX").style.display = isLv? "inline":"none";
 
