@@ -30,6 +30,8 @@ void endImagePlayback(Segment *seg);            // implemented in image_loader.c
 #include "bus_manager.h"
 extern BusManager busses; // same as wled.h
 
+static uint8_t strip_getPaletteBlend();  // forward declaration: little helper to access strip.paletteBlend
+
 #define DEFAULT_BRIGHTNESS (uint8_t)127
 #define DEFAULT_MODE       (uint8_t)0
 #define DEFAULT_SPEED      (uint8_t)128
@@ -49,6 +51,12 @@ extern BusManager busses; // same as wled.h
 //color mangling macros
 #ifndef RGBW32
 #define RGBW32(r,g,b,w) (uint32_t((byte(w) << 24) | (byte(r) << 16) | (byte(g) << 8) | (byte(b))))
+#endif
+#ifndef W
+#define R(c) (byte((c) >> 16))
+#define G(c) (byte((c) >> 8))
+#define B(c) (byte(c))
+#define W(c) (byte((c) >> 24))
 #endif
 
 /* Not used in all effects yet */
@@ -681,7 +689,10 @@ typedef struct Segment {
     }
 
     uint8_t  currentMode(uint8_t modeNew);
-    uint32_t currentColor(uint8_t slot, uint32_t colorNew);
+    inline uint32_t currentColor(uint8_t slot, uint32_t colorNew) const {  // WLEDMM moved here from FX_fcn.cpp
+      return transitional && _t ? color_blend(_t->_colorT[slot], colorNew, progress(), true) : colorNew;
+    }
+
     CRGBPalette16 &loadPalette(CRGBPalette16 &tgt, uint8_t pal) const;
     void     setCurrentPalette(void);
 
@@ -711,8 +722,39 @@ typedef struct Segment {
     inline void addPixelColor(int n, CRGB c, bool fast = false)          { addPixelColor(n, uint32_t(c) & 0x00FFFFFF, fast); } // automatically inline
     void fadePixelColor(uint16_t n, uint8_t fade);
     uint8_t get_random_wheel_index(uint8_t pos)  const;
-	  uint32_t __attribute__((pure)) color_from_palette(uint_fast16_t, bool mapping, bool wrap, uint8_t mcol, uint8_t pbri = 255);
-    uint32_t __attribute__((pure)) color_wheel(uint8_t pos);
+
+    // WLEDMM function moved here (from FX_fcn.cpp) for better optimization by the compiler
+    inline uint32_t __attribute__((hot)) color_from_palette(uint_fast16_t i, bool mapping, bool wrap, uint8_t mcol, uint8_t pbri = 255) const {
+      uint32_t color = gamma32(currentColor(mcol, colors[mcol]));
+      // default palette or no RGB support on segment
+      if ((palette == 0 && mcol < NUM_COLORS) || !_isRGB) {
+        if (pbri == 255) return color;
+        return RGBW32(scale8_video(R(color),pbri), scale8_video(G(color),pbri), scale8_video(B(color),pbri), scale8_video(W(color),pbri));
+      }
+      uint8_t paletteIndex = i;
+      uint_fast16_t vLen = mapping ? virtualLength() : 1;
+      if (mapping && vLen > 1) paletteIndex = (i*255)/(vLen -1);
+      if (!wrap) paletteIndex = scale8(paletteIndex, 240); //cut off blend at palette "end"
+      CRGB fastled_col = ColorFromPaletteWLED(_currentPalette, paletteIndex, pbri, (strip_getPaletteBlend() == 3)? NOBLEND:LINEARBLEND); // NOTE: paletteBlend should be global
+      uint8_t w = W(color); // extract white channel
+      return RGBW32(fastled_col.r, fastled_col.g, fastled_col.b, w);
+    }
+
+    // WLEDMM function moved here (from FX_fcn.cpp) for better optimization by the compiler
+    inline uint32_t color_wheel(uint8_t pos) const {
+      if (palette) return color_from_palette(pos, false, true, 0);
+      uint8_t w = W(currentColor(0, colors[0])); // extract white channel
+      pos = 255 - pos;
+      if (pos < 85) {
+        return RGBW32((255 - pos * 3), 0, (pos * 3), w);
+      } else if(pos < 170) {
+        pos -= 85;
+        return RGBW32(0, (pos * 3), (255 - pos * 3), w);
+      } else {
+        pos -= 170;
+        return RGBW32((pos * 3), (255 - pos * 3), 0, w);
+      }
+    }
 
     // 2D Blur: shortcuts for bluring columns or rows only (50% faster than full 2D blur)
     inline void blurCols(fract8 blur_amount, bool smear = false) { // blur all columns
@@ -1275,6 +1317,9 @@ class WS2812FX {  // 96 bytes
     void
       estimateCurrentAndLimitBri(void);
 };
+
+extern WS2812FX strip;    // same as wled.h
+inline uint8_t strip_getPaletteBlend() { return strip.paletteBlend; } // little helper for segment::color_from_palette()
 
 extern const char JSON_mode_names[];
 extern const char JSON_palette_names[];
