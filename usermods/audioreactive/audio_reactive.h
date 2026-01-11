@@ -706,7 +706,7 @@ void FFTcode(void * parameter)
     micReal_max = datMax;
     micReal_avg = datAvg / samplesFFT;
 #if 0
-    // compute mix/max again after filtering - useful for filter debugging
+    // compute min/max again after filtering - useful for filter debugging
     for (int i=0; i < samplesFFT; i++) {
       if (i==0) {
         datMin = datMax = vReal[i];
@@ -1190,7 +1190,7 @@ class AudioReactive : public Usermod {
     };
 
     #define UDPSOUND_MAX_PACKET     96 // max packet size for audiosync, with a bit of "headroom"
-    #define AR_UDP_SEND_INTERVAL_MS 18 // 23ms = time for reading one new batch of samples @ 22kHz; minus 5ms margin for network overhead
+    #define AR_UDP_READ_INTERVAL_MS 18 // 23ms = time for reading one new batch of samples @ 22kHz; minus 5ms margin for network overhead
     #define AR_UDP_FLUSH_ALL       255 // tells receiveAudioData to purge the network input queue
 
     // set your config variables to their boot default value (this can also be done in readFromConfig() or a constructor if you prefer)
@@ -2346,7 +2346,7 @@ class AudioReactive : public Usermod {
             // DEBUG_PRINTF(F("AR reading at %d compared to %d max\n"), millis() - lastTime, delayMs); // TroyHacks
 
             unsigned timeElapsed = (millis() - last_UDPTime);
-            unsigned maxReadSamples = timeElapsed / AR_UDP_SEND_INTERVAL_MS;         // estimate how many packets arrived since last receive
+            unsigned maxReadSamples = timeElapsed / AR_UDP_READ_INTERVAL_MS;         // estimate how many packets arrived since last receive
             maxReadSamples = max(1U, min(maxReadSamples, 20U));                      // constrain to [1...20] = max 380ms drop
             // check if we should purge the receiving queue
             switch (audioSyncPurge) {
