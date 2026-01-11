@@ -130,7 +130,7 @@
 static volatile bool disableSoundProcessing = false;      // if true, sound processing (FFT, filters, AGC) will be suspended. "volatile" as it is shared between tasks.
 static uint8_t audioSyncEnabled = AUDIOSYNC_NONE;         // bit field: bit 0 - send, bit 1 - receive, bit 2 - use local if not receiving
 static bool audioSyncSequence = true;                     // if true, the receiver will drop out-of-sequence packets
-static uint8_t audioSyncPurge = 1;                        // 0: process all received packets; 1: auto-purge old packets; 2:only process last received packets
+static uint8_t audioSyncPurge = 1;                        // 0: process each packet (don't purge); 1: auto-purge old packets; 2: only process latest received packet (always purge)
 static bool udpSyncConnected = false;         // UDP connection status -> true if connected to multicast group
 
 #define NUM_GEQ_CHANNELS 16                                           // number of frequency channels. Don't change !!
