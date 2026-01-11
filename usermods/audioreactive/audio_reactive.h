@@ -130,6 +130,7 @@
 static volatile bool disableSoundProcessing = false;      // if true, sound processing (FFT, filters, AGC) will be suspended. "volatile" as its shared between tasks.
 static uint8_t audioSyncEnabled = AUDIOSYNC_NONE;         // bit field: bit 0 - send, bit 1 - receive, bit 2 - use local if not receiving
 static bool audioSyncSequence = true;                     // if true, the receiver will drop out-of-sequence packets
+static uint8_t audioSyncPurge = 1;                        // 0: process all received packets; 1: auto-purge old packets; 2:only process last received packets
 static bool udpSyncConnected = false;         // UDP connection status -> true if connected to multicast group
 
 #define NUM_GEQ_CHANNELS 16                                           // number of frequency channels. Don't change !!
@@ -2350,10 +2351,18 @@ class AudioReactive : public Usermod {
             unsigned maxReadSamples = timeElapsed / AR_UDP_AVG_SEND_RATE;            // estimate how many packets arrived since last receive
             maxReadSamples = max(1U, min(maxReadSamples, 20U));                      // constrain to [1...20] = max 380ms drop
             // check if we should purge the the receiving queue
-            if (timeElapsed >= AUDIOSYNC_IDLE_MS) maxReadSamples = AR_UDP_FLUSH_ALL; // too long since last run
-            if (receivedFormat == 0) maxReadSamples = AR_UDP_FLUSH_ALL;              // new connection
-            if (fabsf(volumeSmth) < 0.25f) maxReadSamples = AR_UDP_FLUSH_ALL;        // silence detected
-            //maxReadSamples = AR_UDP_FLUSH_ALL;        // always flush
+            switch (audioSyncPurge) {
+              case 0: maxReadSamples = 1; break;                                       // never drop packets, unless new connection or timed out
+              case 2: maxReadSamples = AR_UDP_FLUSH_ALL; break;                        // always drop - process latest packet only
+              default: 
+              // falls through
+              case 1:                                                                  // auto drop when silence detected, or when receiver loop is slower than sender
+                if (fabsf(volumeSmth) < 0.25f) maxReadSamples = AR_UDP_FLUSH_ALL;
+                break;
+            }
+            if (receivedFormat == 0) maxReadSamples = AR_UDP_FLUSH_ALL;              // new connection -> always flush queue
+            if (timeElapsed >= AUDIOSYNC_IDLE_MS) maxReadSamples = AR_UDP_FLUSH_ALL; // too long since last run - always flush queue
+
             // try to get fresh data
             have_new_sample = receiveAudioData(maxReadSamples);
             if (have_new_sample) {
@@ -2872,6 +2881,7 @@ class AudioReactive : public Usermod {
       JsonObject sync = top.createNestedObject("sync");
       sync[F("port")] = audioSyncPort;
       sync[F("mode")] = audioSyncEnabled;
+      sync[F("last_packet_only")] = audioSyncPurge;
       sync[F("check_sequence")] = audioSyncSequence;
     }
 
@@ -2956,6 +2966,7 @@ class AudioReactive : public Usermod {
 
       configComplete &= getJsonValue(top["sync"][F("port")], audioSyncPort);
       configComplete &= getJsonValue(top["sync"][F("mode")], audioSyncEnabled);
+      configComplete &= getJsonValue(top["sync"][F("last_packet_only")], audioSyncPurge);
       configComplete &= getJsonValue(top["sync"][F("check_sequence")], audioSyncSequence);
 
       // WLEDMM notify user when a reboot is necessary
@@ -3184,6 +3195,11 @@ class AudioReactive : public Usermod {
 #ifdef ARDUINO_ARCH_ESP32
       oappend(SET_F("addOption(dd,'Receive or Local',6);"));  // AUDIOSYNC_REC_PLUS
 #endif
+      // Receiver dropy old packets and processes the latest packet only
+      oappend(SET_F("dd=addDropdown(ux,'sync:last_packet_only');"));
+      oappend(SET_F("addOption(dd,'Never',0);"));
+      oappend(SET_F("addOption(dd,'Auto (recommended)',1);")); // auto = drop during silence, or when last receive happened too long ago 
+      oappend(SET_F("addOption(dd,'Always',2);"));
       // check_sequence: Receiver skips out-of-sequence packets when enabled
       oappend(SET_F("dd=addDropdown(ux,'sync:check_sequence');"));
       oappend(SET_F("addOption(dd,'Off',0);"));
