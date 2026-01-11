@@ -1898,7 +1898,7 @@ class AudioReactive : public Usermod {
         // Process each received packet: last value will persist, intermediate ones needed to update sequence counters
         if (lastValidPacketSize > 0) {
           if (lastValidPacketSize == sizeof(audioSyncPacket) && (isValidUdpSyncVersion((const char *)fftUdpBuffer))) {
-            receivedFormat = 2;
+            //receivedFormat = max(receivedFormat, 2); // format V2 or V2+ - will be set in decodeAudioData()
             haveFreshData |= decodeAudioData(lastValidPacketSize, fftUdpBuffer);
           } else if (lastValidPacketSize == sizeof(audioSyncPacket_v1) && (isValidUdpSyncVersion_v1((const char *)fftUdpBuffer))) {
             decodeAudioData_v1(lastValidPacketSize, fftUdpBuffer);
