@@ -1189,6 +1189,7 @@ class AudioReactive : public Usermod {
     };
 
     #define UDPSOUND_MAX_PACKET 96 // max packet size for audiosync, with a bit of "headroom"
+    #define UDP_AVG_SEND_RATE   23 // 23ms = time for reading one new batch of samples @ 22kHz
 
     // set your config variables to their boot default value (this can also be done in readFromConfig() or a constructor if you prefer)
   #if defined(SR_ENABLE_DEFAULT) || defined(UM_AUDIOREACTIVE_ENABLE)
@@ -1848,15 +1849,16 @@ class AudioReactive : public Usermod {
       agcSensitivity = 128.0f; // substitute - V1 format does not include this value
     }
 
-    bool receiveAudioData() {
+    bool receiveAudioData( unsigned maxSamples) {  // maxSamples = 255 means "purge complete input queue" 
       if (!udpSyncConnected) return false;
       bool haveFreshData = false;
       size_t packetSize = 0;
       static uint8_t fftUdpBuffer[UDPSOUND_MAX_PACKET + 1] = {0};
       size_t lastValidPacketSize = 0;
 
-      // Loop to read all available packets
-      while (true) {
+      // Loop to read available packets
+      unsigned packetsReceived = 0;
+      do {
         #if __cpp_exceptions
         try {
           packetSize = fftUdp.parsePacket();
@@ -1867,7 +1869,7 @@ class AudioReactive : public Usermod {
           #endif
           DEBUG_PRINTLN(F("receiveAudioData: parsePacket out of memory exception caught!"));
           USER_FLUSH();
-          continue; // Skip to next iteration
+          //continue; // don't skip to next iteration -> we are OOM
         }
         #else
         packetSize = fftUdp.parsePacket();
@@ -1876,31 +1878,35 @@ class AudioReactive : public Usermod {
         #ifdef ARDUINO_ARCH_ESP32
         if ((packetSize > 0) && ((packetSize < 5) || (packetSize > UDPSOUND_MAX_PACKET))) {
           fftUdp.flush();
-          continue; // Skip invalid packets
+          continue; // Skip invalid packets -> next iteration
         }
         #endif
 
-        if (packetSize == 0) break; // No more packets available
+        if (packetSize == 0) break; // No more packets available --> exit loop
 
         if ((packetSize > 5) && (packetSize <= UDPSOUND_MAX_PACKET)) {
           fftUdp.read(fftUdpBuffer, packetSize);
           lastValidPacketSize = packetSize;
         }
-      }
 
-      // Process only the last valid packet
-      if (lastValidPacketSize > 0) {
-        if (lastValidPacketSize == sizeof(audioSyncPacket) && (isValidUdpSyncVersion((const char *)fftUdpBuffer))) {
-          receivedFormat = 2;
-          haveFreshData = decodeAudioData(lastValidPacketSize, fftUdpBuffer);
-        } else if (lastValidPacketSize == sizeof(audioSyncPacket_v1) && (isValidUdpSyncVersion_v1((const char *)fftUdpBuffer))) {
-          decodeAudioData_v1(lastValidPacketSize, fftUdpBuffer);
-          receivedFormat = 1;
-          haveFreshData = true;
-        } else {
-          receivedFormat = 0; // unknown format
+        // Process each received packet: last value will persist, intermediate ones needed to update sequence counters
+        if (lastValidPacketSize > 0) {
+          if (lastValidPacketSize == sizeof(audioSyncPacket) && (isValidUdpSyncVersion((const char *)fftUdpBuffer))) {
+            receivedFormat = 2;
+            haveFreshData |= decodeAudioData(lastValidPacketSize, fftUdpBuffer);
+          } else if (lastValidPacketSize == sizeof(audioSyncPacket_v1) && (isValidUdpSyncVersion_v1((const char *)fftUdpBuffer))) {
+            decodeAudioData_v1(lastValidPacketSize, fftUdpBuffer);
+            receivedFormat = 1;
+            haveFreshData = true;
+          } else {
+            receivedFormat = 0; // unknown format
+          }
         }
-      }
+
+        packetsReceived++;
+      } while ((packetSize > 0) && ((packetsReceived < maxSamples) || (maxSamples == 255))); // repeat until we have read enough packets, or no more packets available
+      if ((packetsReceived > 1) && haveFreshData) {USER_PRINTF("AR UDP: dropped  %d [%ums\t%d maxDrop].\n", packetsReceived-1, millis() - last_UDPTime, maxSamples-1);} // for debugging
+
       return haveFreshData;
     }
 
@@ -2342,7 +2348,16 @@ class AudioReactive : public Usermod {
           bool have_new_sample = false;
           if (millis() - lastTime > delayMs) {
             // DEBUG_PRINTF(F("AR reading at %d compared to %d max\n"), millis() - lastTime, delayMs); // TroyHacks
-            have_new_sample = receiveAudioData();
+
+            unsigned timeElapsed = (millis() - last_UDPTime);
+            unsigned maxReadSamples = timeElapsed / UDP_AVG_SEND_RATE;  // estimate how many packets can arrived since last receive
+            maxReadSamples = max(1U, min(maxReadSamples, 20U));         // constrain to [1...20] = max 200ms
+            // check if we should purge the the receiving queue
+            if (timeElapsed >= AUDIOSYNC_IDLE_MS) maxReadSamples = 255; // too long since last run
+            if (receivedFormat == 0) maxReadSamples = 255;              // new connection
+            if (fabsf(volumeSmth) < 0.25f) maxReadSamples = 255;        // silence detected
+            // try to get fresh data
+            have_new_sample = receiveAudioData(maxReadSamples);
             if (have_new_sample) {
               last_UDPTime = millis();
               useNetworkAudio = true;  // UDP input arrived - use it
