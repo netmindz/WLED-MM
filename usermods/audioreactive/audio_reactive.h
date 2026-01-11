@@ -1752,25 +1752,31 @@ class AudioReactive : public Usermod {
 
       // validate sequence, discard out-of-sequence packets
       static uint8_t lastFrameCounter = 0;
+      int lastReceivedFormat = receivedFormat;
       // add info for UI
       if ((receivedPacket.frameCounter > 0) && (lastFrameCounter > 0)) receivedFormat = 3; // v2+
       else receivedFormat = 2; // v2
 
-         // Simpler 8-bit rollover-safe sequence check:
-         // (int8_t)(cur - prev) > 0  => cur is ahead of prev by 1..127
-         //                        0 => duplicate, 
-		 //                      < 0 => older
-         //    bool sequenceOK = !audioSyncSequence || receivedPacket.frameCounter == 0 ||   // always accept legacy "0"
-         //    ((int8_t)(receivedPacket.frameCounter - lastFrameCounter) > 0);
-
 	  // check sequence
       bool sequenceOK = false;
+#if 0  // standard check
       if(receivedPacket.frameCounter > lastFrameCounter) sequenceOK = true;                  // sequence OK
       if((lastFrameCounter < 12) && (receivedPacket.frameCounter > 248)) sequenceOK = false; // prevent sequence "roll-back" due to late packets (1->254)
       if((lastFrameCounter > 248) && (receivedPacket.frameCounter < 12)) sequenceOK = true;  // handle roll-over (255 -> 0)
+#else // improved rollover-safe sequence check (experimental)
+      if ((int8_t)(receivedPacket.frameCounter - lastFrameCounter) > 0) sequenceOK = true;
+      // Simpler 8-bit rollover-safe sequence check:
+      // (int8_t)(cur - prev) > 0  => cur is ahead of prev by 1..127
+      //                        0 => duplicate, 
+		  //                      < 0 => older
+      //    bool sequenceOK = !audioSyncSequence || receivedPacket.frameCounter == 0 ||   // always accept legacy "0"
+      //    ((int8_t)(receivedPacket.frameCounter - lastFrameCounter) > 0);
+      if (lastReceivedFormat < 2) sequenceOK = true;                       // first V2 packet - accept anything (prevents delay when re-enabling AR)
+      if (millis()- last_UDPTime >= AUDIOSYNC_IDLE_MS) sequenceOK = true;  // receiver timed out - resync needed
+#endif
       if(audioSyncSequence == false) sequenceOK = true;                                       // sequence checking disabled by user
       if((sequenceOK == false) && (receivedPacket.frameCounter != 0)) {                      // always accept "0" - its the legacy value
-        DEBUGSR_PRINTF("Skipping audio frame out of order or duplicated - %u vs %u\n", lastFrameCounter, receivedPacket.frameCounter);
+        USER_PRINTF("Skipping audio frame out of order or duplicated - %u vs %u\n", lastFrameCounter, receivedPacket.frameCounter);
         return false;   // reject out-of sequence frame
       }
       else {
