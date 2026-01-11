@@ -1188,8 +1188,9 @@ class AudioReactive : public Usermod {
       double FFT_MajorPeak;   //  08 Bytes
     };
 
-    #define UDPSOUND_MAX_PACKET 96 // max packet size for audiosync, with a bit of "headroom"
-    #define UDP_AVG_SEND_RATE   23 // 23ms = time for reading one new batch of samples @ 22kHz
+    #define UDPSOUND_MAX_PACKET  96 // max packet size for audiosync, with a bit of "headroom"
+    #define AR_UDP_AVG_SEND_RATE 18 // 23ms = time for reading one new batch of samples @ 22kHz; minus 5ms margin for network overhead
+    #define AR_UDP_FLUSH_ALL    255 // tells receiveAudioData to purge the network input queue
 
     // set your config variables to their boot default value (this can also be done in readFromConfig() or a constructor if you prefer)
   #if defined(SR_ENABLE_DEFAULT) || defined(UM_AUDIOREACTIVE_ENABLE)
@@ -1843,7 +1844,7 @@ class AudioReactive : public Usermod {
       agcSensitivity = 128.0f; // substitute - V1 format does not include this value
     }
 
-    bool receiveAudioData( unsigned maxSamples) {  // maxSamples = 255 means "purge complete input queue" 
+    bool receiveAudioData( unsigned maxSamples) {  // maxSamples = AR_UDP_FLUSH_ALL (255) means "purge complete input queue" 
       if (!udpSyncConnected) return false;
       bool haveFreshData = false;
       size_t packetSize = 0;
@@ -1898,9 +1899,11 @@ class AudioReactive : public Usermod {
         }
 
         packetsReceived++;
-      } while ((packetSize > 0) && ((packetsReceived < maxSamples) || (maxSamples == 255))); // repeat until we have read enough packets, or no more packets available
-      if ((packetsReceived > 1) && haveFreshData) {USER_PRINTF("AR UDP: dropped  %d [%ums\t%d maxDrop].\n", packetsReceived-1, millis() - last_UDPTime, maxSamples-1);} // for debugging
+      } while ((packetSize > 0) && ((packetsReceived < maxSamples) || (maxSamples == AR_UDP_FLUSH_ALL))); // repeat until we have read enough packets, or no more packets available
 
+      #if defined(WLED_DEBUG) || defined(SR_DEBUG)
+      if ((packetsReceived > 1) && haveFreshData) {DEBUGSR_PRINTF("AR UDP: dropped  %d packets [%ums]\t%d maxDrop.\n", packetsReceived-1, millis() - last_UDPTime, maxSamples-1);} // for debugging
+      #endif
       return haveFreshData;
     }
 
@@ -2344,12 +2347,13 @@ class AudioReactive : public Usermod {
             // DEBUG_PRINTF(F("AR reading at %d compared to %d max\n"), millis() - lastTime, delayMs); // TroyHacks
 
             unsigned timeElapsed = (millis() - last_UDPTime);
-            unsigned maxReadSamples = timeElapsed / UDP_AVG_SEND_RATE;  // estimate how many packets can arrived since last receive
-            maxReadSamples = max(1U, min(maxReadSamples, 20U));         // constrain to [1...20] = max 200ms
+            unsigned maxReadSamples = timeElapsed / AR_UDP_AVG_SEND_RATE;            // estimate how many packets arrived since last receive
+            maxReadSamples = max(1U, min(maxReadSamples, 20U));                      // constrain to [1...20] = max 380ms drop
             // check if we should purge the the receiving queue
-            if (timeElapsed >= AUDIOSYNC_IDLE_MS) maxReadSamples = 255; // too long since last run
-            if (receivedFormat == 0) maxReadSamples = 255;              // new connection
-            if (fabsf(volumeSmth) < 0.25f) maxReadSamples = 255;        // silence detected
+            if (timeElapsed >= AUDIOSYNC_IDLE_MS) maxReadSamples = AR_UDP_FLUSH_ALL; // too long since last run
+            if (receivedFormat == 0) maxReadSamples = AR_UDP_FLUSH_ALL;              // new connection
+            if (fabsf(volumeSmth) < 0.25f) maxReadSamples = AR_UDP_FLUSH_ALL;        // silence detected
+            //maxReadSamples = AR_UDP_FLUSH_ALL;        // always flush
             // try to get fresh data
             have_new_sample = receiveAudioData(maxReadSamples);
             if (have_new_sample) {
