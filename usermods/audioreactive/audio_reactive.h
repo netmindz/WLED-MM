@@ -1189,9 +1189,9 @@ class AudioReactive : public Usermod {
       double FFT_MajorPeak;   //  08 Bytes
     };
 
-    #define UDPSOUND_MAX_PACKET  96 // max packet size for audiosync, with a bit of "headroom"
-    #define AR_UDP_AVG_SEND_RATE 18 // 23ms = time for reading one new batch of samples @ 22kHz; minus 5ms margin for network overhead
-    #define AR_UDP_FLUSH_ALL    255 // tells receiveAudioData to purge the network input queue
+    #define UDPSOUND_MAX_PACKET     96 // max packet size for audiosync, with a bit of "headroom"
+    #define AR_UDP_SEND_INTERVAL_MS 18 // 23ms = time for reading one new batch of samples @ 22kHz; minus 5ms margin for network overhead
+    #define AR_UDP_FLUSH_ALL       255 // tells receiveAudioData to purge the network input queue
 
     // set your config variables to their boot default value (this can also be done in readFromConfig() or a constructor if you prefer)
   #if defined(SR_ENABLE_DEFAULT) || defined(UM_AUDIOREACTIVE_ENABLE)
@@ -1850,7 +1850,6 @@ class AudioReactive : public Usermod {
       bool haveFreshData = false;
       size_t packetSize = 0;
       static uint8_t fftUdpBuffer[UDPSOUND_MAX_PACKET + 1] = {0};
-      size_t lastValidPacketSize = 0;
 
       // Loop to read available packets
       unsigned packetsReceived = 0;
@@ -1882,16 +1881,15 @@ class AudioReactive : public Usermod {
 
         if ((packetSize > 5) && (packetSize <= UDPSOUND_MAX_PACKET)) {
           fftUdp.read(fftUdpBuffer, packetSize);
-          lastValidPacketSize = packetSize;
         }
 
         // Process each received packet: last value will persist, intermediate ones needed to update sequence counters
-        if (lastValidPacketSize > 0) {
-          if (lastValidPacketSize == sizeof(audioSyncPacket) && (isValidUdpSyncVersion((const char *)fftUdpBuffer))) {
+        if (packetSize > 0) {
+          if (packetSize == sizeof(audioSyncPacket) && (isValidUdpSyncVersion((const char *)fftUdpBuffer))) {
             //receivedFormat = max(receivedFormat, 2); // format V2 or V2+ - will be set in decodeAudioData()
-            haveFreshData |= decodeAudioData(lastValidPacketSize, fftUdpBuffer);
-          } else if (lastValidPacketSize == sizeof(audioSyncPacket_v1) && (isValidUdpSyncVersion_v1((const char *)fftUdpBuffer))) {
-            decodeAudioData_v1(lastValidPacketSize, fftUdpBuffer);
+            haveFreshData |= decodeAudioData(packetSize, fftUdpBuffer);
+          } else if (packetSize == sizeof(audioSyncPacket_v1) && (isValidUdpSyncVersion_v1((const char *)fftUdpBuffer))) {
+            decodeAudioData_v1(packetSize, fftUdpBuffer);
             receivedFormat = 1;
             haveFreshData = true;
           } else {
@@ -2348,7 +2346,7 @@ class AudioReactive : public Usermod {
             // DEBUG_PRINTF(F("AR reading at %d compared to %d max\n"), millis() - lastTime, delayMs); // TroyHacks
 
             unsigned timeElapsed = (millis() - last_UDPTime);
-            unsigned maxReadSamples = timeElapsed / AR_UDP_AVG_SEND_RATE;            // estimate how many packets arrived since last receive
+            unsigned maxReadSamples = timeElapsed / AR_UDP_SEND_INTERVAL_MS;         // estimate how many packets arrived since last receive
             maxReadSamples = max(1U, min(maxReadSamples, 20U));                      // constrain to [1...20] = max 380ms drop
             // check if we should purge the receiving queue
             switch (audioSyncPurge) {
@@ -2880,7 +2878,7 @@ class AudioReactive : public Usermod {
       JsonObject sync = top.createNestedObject("sync");
       sync[F("port")] = audioSyncPort;
       sync[F("mode")] = audioSyncEnabled;
-      sync[F("last_packet_only")] = audioSyncPurge;
+      sync[F("skip_old_data")] = audioSyncPurge;
       sync[F("check_sequence")] = audioSyncSequence;
     }
 
@@ -2964,7 +2962,7 @@ class AudioReactive : public Usermod {
 
       configComplete &= getJsonValue(top["sync"][F("port")], audioSyncPort);
       configComplete &= getJsonValue(top["sync"][F("mode")], audioSyncEnabled);
-      configComplete &= getJsonValue(top["sync"][F("last_packet_only")], audioSyncPurge);
+      configComplete &= getJsonValue(top["sync"][F("skip_old_data")], audioSyncPurge);
       configComplete &= getJsonValue(top["sync"][F("check_sequence")], audioSyncSequence);
 
       // WLEDMM notify user when a reboot is necessary
@@ -3192,8 +3190,8 @@ class AudioReactive : public Usermod {
 #ifdef ARDUINO_ARCH_ESP32
       oappend(SET_F("addOption(dd,'Receive or Local',6);"));  // AUDIOSYNC_REC_PLUS
 #endif
-      // Receiver dropy old packets and processes the latest packet only
-      oappend(SET_F("dd=addDropdown(ux,'sync:last_packet_only');"));
+      // Receiver drops old packets and processes the latest packet only
+      oappend(SET_F("dd=addDropdown(ux,'sync:skip_old_data');"));
       oappend(SET_F("addOption(dd,'Never',0);"));
       oappend(SET_F("addOption(dd,'Auto (recommended)',1);")); // auto = drop during silence, or when last receive happened too long ago 
       oappend(SET_F("addOption(dd,'Always',2);"));
