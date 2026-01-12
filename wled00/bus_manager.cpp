@@ -1309,7 +1309,8 @@ int BusManager::add(BusConfig &bc) {
       if (!theBus->isOk()) continue;
       // check for overlap
       unsigned theStart = theBus->getStart();
-      unsigned theEnd = theStart + theBus->getLength() - 1;
+      unsigned theLen = theBus->getLength();
+      unsigned theEnd = (theLen > 0) ? theStart + theLen - 1 : theStart;
       // see https://stackoverflow.com/questions/3269434/whats-the-most-efficient-way-to-test-if-two-ranges-overlap
       if ((newStart <= theEnd) && (theStart <= newEnd)) {  // catches all overlap scenarios - including "new is including (around) another range"
         foundOverlap = true;  
