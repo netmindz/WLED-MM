@@ -1295,14 +1295,13 @@ int BusManager::add(BusConfig &bc) {
 
   Bus *newBus = busses[numBusses];
   if (newBus == nullptr) return numBusses; // WLEDMM early exit if bus creation failed
-
-  unsigned newStart = newBus->getStart();
-  unsigned newLen = newBus->getLength();
-  unsigned newEnd = (newLen > 0) ? newStart + newLen - 1 : newStart; // handle zero-length edge case (only happens when bus could not initialize)
   // WLEDMM check if added bus overlaps with any existing bus
   bool foundOverlap = false;
   unsigned busCount = getNumBusses();
-  if (newBus != nullptr && newBus->isOk()) {
+  if (newBus->isOk()) {
+    unsigned newStart = newBus->getStart();
+    unsigned newLen = newBus->getLength();
+    unsigned newEnd = (newLen > 0) ? newStart + newLen - 1 : newStart; // handle zero-length edge case (only happens when bus could not initialize)
     for (unsigned i=0; i<busCount; i++) {
       if (i == numBusses) continue; // skip self - should not happen
       Bus *theBus = getBus(i);
