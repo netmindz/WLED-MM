@@ -1293,10 +1293,11 @@ int BusManager::add(BusConfig &bc) {
     busses[numBusses] = new BusPwm(bc);
   }
 
-  // WLEDMM ToDO
   Bus *newBus = busses[numBusses];
+  if (newBus == nullptr) return numBusses; // WLEDMM early exit if bus creation failed
+
   unsigned newStart = newBus->getStart();
-  unsigned newEnd = newStart + newBus->getLength() - 1;
+  unsigned newEnd = newStart + max(newBus->getLength() - 1, 0); // "max" needed for single-pixel busses
   // WLEDMM check if added bus overlaps with any existing bus
   bool foundOverlap = false;
   unsigned busCount = getNumBusses();
