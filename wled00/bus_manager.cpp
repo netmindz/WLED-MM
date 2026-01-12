@@ -1318,8 +1318,8 @@ int BusManager::add(BusConfig &bc) {
     }
   }
   // if some busses overlap, we disable the bus caching optimization to allow multiple outputs for the same pixel
-  if (foundOverlap) { overlapingBusses = true; slowMode = true; }
-  if (numBusses < 1) { overlapingBusses = false; slowMode = false; }
+  if (foundOverlap) { overlappingBusses = true; slowMode = true; }
+  if (numBusses < 1) { overlappingBusses = false; slowMode = false; }
   USER_PRINT(slowMode ? "busses are in SlowMode\n" : "");
   return numBusses++;
 }
@@ -1340,7 +1340,7 @@ void BusManager::removeAll() {
   laststart = 0;
   lastlen = 0;
   slowMode = false;
-  overlapingBusses = false;
+  overlappingBusses = false;
 }
 
 void __attribute__((hot)) BusManager::show() {

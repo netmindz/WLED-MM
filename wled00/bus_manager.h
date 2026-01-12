@@ -464,7 +464,7 @@ class BusManager {
       lastBus = nullptr;
       laststart = 0;
       lastlen= 0;
-      if (isRTMode || !overlapingBusses) slowMode = isRTMode; // don't reset slowMode if we have overlaping busses
+      if (isRTMode || !overlappingBusses) slowMode = isRTMode; // don't reset slowMode if we have overlaping busses
     }
 
     void setStatusPixel(uint32_t c);
@@ -507,7 +507,7 @@ class BusManager {
     unsigned laststart = 0;
     unsigned lastlen = 0;
     bool slowMode = false; // WLEDMM not sure why we need this. But its necessary.
-    bool overlapingBusses = false; // WLEDMM needed to enforce "slowMode" when busses overlap (=custom bus start indices)
+    bool overlappingBusses = false; // WLEDMM needed to enforce "slowMode" when busses overlap (=custom bus start indices)
 
     inline uint8_t getNumVirtualBusses() const {
       int j = 0;
