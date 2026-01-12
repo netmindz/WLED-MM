@@ -1316,7 +1316,7 @@ void BusManager::removeAll() {
 
 void __attribute__((hot)) BusManager::show() {
   for (unsigned i = 0; i < numBusses; i++) {
-#if 1 && defined(ARDUINO_ARCH_ESP32)
+#if defined(ARDUINO_ARCH_ESP32) & defined(WLEDMM_FILEWAIT) // only if we don't have the flicker-free RMTHI driver
     unsigned long t0 = millis();
     while ((busses[i]->canShow() == false) && (millis() - t0 < 80)) delay(1); // WLEDMM experimental: wait until bus driver is ready (max 80ms) - costs us 1-2 fps but reduces flickering
 #endif
