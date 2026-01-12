@@ -1272,6 +1272,7 @@ int BusManager::add(BusConfig &bc) {
   lastlen = 0;
   laststart = 0;
   lastBus = nullptr;
+  bool lastSlowMode = slowMode;
 
   DEBUG_PRINTF("BusManager::add(bc.type=%u)\n", bc.type);
   if (bc.type >= TYPE_NET_DDP_RGB && bc.type < 96) {
@@ -1314,14 +1315,15 @@ int BusManager::add(BusConfig &bc) {
       // see https://stackoverflow.com/questions/3269434/whats-the-most-efficient-way-to-test-if-two-ranges-overlap
       if ((newStart <= theEnd) && (theStart <= newEnd)) {  // catches all overlap scenarios - including "new is including (around) another range"
         foundOverlap = true;  
-        USER_PRINTF("bus %u[%u %u] overlaps with\t%u [%u %u]\n", numBusses, newStart, newEnd, i, theStart, theEnd);
+        DEBUG_PRINTF("bus %u[%u %u] overlaps with\t%u [%u %u]\n", numBusses, newStart, newEnd, i, theStart, theEnd);
       }
     }
   }
   // if some busses overlap, we disable the bus caching optimization to allow multiple outputs for the same pixel
   if (foundOverlap) { overlappingBusses = true; slowMode = true; }
   if (numBusses < 1) { overlappingBusses = false; slowMode = false; }
-  USER_PRINT(slowMode ? "busses are in SlowMode\n" : "");
+  USER_PRINT(slowMode && (lastSlowMode != slowMode) ? F("Warning: Outputs set to SlowMode, due to overlapping bus start indices!\n") : F("")); // only print message once when we switch over to slow mode
+#endif
   return numBusses++;
 }
 
