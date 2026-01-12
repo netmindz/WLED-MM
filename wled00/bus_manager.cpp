@@ -1272,7 +1272,7 @@ int BusManager::add(BusConfig &bc) {
   lastlen = 0;
   laststart = 0;
   lastBus = nullptr;
-  slowMode = false;
+  bool lastSlowMode = slowMode;
 
   DEBUG_PRINTF("BusManager::add(bc.type=%u)\n", bc.type);
   if (bc.type >= TYPE_NET_DDP_RGB && bc.type < 96) {
@@ -1293,6 +1293,36 @@ int BusManager::add(BusConfig &bc) {
   } else {
     busses[numBusses] = new BusPwm(bc);
   }
+
+  Bus *newBus = busses[numBusses];
+  if (newBus == nullptr) return numBusses; // WLEDMM early exit if bus creation failed
+  // WLEDMM check if added bus overlaps with any existing bus
+  bool foundOverlap = false;
+  unsigned busCount = getNumBusses();
+  if (newBus->isOk()) {
+    unsigned newStart = newBus->getStart();
+    unsigned newLen = newBus->getLength();
+    unsigned newEnd = (newLen > 0) ? newStart + newLen - 1 : newStart; // handle zero-length edge case (only happens when bus could not initialize)
+    for (unsigned i=0; i<busCount; i++) {
+      if (i == numBusses) continue; // skip self - should not happen
+      Bus *theBus = getBus(i);
+      if (theBus == nullptr) continue;
+      if (!theBus->isOk()) continue;
+      // check for overlap
+      unsigned theStart = theBus->getStart();
+      unsigned theLen = theBus->getLength();
+      unsigned theEnd = (theLen > 0) ? theStart + theLen - 1 : theStart;
+      // see https://stackoverflow.com/questions/3269434/whats-the-most-efficient-way-to-test-if-two-ranges-overlap
+      if ((newStart <= theEnd) && (theStart <= newEnd)) {  // catches all overlap scenarios - including "new is including (around) another range"
+        foundOverlap = true;  
+        DEBUG_PRINTF("bus %u[%u %u] overlaps with\t%u [%u %u]\n", numBusses, newStart, newEnd, i, theStart, theEnd);
+      }
+    }
+  }
+  // if some busses overlap, we disable the bus caching optimization to allow multiple outputs for the same pixel
+  if (foundOverlap) { overlappingBusses = true; slowMode = true; }
+  if (numBusses < 1) { overlappingBusses = false; slowMode = false; }
+  USER_PRINT(slowMode && (lastSlowMode != slowMode) ? F("Warning: Outputs set to SlowMode, due to overlapping bus start indices!\n") : F("")); // only print message once when we switch over to slow mode
   return numBusses++;
 }
 
@@ -1312,6 +1342,7 @@ void BusManager::removeAll() {
   laststart = 0;
   lastlen = 0;
   slowMode = false;
+  overlappingBusses = false;
 }
 
 void __attribute__((hot)) BusManager::show() {
@@ -1431,7 +1462,7 @@ uint32_t IRAM_ATTR  __attribute__((hot)) BusManager::getPixelColorRestored(uint_
 
 bool BusManager::canAllShow() const {
   for (uint8_t i = 0; i < numBusses; i++) {
-    if (!busses[i]->canShow()) return false;
+    if ((busses[i]->isOk()) && !busses[i]->canShow()) return false;
   }
   return true;
 }
