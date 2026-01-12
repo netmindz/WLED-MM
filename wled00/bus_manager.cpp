@@ -1297,7 +1297,8 @@ int BusManager::add(BusConfig &bc) {
   if (newBus == nullptr) return numBusses; // WLEDMM early exit if bus creation failed
 
   unsigned newStart = newBus->getStart();
-  unsigned newEnd = newStart + max(newBus->getLength() - 1, 0); // "max" needed for single-pixel busses
+  unsigned newLen = newBus->getLength();
+  unsigned newEnd = (newLen > 0) ? newStart + newLen - 1 : newStart; // handle zero-length edge case (only happens when bus could not initialize)
   // WLEDMM check if added bus overlaps with any existing bus
   bool foundOverlap = false;
   unsigned busCount = getNumBusses();
