@@ -1323,7 +1323,6 @@ int BusManager::add(BusConfig &bc) {
   if (foundOverlap) { overlappingBusses = true; slowMode = true; }
   if (numBusses < 1) { overlappingBusses = false; slowMode = false; }
   USER_PRINT(slowMode && (lastSlowMode != slowMode) ? F("Warning: Outputs set to SlowMode, due to overlapping bus start indices!\n") : F("")); // only print message once when we switch over to slow mode
-#endif
   return numBusses++;
 }
 
