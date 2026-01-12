@@ -1272,7 +1272,6 @@ int BusManager::add(BusConfig &bc) {
   lastlen = 0;
   laststart = 0;
   lastBus = nullptr;
-  slowMode = false;
 
   DEBUG_PRINTF("BusManager::add(bc.type=%u)\n", bc.type);
   if (bc.type >= TYPE_NET_DDP_RGB && bc.type < 96) {
@@ -1293,6 +1292,34 @@ int BusManager::add(BusConfig &bc) {
   } else {
     busses[numBusses] = new BusPwm(bc);
   }
+
+  // WLEDMM ToDO
+  Bus *newBus = busses[numBusses];
+  unsigned newStart = newBus->getStart();
+  unsigned newEnd = newStart + newBus->getLength() - 1;
+  // WLEDMM check if added bus overlaps with any existing bus
+  bool foundOverlap = false;
+  unsigned busCount = getNumBusses();
+  if (newBus != nullptr && newBus->isOk()) {
+    for (unsigned i=0; i<busCount; i++) {
+      if (i == numBusses) continue; // skip self - should not happen
+      Bus *theBus = getBus(i);
+      if (theBus == nullptr) continue;
+      if (!theBus->isOk()) continue;
+      // check for overlap
+      unsigned theStart = theBus->getStart();
+      unsigned theEnd = theStart + theBus->getLength() - 1;
+      // see https://stackoverflow.com/questions/3269434/whats-the-most-efficient-way-to-test-if-two-ranges-overlap
+      if ((newStart <= theEnd) && (theStart <= newEnd)) {  // catches all overlap scenarios - including "new is including (around) another range"
+        foundOverlap = true;  
+        USER_PRINTF("bus %u[%u %u] overlaps with\t%u [%u %u]", numBusses, newStart, newEnd, i, theStart, theEnd);
+      }
+    }
+  }
+  // if some busses overlap, we disable the bus caching optimization to allow multiple outputs for the same pixel
+  if (foundOverlap) { overlapingBusses = true; slowMode = true; }
+  if (numBusses < 1) { overlapingBusses = false; slowMode = false; }
+  USER_PRINT(slowMode ? "busses are in SlowMode\n" : "");
   return numBusses++;
 }
 
@@ -1312,6 +1339,7 @@ void BusManager::removeAll() {
   laststart = 0;
   lastlen = 0;
   slowMode = false;
+  overlapingBusses = false;
 }
 
 void __attribute__((hot)) BusManager::show() {
@@ -1431,7 +1459,7 @@ uint32_t IRAM_ATTR  __attribute__((hot)) BusManager::getPixelColorRestored(uint_
 
 bool BusManager::canAllShow() const {
   for (uint8_t i = 0; i < numBusses; i++) {
-    if (!busses[i]->canShow()) return false;
+    if ((busses[i]->isOk()) && !busses[i]->canShow()) return false;
   }
   return true;
 }

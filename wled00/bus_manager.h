@@ -373,7 +373,7 @@ class BusNetwork : public Bus {
       return _artnet_leds_per_output;
     }
 
-    void setColorOrder(uint8_t colorOrder);
+    void setColorOrder(uint8_t colorOrder); // ??? not implemented???
 
     uint8_t getColorOrder() const override {
       return _colorOrder;
@@ -464,7 +464,7 @@ class BusManager {
       lastBus = nullptr;
       laststart = 0;
       lastlen= 0;
-      slowMode = isRTMode;
+      if (isRTMode || !overlapingBusses) slowMode = isRTMode; // don't reset slowMode if we have overlaping busses
     }
 
     void setStatusPixel(uint32_t c);
@@ -507,6 +507,7 @@ class BusManager {
     unsigned laststart = 0;
     unsigned lastlen = 0;
     bool slowMode = false; // WLEDMM not sure why we need this. But its necessary.
+    bool overlapingBusses = false; // WLEDMM needed to enforce "slowMode" when busses overlap (=custom bus start indices)
 
     inline uint8_t getNumVirtualBusses() const {
       int j = 0;
