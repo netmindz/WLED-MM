@@ -1,6 +1,8 @@
 name: PlatformIO CI
 
-on: [push, pull_request]
+# Only included into other workflows
+on:
+  workflow_call:
 
 jobs:
 
