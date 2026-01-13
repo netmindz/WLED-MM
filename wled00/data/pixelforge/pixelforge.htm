@@ -333,6 +333,7 @@ button, .btn {
 		</div>
 
 		<h3>Settings</h3>
+		<p><em>Only partially supported in WLED-MM !</em></p>
 		<div class="cs">
 			<div class="fr">
 				Speed	<input type="range" id="sx" min="0" max="255">
@@ -361,6 +362,8 @@ button, .btn {
 		</div>
 
 		<h3>Available Tokens</h3>
+		<p><em>Only partially supported in WLED-MM !</em></p>
+
 		<div style="padding:15px;">
 			<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px;text-align:left">
 				<div><a href="#" class="tk" data-t="#TIME">#TIME</a> - HH:MM AM/PM</div>
@@ -379,6 +382,9 @@ button, .btn {
 				<div><a href="#" class="tk" data-t="#MONL">#MONL</a> - Month (January)</div>
 				<div><a href="#" class="tk" data-t="#DAY">#DAY</a> - Weekday (Mon)</div>
 				<div><a href="#" class="tk" data-t="#DDDD">#DDDD</a> - Weekday (Monday)</div>
+				<div><a href="#" class="tk" data-t="#FPS">#FPS</a> - Framerate (frames per second)</div>
+				<div><a href="#" class="tk" data-t="#AMP">#AMP</a> - Estimated MilliAmpere</div>
+				<div><a href="#" class="tk" data-t="#ERR">#ERR</a> - Last Error Code</div>
 			</div>
 			<div style="margin:10px;padding-top:10px;border-top:1px solid #444">
 				<strong>Tips:</strong><br>
@@ -411,7 +417,7 @@ button, .btn {
 	<div class="ed active">
 		<div>
 			<h3>PIXEL MAGIC Tool</h3>
-			<div><small>Legacy pixel art editor</small></div>
+			<div><small>Legacy pixel art editor</small><br>Not recommended for use with WLED-MM</div>
 			<button class="btn" id="t3" style="display:none"></button>
 		</div>
 	</div>
