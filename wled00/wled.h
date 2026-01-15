@@ -7,7 +7,9 @@
  */
 
 // version code in format yymmddb (b = daily build)
-#define VERSION 2601131
+#ifndef VERSION // WLEDMM allow override by nightly build script
+#define VERSION 2601151
+#endif
 
 // WLEDMM  - you can check for this define in usermods, to only enabled WLEDMM specific code in the "right" fork. Its not defined in AC WLED.
 #define _MoonModules_WLED_
