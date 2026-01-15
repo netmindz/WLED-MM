@@ -4,10 +4,11 @@ name: PlatformIO CI
 on:
   workflow_call:
     inputs:
-      version:
-        description: 'Build VERSION in format yymmddb (optional, for nightly builds)'
+      nightly_build:
+        description: 'Flag to indicate this is a nightly build'
         required: false
-        type: string
+        type: boolean
+        default: false
 
 jobs:
 
@@ -67,7 +68,7 @@ jobs:
     - name: Build firmware
       env:
         WLED_RELEASE: True
-        PLATFORMIO_BUILD_FLAGS: ${{ inputs.version && format('-D VERSION={0}', inputs.version) || '' }}
+        WLED_NIGHTLY_BUILD: ${{ inputs.nightly_build && 'true' || 'false' }}
       run: pio run -e ${{ matrix.environment }}
     - name: Rename Bin
       run: mv -v .pio/build/${{ matrix.environment }}/firmware.bin firmware-${{ matrix.environment }}.bin

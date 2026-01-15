@@ -8,25 +8,10 @@ on:
   workflow_dispatch:
 
 jobs:
-  calculate_version:
-    name: Calculate VERSION
-    runs-on: ubuntu-latest
-    outputs:
-      version: ${{ steps.version.outputs.version }}
-    steps:
-      - name: Calculate VERSION
-        id: version
-        run: |
-          # VERSION format: yymmddb (b = daily build number, set to 1 for nightly)
-          VERSION=$(date -u +"%y%m%d")1
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
-          echo "Calculated VERSION: $VERSION"
-  
   wled_build:
-    needs: calculate_version
     uses: ./.github/workflows/build.yml
     with:
-      version: ${{ needs.calculate_version.outputs.version }}
+      nightly_build: true
   nightly:
     name: Deploy nightly
     runs-on: ubuntu-latest
