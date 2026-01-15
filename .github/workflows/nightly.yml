@@ -25,7 +25,7 @@ jobs:
         run: ls -la
       - name: "✏️ Generate release changelog"
         id: changelog
-        uses: janheinrichmerker/action-github-changelog-generator@v2.3
+        uses: janheinrichmerker/action-github-changelog-generator@v2.4
         with:
           token: ${{ secrets.GITHUB_TOKEN }} 
           sinceTag: v14.7.1
