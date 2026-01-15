@@ -29,6 +29,7 @@ jobs:
         with:
           token: ${{ secrets.GITHUB_TOKEN }} 
           sinceTag: v14.7.1
+          output: CHANGELOG_NIGHTLY.md
           # Exclude issues that were closed without resolution from changelog
           excludeLabels: 'stale,wontfix,duplicate,invalid'
       - name: Update Nightly Release
@@ -39,7 +40,7 @@ jobs:
           tag_name: nightly
           name: 'Nightly mdev Build $$'
           prerelease: true
-          body: ${{ steps.changelog.outputs.changelog }}
+          body_path: CHANGELOG_NIGHTLY.md
           files: |
             *.bin
             *.bin.gz
