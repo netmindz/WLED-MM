@@ -37,7 +37,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           tag_name: nightly
-          name: 'Nightly Release $$'
+          name: 'Nightly mdev Build $$'
           prerelease: true
           body: ${{ steps.changelog.outputs.changelog }}
           files: |
