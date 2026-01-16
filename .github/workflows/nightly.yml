@@ -31,7 +31,7 @@ jobs:
           sinceTag: v14.7.1
           output: CHANGELOG_NIGHTLY.md
           # Exclude issues that were closed without resolution from changelog
-          excludeLabels: 'stale,wontfix,duplicate,invalid'
+          excludeLabels: 'stale,wontfix,duplicate,invalid,question,use-as-is,not_planned'
       - name: Update Nightly Release
         uses: andelf/nightly-release@main
         env:
