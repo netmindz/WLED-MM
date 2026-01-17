@@ -8,6 +8,8 @@
 
 #include <Arduino.h> //PI constant
 
+#include "const.h" // WLED constantsr
+
 //#define WLED_DEBUG_MATH
 
 // Note: cos_t, sin_t and tan_t are very accurate but slow
@@ -101,21 +103,21 @@ void init_math(void) {
 void init_math(void) { return;}  // dummy for 8266
 #endif
 
-float sin_approx(float theta) {
+float IRAM_ATTR_YN sin_approx(float theta) {
   uint16_t scaled_theta = (int)(theta * (float)(0xFFFF / M_TWOPI)); // note: do not cast negative float to uint! cast to int first (undefined on C3)
   int32_t result = sin16_calc(scaled_theta);
   float sin = float(result) / 0x7FFF;
   return sin;
 }
 
-float cos_approx(float theta) {
+float IRAM_ATTR_YN cos_approx(float theta) {
   uint16_t scaled_theta = (int)(theta * (float)(0xFFFF / M_TWOPI)); // note: do not cast negative float to uint! cast to int first (undefined on C3)
   int32_t result = sin16_calc(scaled_theta + 0x4000);
   float cos = float(result) / 0x7FFF;
   return cos;
 }
 
-float tan_approx(float x) {
+float IRAM_ATTR_YN tan_approx(float x) {
   float c = cos_approx(x);
   if (c==0.0f) return 0;
   float res = sin_approx(x) / c;
@@ -237,7 +239,7 @@ float fmod_t(float num, float denom) {
 #endif  // WLEDMM
 
 // bit-wise integer square root calculation (exact)
-uint32_t sqrt32_bw(uint32_t x) {
+uint32_t IRAM_ATTR_YN sqrt32_bw(uint32_t x) {
   uint32_t res = 0;
   uint32_t bit;
   uint32_t num = x; // use 32bit for faster calculation
