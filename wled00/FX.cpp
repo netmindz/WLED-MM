@@ -9555,6 +9555,7 @@ uint16_t mode_particlefire(void) {
   PartSys->updateSystem(); // update system properties (dimensions and data pointers)
   PartSys->setWrapX(SEGMENT.check2);
   PartSys->setMotionBlur(SEGMENT.check1 * 170); // anable/disable motion blur
+  PartSys->setSmearBlur(!SEGMENT.check1 * 60);  // enable smear blur if motion blur is not enabled
 
   uint32_t firespeed = max((uint8_t)100, SEGMENT.speed); //limit speed to 100 minimum, reduce frame rate to make it slower (slower speeds than 100 do not look nice)
   if (SEGMENT.speed < 100) { //slow, limit FPS
@@ -9606,6 +9607,20 @@ uint16_t mode_particlefire(void) {
           int32_t curl = ((int32_t)perlin8(PartSys->particles[i].x, PartSys->particles[i].y, SEGENV.step << 4) - 127);
           PartSys->particles[i].vx += (curl * (firespeed + 10)) >> 9;
         }
+      }
+    }
+  }
+
+  // emit faster sparks at first flame position, amount and speed mostly dependends on intensity
+  if(hw_random8() < 10 + (SEGMENT.intensity >> 2)) {
+    for (i = 0; i < PartSys->usedParticles; i++) {
+      if (PartSys->particles[i].ttl == 0) { // find a dead particle
+        PartSys->particles[i].ttl = hw_random16(SEGMENT.vHeight()) + 30;
+        PartSys->particles[i].x = PartSys->sources[0].source.x;
+        PartSys->particles[i].y = PartSys->sources[0].source.y;
+        PartSys->particles[i].vx = PartSys->sources[0].source.vx;
+        PartSys->particles[i].vy = (SEGMENT.vHeight() >> 1) + (firespeed >> 4) + ((30 + (SEGMENT.intensity >> 1) + SEGMENT.custom1) >> 4); // emitting speed (upwards)
+        break; // emit only one particle
       }
     }
   }
@@ -9673,8 +9688,10 @@ uint16_t mode_particlepit(void) {
           PartSys->setParticleSize(1); // set global size to 1 for advanced rendering (no single pixel particles)
           PartSys->advPartProps[i].size = hw_random16(SEGMENT.custom1); // set each particle to random size
         } else {
+          //PartSys->perParticleSize = false;
           PartSys->setParticleSize(SEGMENT.custom1); // set global size
           PartSys->advPartProps[i].size = 0; // use global size
+          //PartSys->advPartProps[i].size = SEGMENT.custom1; // also set individual size for consistency
         }
         break; // emit only one particle per round
       }
@@ -9916,7 +9933,6 @@ static const char _data_FX_MODE_PARTICLEPERLIN[] PROGMEM = "PS Fuzzy Noise@Speed
 #define NUMBEROFSOURCES 8
 uint16_t mode_particleimpact(void) {
   ParticleSystem2D *PartSys = nullptr;
-  uint32_t i = 0;
   uint32_t numMeteors;
   PSsettings2D meteorsettings;
   meteorsettings.asByte = 0b00101000; // PS settings for meteors: bounceY and gravity enabled
@@ -9951,7 +9967,7 @@ uint16_t mode_particleimpact(void) {
   numMeteors = min(PartSys->numSources, (uint32_t)NUMBEROFSOURCES);
   uint32_t emitparticles; // number of particles to emit for each rocket's state
 
-  for (i = 0; i < numMeteors; i++) {
+  for (uint32_t i = 0; i < numMeteors; i++) {
     // determine meteor state by its speed:
     if ( PartSys->sources[i].source.vy < 0) // moving down, emit sparks
       emitparticles = 1;
@@ -9967,7 +9983,7 @@ uint16_t mode_particleimpact(void) {
   }
 
   // update the meteors, set the speed state
-  for (i = 0; i < numMeteors; i++) {
+  for (uint32_t i = 0; i < numMeteors; i++) {
     if (PartSys->sources[i].source.ttl) {
       PartSys->sources[i].source.ttl--; // note: this saves an if statement, but moving down particles age twice
       if (PartSys->sources[i].source.vy < 0) { // move down
@@ -10442,6 +10458,7 @@ uint16_t mode_particleblobs(void) {
     PartSys->setWallHardness(255);
     PartSys->setWallRoughness(255);
     PartSys->setCollisionHardness(255);
+    //PartSys->perParticleSize = true; // enable per particle size control
   }
   else
     PartSys = reinterpret_cast<ParticleSystem2D *>(SEGENV.data); // if not first call, just set the pointer to the PS
@@ -10513,7 +10530,7 @@ uint16_t mode_particlegalaxy(void) {
   sourcesettings.asByte = 0b00001100; // PS settings for bounceY, bounceY used for source movement (it always bounces whereas particles do not)
   if (SEGMENT.call == 0) { // initialization
     if (!initParticleSystem2D(PartSys, 1, 0, true)) // init using 1 source and advanced particle settings
-      return mode_static(); // allocation failed or not 2D
+      return mode_oops(); // allocation failed or not 2D
     PartSys->sources[0].source.vx = -4; // will collide with wall and get random bounce direction
     PartSys->sources[0].source.x =  PartSys->maxX >> 1; // start in the center
     PartSys->sources[0].source.y =  PartSys->maxY >> 1;
@@ -10528,7 +10545,7 @@ uint16_t mode_particlegalaxy(void) {
     PartSys = reinterpret_cast<ParticleSystem2D *>(SEGENV.data); // if not first call, just set the pointer to the PS
   }
   if (PartSys == nullptr)
-    return mode_static(); // something went wrong, no data!
+    return mode_oops(); // something went wrong, no data!
   // Particle System settings
   PartSys->updateSystem(); // update system properties (dimensions and data pointers)
   uint8_t particlesize = SEGMENT.custom1;
