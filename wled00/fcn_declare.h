@@ -559,9 +559,9 @@ inline uint8_t cos8_t(uint8_t theta) {
 //float sin_t(float phi);
 //float tan_t(float x);
 
-float sin_approx(float theta); // uses integer math (converted to float), accuracy +/-0.0015 (compared to sinf())
-float cos_approx(float theta);
-float tan_approx(float x);
+float  __attribute__((pure)) sin_approx(float theta); // uses integer math (converted to float), accuracy +/-0.0015 (compared to sinf())
+float  __attribute__((pure)) cos_approx(float theta);
+float  __attribute__((pure)) tan_approx(float x);
 #if defined(WLED_USE_UNREAL_MATH)
 float atan2_t(float y, float x);
 float acos_t(float x);
