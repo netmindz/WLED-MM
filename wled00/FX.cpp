@@ -10532,8 +10532,6 @@ uint16_t mode_particlegalaxy(void) {
   // Particle System settings
   PartSys->updateSystem(); // update system properties (dimensions and data pointers)
   uint8_t particlesize = SEGMENT.custom1;
-  if(SEGMENT.check3)
-    particlesize =  SEGMENT.custom1 ? 1 : 0; // set size to 0 (single pixel) or 1 (quad pixel) so motion blur works and adds streaks
   PartSys->setParticleSize(particlesize); // set size globally
   PartSys->setMotionBlur(250 * SEGMENT.check3); // adds trails to single/quad pixel particles, no effect if size > 1
 
@@ -10601,7 +10599,7 @@ uint16_t mode_particlegalaxy(void) {
   PartSys->update(); // update and render
   return FRAMETIME;
 }
-static const char _data_FX_MODE_PARTICLEGALAXY[] PROGMEM = "PS Galaxy@!,!,Size,,Color,,Starfield,Trace;;!;2;pal=59,sx=80,c1=2,c3=4";
+static const char _data_FX_MODE_PARTICLEGALAXY[] PROGMEM = "PS Galaxy@!,!,Size,,Color,,Starfield,Trace;;!;2;pal=59,sx=80,c1=1,c3=4";
 
 #endif //WLED_DISABLE_PARTICLESYSTEM2D
 #endif // WLED_DISABLE_2D
