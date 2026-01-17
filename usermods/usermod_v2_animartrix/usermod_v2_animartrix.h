@@ -2,6 +2,37 @@
 
 #include "wled.h"
 
+#ifdef _MoonModules_WLED_
+	// WLEDMM: use faster math approximations - up to 40% faster
+	static inline float my_floor_t(float x) {
+  	bool neg = x < 0.0f;
+		int val = x;
+  	if (neg) val--;
+  	return val;
+	}
+	static inline float my_fmod_t(float num, float denom) {
+  	int tquot = num / denom;
+  	float res = num - tquot * denom;
+  	return res;
+	}
+	#undef fmodf
+	#define fmodf(num, denum) my_fmod_t(num, denum)
+	#undef floorf
+	#define floorf(num) my_floor_t(num)
+	#define sinf(angle) sin_approx(angle)
+	#define cosf(angle) cos_approx(angle)
+	#define tanf(angle) tan_approx(angle)
+
+	// WLEDMM specific speedups for segment access
+	#ifdef WLEDMM_FASTPATH
+		#undef SEGMENT
+		#undef SEGENV
+		#define SEGMENT (*strip._currentSeg) // saves us many calls to strip._segments[strip.getCurrSegmentId()]
+		#define SEGENV SEGMENT
+	#endif
+#endif
+// WLEDMM end
+
 // softhack007: workaround for ICE (internal compiler error) when compiling with new framework and "-O2":
 
 /* 
@@ -103,11 +134,11 @@ class ANIMartRIXMod:public ANIMartRIX {
 	  } 
 	  setSpeedFactor(speedFactor);
 	}
-	void setPixelColor(int x, int y, rgb pixel) {
-		SEGMENT.setPixelColorXY(x, y, CRGB(pixel.red, pixel.green, pixel.blue));
+	void setPixelColor(int x, int y, rgb pixel) override {
+		SEGMENT.setPixelColorXY(x, y, uint32_t(CRGB(pixel.red, pixel.green, pixel.blue)) & 0x00FFFFFF);
 	}
-	void setPixelColor(int index, rgb pixel) {
-		SEGMENT.setPixelColor(index, CRGB(pixel.red, pixel.green, pixel.blue));
+	void setPixelColor(int index, rgb pixel) override {
+		SEGMENT.setPixelColor(index, uint32_t(CRGB(pixel.red, pixel.green, pixel.blue)) & 0x00FFFFFF);
   	}
 
 	// Add any extra custom effects not part of the ANIMartRIX libary here
@@ -380,11 +411,11 @@ uint16_t mode_Rotating_Blob() {
 class AnimartrixUsermod : public Usermod {
 
   public:
-
+#ifdef _MoonModules_WLED_
     AnimartrixUsermod(const char *name, bool enabled):Usermod(name, enabled) {} //WLEDMM
-	
+#endif
 
-    void setup() {
+    void setup() override {
 		
 		if(!enabled) return;
 
@@ -444,17 +475,21 @@ class AnimartrixUsermod : public Usermod {
       initDone = true;
     }
 
-    void loop() {
-      if (!enabled || strip.isUpdating()) return;
+    void loop() override {
+    #if 0  // not needed
+       if (!enabled || strip.isUpdating()) return;
 
       // do your magic here
       if (millis() - lastTime > 1000) {
         //USER_PRINTLN("I'm alive!");
         lastTime = millis();
       }
+    #else
+			return;
+    #endif
     }
 
-    void addToJsonInfo(JsonObject& root)
+    void addToJsonInfo(JsonObject& root) override
     {
 	  if(!enabled) return;
       char myStringBuffer[16]; // buffer for snprintf()
@@ -467,7 +502,7 @@ class AnimartrixUsermod : public Usermod {
       infoArr.add(uiDomString);
 	}
 
-    uint16_t getId()
+    uint16_t getId() override
     {
       return USERMOD_ID_ANIMARTRIX;
     }
@@ -482,3 +517,11 @@ class AnimartrixUsermod : public Usermod {
 #endif
 #endif
 
+#ifdef _MoonModules_WLED_
+// WLEDMM cleanup
+#undef fmodf
+#undef floorf
+#undef sinf
+#undef cosf
+#undef tanf
+#endif
