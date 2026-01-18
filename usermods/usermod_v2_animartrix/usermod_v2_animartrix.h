@@ -61,67 +61,71 @@
 #endif
 #endif
 
+#define ANIMartRIX_NO_SERPENTINE  // disable serpentine calculation code - already done by WLED so never needed
+
 #include <ANIMartRIX.h>
 
 #warning WLEDMM usermod: CC BY-NC 3.0 licensed effects by Stefan Petrick, include this usermod only if you accept the terms!
 //========================================================================================================================
 
 
-static const char _data_FX_mode_Module_Experiment10[] PROGMEM = "Y💡Module_Experiment10 ☾@Speed;;1;2";
-static const char _data_FX_mode_Module_Experiment9[] PROGMEM = "Y💡Module_Experiment9 ☾@Speed;;1;2";
-static const char _data_FX_mode_Module_Experiment8[] PROGMEM = "Y💡Module_Experiment8 ☾@Speed;;1;2";
-static const char _data_FX_mode_Module_Experiment7[] PROGMEM = "Y💡Module_Experiment7 ☾@Speed;;1;2";
-static const char _data_FX_mode_Module_Experiment6[] PROGMEM = "Y💡Module_Experiment6 ☾@Speed;;1;2";
-static const char _data_FX_mode_Module_Experiment5[] PROGMEM = "Y💡Module_Experiment5 ☾@Speed;;1;2";
-static const char _data_FX_mode_Module_Experiment4[] PROGMEM = "Y💡Module_Experiment4 ☾@Speed;;1;2";
-static const char _data_FX_mode_Zoom2[] PROGMEM = "Y💡Zoom2 ☾@Speed;;1;2";
-static const char _data_FX_mode_Module_Experiment3[] PROGMEM = "Y💡Module_Experiment3 ☾@Speed;;1;2";
-static const char _data_FX_mode_Module_Experiment2[] PROGMEM = "Y💡Module_Experiment2 ☾@Speed;;1;2";
-static const char _data_FX_mode_Module_Experiment1[] PROGMEM = "Y💡Module_Experiment1 ☾@Speed;;1;2";
-static const char _data_FX_mode_Parametric_Water[] PROGMEM = "Y💡Parametric_Water ☾@Speed;;1;2";
-static const char _data_FX_mode_Water[] PROGMEM = "Y💡Water ☾@Speed;;1;2";
-static const char _data_FX_mode_Complex_Kaleido_6[] PROGMEM = "Y💡Complex_Kaleido_6 ☾@Speed;;1;2";
-static const char _data_FX_mode_Complex_Kaleido_5[] PROGMEM = "Y💡Complex_Kaleido_5 ☾@Speed;;1;2";
-static const char _data_FX_mode_Complex_Kaleido_4[] PROGMEM = "Y💡Complex_Kaleido_4 ☾@Speed;;1;2";
-static const char _data_FX_mode_Complex_Kaleido_3[] PROGMEM = "Y💡Complex_Kaleido_3 ☾@Speed;;1;2";
-static const char _data_FX_mode_Complex_Kaleido_2[] PROGMEM = "Y💡Complex_Kaleido_2 ☾@Speed;;1;2";
-static const char _data_FX_mode_Complex_Kaleido[] PROGMEM = "Y💡Complex_Kaleido ☾@Speed;;1;2";
-static const char _data_FX_mode_SM10[] PROGMEM = "Y💡SM10 ☾@Speed;;1;2";
-static const char _data_FX_mode_SM9[] PROGMEM = "Y💡SM9 ☾@Speed;;1;2";
-static const char _data_FX_mode_SM8[] PROGMEM = "Y💡SM8 ☾@Speed;;1;2";
-static const char _data_FX_mode_SM7[] PROGMEM = "Y💡SM7 ☾@Speed;;1;2";
-static const char _data_FX_mode_SM6[] PROGMEM = "Y💡SM6 ☾@Speed;;1;2";
-static const char _data_FX_mode_SM5[] PROGMEM = "Y💡SM5 ☾@Speed;;1;2";
-static const char _data_FX_mode_SM4[] PROGMEM = "Y💡SM4 ☾@Speed;;1;2";
-static const char _data_FX_mode_SM3[] PROGMEM = "Y💡SM3 ☾@Speed;;1;2";
-static const char _data_FX_mode_SM2[] PROGMEM = "Y💡SM2 ☾@Speed;;1;2";
-static const char _data_FX_mode_SM1[] PROGMEM = "Y💡SM1 ☾@Speed;;1;2";
-static const char _data_FX_mode_Big_Caleido[] PROGMEM = "Y💡Big_Caleido ☾@Speed;;1;2";
-static const char _data_FX_mode_RGB_Blobs5[] PROGMEM = "Y💡RGB_Blobs5 ☾@Speed;;1;2";
-static const char _data_FX_mode_RGB_Blobs4[] PROGMEM = "Y💡RGB_Blobs4 ☾@Speed;;1;2";
-static const char _data_FX_mode_RGB_Blobs3[] PROGMEM = "Y💡RGB_Blobs3 ☾@Speed;;1;2";
-static const char _data_FX_mode_RGB_Blobs2[] PROGMEM = "Y💡RGB_Blobs2 ☾@Speed;;1;2";
-static const char _data_FX_mode_RGB_Blobs[] PROGMEM = "Y💡RGB_Blobs ☾@Speed;;1;2";
-static const char _data_FX_mode_Polar_Waves[] PROGMEM = "Y💡Polar_Waves ☾@Speed;;1;2";
-static const char _data_FX_mode_Slow_Fade[] PROGMEM = "Y💡Slow_Fade ☾@Speed;;1;2";
-static const char _data_FX_mode_Zoom[] PROGMEM = "Y💡Zoom ☾@Speed;;1;2";
-static const char _data_FX_mode_Hot_Blob[] PROGMEM = "Y💡Hot_Blob ☾@Speed;;1;2";
-static const char _data_FX_mode_Spiralus2[] PROGMEM = "Y💡Spiralus2 ☾@Speed;;1;2";
-static const char _data_FX_mode_Spiralus[] PROGMEM = "Y💡Spiralus ☾@Speed;;1;2";
-static const char _data_FX_mode_Yves[] PROGMEM = "Y💡Yves ☾@Speed;;1;2";
-static const char _data_FX_mode_Scaledemo1[] PROGMEM = "Y💡Scaledemo1 ☾@Speed;;1;2";
-static const char _data_FX_mode_Lava1[] PROGMEM = "Y💡Lava1 ☾@Speed;;1;2";
-static const char _data_FX_mode_Caleido3[] PROGMEM = "Y💡Caleido3 ☾@Speed;;1;2";
-static const char _data_FX_mode_Caleido2[] PROGMEM = "Y💡Caleido2 ☾@Speed;;1;2";
-static const char _data_FX_mode_Caleido1[] PROGMEM = "Y💡Caleido1 ☾@Speed;;1;2";
-static const char _data_FX_mode_Distance_Experiment[] PROGMEM = "Y💡Distance_Experiment ☾@Speed;;1;2";
-static const char _data_FX_mode_Center_Field[] PROGMEM = "Y💡Center_Field ☾@Speed;;1;2";
-static const char _data_FX_mode_Waves[] PROGMEM = "Y💡Waves ☾@Speed;;1;2";
-static const char _data_FX_mode_Chasing_Spirals[] PROGMEM = "Y💡Chasing_Spirals ☾@Speed;;1;2";
-static const char _data_FX_mode_Rotating_Blob[] PROGMEM = "Y💡Rotating_Blob ☾@Speed;;1;2";
+static const char _data_FX_mode_Module_Experiment10[] PROGMEM = "Y💡Module_Experiment10 ☾@Speed,,,,,,Gamma Correction;;1;2;o2=0";
+static const char _data_FX_mode_Module_Experiment9[] PROGMEM = "Y💡Module_Experiment9 ☾@Speed,,,,,,Gamma Correction;;1;2;o2=0";
+static const char _data_FX_mode_Module_Experiment8[] PROGMEM = "Y💡Module_Experiment8 ☾@Speed,,,,,,Gamma Correction;;1;2;o2=0";
+static const char _data_FX_mode_Module_Experiment7[] PROGMEM = "Y💡Module_Experiment7 ☾@Speed,,,,,,Gamma Correction;;1;2;o2=0";
+static const char _data_FX_mode_Module_Experiment6[] PROGMEM = "Y💡Module_Experiment6 ☾@Speed,,,,,,Gamma Correction;;1;2;o2=0";
+static const char _data_FX_mode_Module_Experiment5[] PROGMEM = "Y💡Module_Experiment5 ☾@Speed,,,,,,Gamma Correction;;1;2;o2=0";
+static const char _data_FX_mode_Module_Experiment4[] PROGMEM = "Y💡Module_Experiment4 ☾@Speed,,,,,,Gamma Correction;;1;2;o2=0";
+static const char _data_FX_mode_Zoom2[] PROGMEM = "Y💡Zoom2 ☾@Speed,,,,,,Gamma Correction;;1;2;o2=0";
+static const char _data_FX_mode_Module_Experiment3[] PROGMEM = "Y💡Module_Experiment3 ☾@Speed,,,,,,Gamma Correction;;1;2;o2=0";
+static const char _data_FX_mode_Module_Experiment2[] PROGMEM = "Y💡Module_Experiment2 ☾@Speed,,,,,,Gamma Correction;;1;2;o2=0";
+static const char _data_FX_mode_Module_Experiment1[] PROGMEM = "Y💡Module_Experiment1 ☾@Speed,,,,,,Gamma Correction;;1;2;o2=0";
+static const char _data_FX_mode_Parametric_Water[] PROGMEM = "Y💡Parametric_Water ☾@Speed,,,,,,Gamma Correction;;1;2;o2=0";
+static const char _data_FX_mode_Water[] PROGMEM = "Y💡Water ☾@Speed,,,,,,Gamma Correction;;1;2;o2=0";
+static const char _data_FX_mode_Complex_Kaleido_6[] PROGMEM = "Y💡Complex_Kaleido_6 ☾@Speed,,,,,,Gamma Correction;;1;2;o2=0";
+static const char _data_FX_mode_Complex_Kaleido_5[] PROGMEM = "Y💡Complex_Kaleido_5 ☾@Speed,,,,,,Gamma Correction;;1;2;o2=0";
+static const char _data_FX_mode_Complex_Kaleido_4[] PROGMEM = "Y💡Complex_Kaleido_4 ☾@Speed,,,,,,Gamma Correction;;1;2;o2=0";
+static const char _data_FX_mode_Complex_Kaleido_3[] PROGMEM = "Y💡Complex_Kaleido_3 ☾@Speed,,,,,,Gamma Correction;;1;2;o2=0";
+static const char _data_FX_mode_Complex_Kaleido_2[] PROGMEM = "Y💡Complex_Kaleido_2 ☾@Speed,,,,,,Gamma Correction;;1;2;o2=0";
+static const char _data_FX_mode_Complex_Kaleido[] PROGMEM = "Y💡Complex_Kaleido ☾@Speed,,,,,,Gamma Correction;;1;2;o2=0";
+static const char _data_FX_mode_SM10[] PROGMEM = "Y💡SM10 ☾@Speed,,,,,,Gamma Correction;;1;2;o2=0";
+static const char _data_FX_mode_SM9[] PROGMEM = "Y💡SM9 ☾@Speed,,,,,,Gamma Correction;;1;2;o2=0";
+static const char _data_FX_mode_SM8[] PROGMEM = "Y💡SM8 ☾@Speed,,,,,,Gamma Correction;;1;2;o2=0";
+static const char _data_FX_mode_SM7[] PROGMEM = "Y💡SM7 ☾@Speed,,,,,,Gamma Correction;;1;2;o2=0";
+static const char _data_FX_mode_SM6[] PROGMEM = "Y💡SM6 ☾@Speed,,,,,,Gamma Correction;;1;2;o2=0";
+static const char _data_FX_mode_SM5[] PROGMEM = "Y💡SM5 ☾@Speed,,,,,,Gamma Correction;;1;2;o2=0";
+static const char _data_FX_mode_SM4[] PROGMEM = "Y💡SM4 ☾@Speed,,,,,,Gamma Correction;;1;2;o2=0";
+static const char _data_FX_mode_SM3[] PROGMEM = "Y💡SM3 ☾@Speed,,,,,,Gamma Correction;;1;2;o2=0";
+static const char _data_FX_mode_SM2[] PROGMEM = "Y💡SM2 ☾@Speed,,,,,,Gamma Correction;;1;2;o2=0";
+static const char _data_FX_mode_SM1[] PROGMEM = "Y💡SM1 ☾@Speed,,,,,,Gamma Correction;;1;2;o2=0";
+static const char _data_FX_mode_Big_Caleido[] PROGMEM = "Y💡Big_Caleido ☾@Speed,,,,,,Gamma Correction;;1;2;o2=0";
+static const char _data_FX_mode_RGB_Blobs5[] PROGMEM = "Y💡RGB_Blobs5 ☾@Speed,,,,,,Gamma Correction;;1;2;o2=0";
+static const char _data_FX_mode_RGB_Blobs4[] PROGMEM = "Y💡RGB_Blobs4 ☾@Speed,,,,,,Gamma Correction;;1;2;o2=0";
+static const char _data_FX_mode_RGB_Blobs3[] PROGMEM = "Y💡RGB_Blobs3 ☾@Speed,,,,,,Gamma Correction;;1;2;o2=0";
+static const char _data_FX_mode_RGB_Blobs2[] PROGMEM = "Y💡RGB_Blobs2 ☾@Speed,,,,,,Gamma Correction;;1;2;o2=0";
+static const char _data_FX_mode_RGB_Blobs[] PROGMEM = "Y💡RGB_Blobs ☾@Speed,,,,,,Gamma Correction;;1;2;o2=0";
+static const char _data_FX_mode_Polar_Waves[] PROGMEM = "Y💡Polar_Waves ☾@Speed,,,,,,Gamma Correction;;1;2;o2=0";
+static const char _data_FX_mode_Slow_Fade[] PROGMEM = "Y💡Slow_Fade ☾@Speed,,,,,,Gamma Correction;;1;2;o2=0";
+static const char _data_FX_mode_Zoom[] PROGMEM = "Y💡Zoom ☾@Speed,,,,,,Gamma Correction;;1;2;o2=0";
+static const char _data_FX_mode_Hot_Blob[] PROGMEM = "Y💡Hot_Blob ☾@Speed,,,,,,Gamma Correction;;1;2;o2=0";
+static const char _data_FX_mode_Spiralus2[] PROGMEM = "Y💡Spiralus2 ☾@Speed,,,,,,Gamma Correction;;1;2;o2=0";
+static const char _data_FX_mode_Spiralus[] PROGMEM = "Y💡Spiralus ☾@Speed,,,,,,Gamma Correction;;1;2;o2=0";
+static const char _data_FX_mode_Yves[] PROGMEM = "Y💡Yves ☾@Speed,,,,,,Gamma Correction;;1;2;o2=0";
+static const char _data_FX_mode_Scaledemo1[] PROGMEM = "Y💡Scaledemo1 ☾@Speed,,,,,,Gamma Correction;;1;2;o2=0";
+static const char _data_FX_mode_Lava1[] PROGMEM = "Y💡Lava1 ☾@Speed,,,,,,Gamma Correction;;1;2;o2=0";
+static const char _data_FX_mode_Caleido3[] PROGMEM = "Y💡Caleido3 ☾@Speed,,,,,,Gamma Correction;;1;2;o2=0";
+static const char _data_FX_mode_Caleido2[] PROGMEM = "Y💡Caleido2 ☾@Speed,,,,,,Gamma Correction;;1;2;o2=0";
+static const char _data_FX_mode_Caleido1[] PROGMEM = "Y💡Caleido1 ☾@Speed,,,,,,Gamma Correction;;1;2;o2=0";
+static const char _data_FX_mode_Distance_Experiment[] PROGMEM = "Y💡Distance_Experiment ☾@Speed,,,,,,Gamma Correction;;1;2;o2=0";
+static const char _data_FX_mode_Center_Field[] PROGMEM = "Y💡Center_Field ☾@Speed,,,,,,Gamma Correction;;1;2;o2=0";
+static const char _data_FX_mode_Waves[] PROGMEM = "Y💡Waves ☾@Speed,,,,,,Gamma Correction;;1;2;o2=0";
+static const char _data_FX_mode_Chasing_Spirals[] PROGMEM = "Y💡Chasing_Spirals ☾@Speed,,,,,,Gamma Correction;;1;2;o2=0";
+static const char _data_FX_mode_Rotating_Blob[] PROGMEM = "Y💡Rotating_Blob ☾@Speed,,,,,,Gamma Correction;;1;2;o2=0";
 
 
 class ANIMartRIXMod:public ANIMartRIX {
+	private:
+	bool use_gamma = false;
 	public:
 	void initEffect() {
 	  if (SEGENV.call == 0) {
@@ -134,16 +138,31 @@ class ANIMartRIXMod:public ANIMartRIX {
 	  else{
 		speedFactor = (float) map(SEGMENT.speed, 128, 255, 10, 100) / 10.0f;
 	  } 
+	  use_gamma = SEGENV.check2;
 	  setSpeedFactor(speedFactor);
 	}
+
 	void setPixelColor(int x, int y, rgb pixel) override {
-		SEGMENT.setPixelColorXY(x, y, uint32_t(CRGB(pixel.red, pixel.green, pixel.blue)) & 0x00FFFFFF);
+		uint8_t colR, colG, colB;
+		if (use_gamma) {
+			colR = gamma8(pixel.red); colG = gamma8(pixel.green); colB = gamma8(pixel.blue);
+		} else {
+			colR = pixel.red; colG = pixel.green; colB = pixel.blue;
+		}
+		SEGMENT.setPixelColorXY(x, y, RGBW32(colR,colG,colB,0));
 	}
+
 	void setPixelColor(int index, rgb pixel) override {
+		uint8_t colR, colG, colB;
+		if (use_gamma) {
+			colR = gamma8(pixel.red); colG = gamma8(pixel.green); colB = gamma8(pixel.blue);
+		} else {
+			colR = pixel.red; colG = pixel.green; colB = pixel.blue;
+		}
 		// get x and y, so we can us setPixelColorXY() - faster in WLEDMM
 		int x = index % num_x;
 		int y = index / num_x;
-		SEGMENT.setPixelColorXY(x,y, uint32_t(CRGB(pixel.red, pixel.green, pixel.blue)) & 0x00FFFFFF);
+		SEGMENT.setPixelColorXY(x,y, RGBW32(colR,colG,colB,0));
   	}
 
 	// Add any extra custom effects not part of the ANIMartRIX libary here
