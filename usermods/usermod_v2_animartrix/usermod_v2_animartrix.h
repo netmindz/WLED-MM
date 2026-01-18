@@ -54,8 +54,10 @@
 #if defined(ARDUINO_ARCH_ESP32) && defined(ESP_IDF_VERSION)
 #if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(4, 4, 0)
   // this pragma temporarily raises gcc optimization level to "-O3", to avoid internal error conditions
+	// -fsingle-precision-constant = all literals are float (default is "double" = very slow)
+	// -ffast-math = additional math optimizations that may reduce accurcy
   #pragma GCC push_options
-  #pragma GCC optimize ("O3")
+  #pragma GCC optimize ("O3,single-precision-constant,fast-math")
 #endif
 #endif
 
