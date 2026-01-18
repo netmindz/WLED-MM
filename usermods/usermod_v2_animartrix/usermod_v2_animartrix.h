@@ -140,7 +140,10 @@ class ANIMartRIXMod:public ANIMartRIX {
 		SEGMENT.setPixelColorXY(x, y, uint32_t(CRGB(pixel.red, pixel.green, pixel.blue)) & 0x00FFFFFF);
 	}
 	void setPixelColor(int index, rgb pixel) override {
-		SEGMENT.setPixelColor(index, uint32_t(CRGB(pixel.red, pixel.green, pixel.blue)) & 0x00FFFFFF);
+		// get x and y, so we can us setPixelColorXY() - faster in WLEDMM
+		int x = index % num_x;
+		int y = index / num_x;
+		SEGMENT.setPixelColorXY(x,y, uint32_t(CRGB(pixel.red, pixel.green, pixel.blue)) & 0x00FFFFFF);
   	}
 
 	// Add any extra custom effects not part of the ANIMartRIX libary here
