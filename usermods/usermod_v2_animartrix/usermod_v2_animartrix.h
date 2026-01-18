@@ -128,16 +128,15 @@ class ANIMartRIXMod:public ANIMartRIX {
 	bool use_gamma = false;
 	public:
 	void initEffect() {
-	  if (SEGENV.call == 0) {
-		init(SEGMENT.virtualWidth(), SEGMENT.virtualHeight(), false);
+	  if ((SEGENV.call == 0) || (SEGMENT.virtualWidth() != num_x) || (SEGMENT.virtualHeight() != num_y)) {
+		  init(SEGMENT.virtualWidth(), SEGMENT.virtualHeight(), false);
 	  }
 	  float speedFactor = 1.0;
 	  if (SEGMENT.speed < 128) {
-		speedFactor = (float) map(SEGMENT.speed,   0, 127, 1, 100) / 100.0f;
+		  speedFactor = (float) map(SEGMENT.speed,   0, 127, 1, 100) / 100.0f;
+	  } else {
+		  speedFactor = (float) map(SEGMENT.speed, 128, 255, 10, 100) / 10.0f;
 	  }
-	  else{
-		speedFactor = (float) map(SEGMENT.speed, 128, 255, 10, 100) / 10.0f;
-	  } 
 	  use_gamma = SEGENV.check2;
 	  setSpeedFactor(speedFactor);
 	}
