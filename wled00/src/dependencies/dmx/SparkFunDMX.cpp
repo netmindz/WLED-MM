@@ -124,6 +124,7 @@ void SparkFunDMX::initWrite (int chanQuant) {
 // Function to read DMX data
 uint8_t SparkFunDMX::read(int Channel) {
   if (Channel > chanSize) Channel = chanSize;
+  if ((Channel > dmxMaxChannel) || (Channel < 1)) return 0; // WLEDMM prevent array out-of-bounds access
   return(dmxData[Channel - 1]); //subtract one to account for start byte
 }
 #endif
@@ -132,6 +133,7 @@ uint8_t SparkFunDMX::read(int Channel) {
 void SparkFunDMX::write(int Channel, uint8_t value) {
   if (Channel < 0) Channel = 0;
   if (Channel > chanSize) chanSize = Channel;
+  if (Channel > dmxMaxChannel) Channel = dmxMaxChannel; // WLEDMM prevent array out-of-bounds access
   dmxData[0] = 0;
   dmxData[Channel] = value; //add one to account for start byte
 }
@@ -151,7 +153,7 @@ void SparkFunDMX::update() {
     
     //Send DMX data
     DMXSerial.begin(DMXSPEED, DMXFORMAT, rxPin, txPin);//Begin the Serial port
-    DMXSerial.write(dmxData, chanSize);
+    DMXSerial.write(dmxData, min(dmxMaxChannel, chanSize));
     DMXSerial.flush();
     DMXSerial.end();//clear our DMX array, end the Hardware Serial port
   }
@@ -162,9 +164,11 @@ void SparkFunDMX::update() {
 	{
 		while (DMXSerial.available())
 		{
-			dmxData[currentChannel++] = DMXSerial.read();
+      uint8_t newdata = DMXSerial.read();
+      if (currentChannel <= dmxMaxChannel)
+			  dmxData[currentChannel++] = newdata;
 		}
-	if (currentChannel > chanSize) //Set the channel counter back to 0 if we reach the known end size of our packet
+	if ((currentChannel > chanSize) || (currentChannel > dmxMaxChannel)) //Set the channel counter back to 0 if we reach the known end size of our packet
 	{
 		
       portENTER_CRITICAL(&timerMux);
