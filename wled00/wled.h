@@ -470,7 +470,7 @@ WLED_GLOBAL bool arlsForceMaxBri _INIT(false);                    // enable to f
 #ifdef WLED_ENABLE_DMX
  #if defined(ESP8266) || defined(CONFIG_IDF_TARGET_ESP32C3) || defined(CONFIG_IDF_TARGET_ESP32S2)
   WLED_GLOBAL DMXESPSerial dmx;
- #else //ESP32
+ #else //ESP32 or ESP32-S3
   WLED_GLOBAL SparkFunDMX dmx;
  #endif
 WLED_GLOBAL uint16_t e131ProxyUniverse _INIT(0);                  // output this E1.31 (sACN) / ArtNet universe via MAX485 (0 = disabled)
