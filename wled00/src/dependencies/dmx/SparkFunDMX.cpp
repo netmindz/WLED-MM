@@ -22,6 +22,8 @@ Distributed as-is; no warranty is given.
 #include "SparkFunDMX.h"
 #include <HardwareSerial.h>
 
+#pragma message "using SparkFunDMX"
+
 #define dmxMaxChannel  512
 #define defaultMax 32
 
@@ -34,8 +36,8 @@ static const int enablePin = -1;		// disable the enable pin because it is not ne
 static const int rxPin = -1;       // disable the receiving pin because it is not needed - softhack007: Pin=-1 means "use default" not "disable"
 static const int txPin = 2;        // transmit DMX data over this pin (default is pin 2)
 
-//DMX value array and size. Entry 0 will hold startbyte
-static uint8_t dmxData[dmxMaxChannel] = { 0 };
+//DMX value array and size. Entry 0 will hold startbyte, so we need 512+1 elements
+static uint8_t dmxData[dmxMaxChannel+1] = { 0 };
 static int chanSize = 0;
 #if !defined(DMX_SEND_ONLY)
 static int currentChannel = 0;
