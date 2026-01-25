@@ -11,7 +11,7 @@
  */
 
 #ifdef WLED_ENABLE_DMX
-#pragma message "DMX network output enabled"
+#pragma message "DMX output enabled"
 
 #define MAX_DMX_RATE 44 // max DMX update rate in Hz
 
