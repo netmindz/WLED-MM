@@ -153,7 +153,7 @@ void SparkFunDMX::update() {
     
     //Send DMX data
     DMXSerial.begin(DMXSPEED, DMXFORMAT, rxPin, txPin);//Begin the Serial port
-    DMXSerial.write(dmxData, min(dmxMaxChannel, chanSize));
+    DMXSerial.write(dmxData, min(dmxMaxChannel+1, chanSize)); // send max 513 bytes = start byte + 512 channels
     DMXSerial.flush();
     DMXSerial.end();//clear our DMX array, end the Hardware Serial port
   }
