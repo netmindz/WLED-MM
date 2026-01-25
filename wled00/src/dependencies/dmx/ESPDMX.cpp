@@ -73,6 +73,7 @@ void DMXESPSerial::write(int Channel, uint8_t value) {
 
   if (Channel < 1) Channel = 1;
   if (Channel > channelSize) Channel = channelSize;
+  if (Channel > dmxMaxChannel) Channel = dmxMaxChannel; // WLEDMM protect against array bounds violation
   if (value < 0) value = 0;
   if (value > 255) value = 255;
 
@@ -99,7 +100,7 @@ void DMXESPSerial::update() {
   //send data
   Serial1.begin(DMXSPEED, DMXFORMAT);
   digitalWrite(sendPin, LOW);
-  Serial1.write(dmxDataStore, channelSize);
+  Serial1.write(dmxDataStore, min(dmxMaxChannel+1, channelSize+1));
   Serial1.flush();
   delay(1);
   Serial1.end();
