@@ -132,8 +132,8 @@ uint8_t SparkFunDMX::read(int Channel) {
 // Function to send DMX data
 void SparkFunDMX::write(int Channel, uint8_t value) {
   if (Channel < 0) Channel = 0;
-  if (Channel > chanSize) chanSize = Channel;
-  if (Channel > dmxMaxChannel) Channel = dmxMaxChannel; // WLEDMM prevent array out-of-bounds access
+  if (Channel+1 > chanSize) chanSize = min(dmxMaxChannel +1, Channel+1); // WLEDMM "+1" as we need to account for start byte
+  if (Channel > dmxMaxChannel) Channel = dmxMaxChannel;                  // WLEDMM prevent array out-of-bounds access
   dmxData[0] = 0;
   dmxData[Channel] = value; //add one to account for start byte
 }
