@@ -123,8 +123,8 @@ void SparkFunDMX::initWrite (int chanQuant) {
 #if !defined(DMX_SEND_ONLY)
 // Function to read DMX data
 uint8_t SparkFunDMX::read(int Channel) {
-  if (Channel > chanSize) Channel = chanSize;
   if ((Channel > dmxMaxChannel) || (Channel < 1)) return 0; // WLEDMM prevent array out-of-bounds access
+  if (Channel > chanSize) Channel = chanSize;
   return(dmxData[Channel - 1]); //subtract one to account for start byte
 }
 #endif
