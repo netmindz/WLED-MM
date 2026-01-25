@@ -164,9 +164,9 @@ void SparkFunDMX::update() {
 	{
 		while (DMXSerial.available())
 		{
-      uint8_t newdata = DMXSerial.read();
-      if (currentChannel <= dmxMaxChannel)
-			  dmxData[currentChannel++] = newdata;
+		  uint8_t newdata = DMXSerial.read();
+		  if (currentChannel <= dmxMaxChannel)
+		    dmxData[currentChannel++] = newdata;
 		}
 	if ((currentChannel > chanSize) || (currentChannel > dmxMaxChannel)) //Set the channel counter back to 0 if we reach the known end size of our packet
 	{
