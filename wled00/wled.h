@@ -761,7 +761,7 @@ WLED_GLOBAL AsyncWebServer server _INIT_N(((80)));
 #ifdef WLED_ENABLE_WEBSOCKETS
 WLED_GLOBAL AsyncWebSocket ws _INIT_N((("/ws")));
 #endif
-WLED_GLOBAL AsyncClient     *hueClient _INIT(NULL);
+//WLED_GLOBAL AsyncClient     *hueClient _INIT(NULL); // WLEDMM moved into hue.cpp
 WLED_GLOBAL AsyncWebHandler *editHandler _INIT(nullptr);
 
 // udp interface objects
