@@ -9,9 +9,9 @@
 #include <IPAddress.h>
 
 #define NODE_TYPE_ID_UNDEFINED        0
-#define NODE_TYPE_ID_ESP8266         82
-#define NODE_TYPE_ID_ESP32           32
-#define NODE_TYPE_ID_ESP32S2         33
+#define NODE_TYPE_ID_ESP8266         82 // should be 1
+#define NODE_TYPE_ID_ESP32           32 // should be 2
+#define NODE_TYPE_ID_ESP32S2         33 // etc
 #define NODE_TYPE_ID_ESP32S3         34
 #define NODE_TYPE_ID_ESP32C3         35
 
