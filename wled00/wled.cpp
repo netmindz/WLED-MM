@@ -466,13 +466,23 @@ void WLED::setup()
   #ifdef WLED_BOOTUPDELAY
   delay(WLED_BOOTUPDELAY); // delay to let voltage stabilize, helps with boot issues on some setups
   #endif
-  Serial.begin(115200);
 
-#if !defined(WLEDMM_NO_SERIAL_WAIT) || defined(WLED_DEBUG)
+  #if ARDUINO_USB_CDC_ON_BOOT && (defined(CONFIG_IDF_TARGET_ESP32S3) || defined(CONFIG_IDF_TARGET_ESP32C3) || defined(CONFIG_IDF_TARGET_ESP32C6))
+  // Just to be very sure nothing else grabs serial...
+  portMUX_TYPE mux = portMUX_INITIALIZER_UNLOCKED;
+  portENTER_CRITICAL(&mux);
+  Serial.begin(115200);     //  WLEDMM avoid "hung devices" when USB_CDC is enabled; see https://github.com/espressif/arduino-esp32/issues/9043
+  Serial.setTxTimeoutMs(0); // potential side-effect: incomplete debug output, with missing characters whenever TX buffer is full.
+  portEXIT_CRITICAL(&mux);
+  #else
+  Serial.begin(115200);
+  #endif
+
+  #if !defined(WLEDMM_NO_SERIAL_WAIT) || defined(WLED_DEBUG)
   if (!Serial) delay(1000); // WLEDMM make sure that Serial has initalized
-#else
+  #else
   if (!Serial) delay(300);  // just a tiny wait to avoid problems later when acessing serial
-#endif
+  #endif
 
   init_math();  // WLEDMM: pre-calculate some lookup tables
 
@@ -496,8 +506,8 @@ void WLED::setup()
   #endif
   #if ARDUINO_USB_CDC_ON_BOOT || ARDUINO_USB_MODE
     #if ARDUINO_USB_CDC_ON_BOOT && (defined(CONFIG_IDF_TARGET_ESP32S3) || defined(CONFIG_IDF_TARGET_ESP32C3) || defined(CONFIG_IDF_TARGET_ESP32C6))
-    //  WLEDMM avoid "hung devices" when USB_CDC is enabled; see https://github.com/espressif/arduino-esp32/issues/9043
-    Serial.setTxTimeoutMs(0);    // potential side-effect: incomplete debug output, with missing characters whenever TX buffer is full.
+    
+    Serial.setTxTimeoutMs(0);    
     #endif
 #if !defined(WLEDMM_NO_SERIAL_WAIT) || defined(WLED_DEBUG)
   if (!Serial) delay(2500);  // WLEDMM: always allow CDC USB serial to initialise
