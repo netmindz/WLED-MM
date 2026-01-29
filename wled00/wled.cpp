@@ -468,12 +468,8 @@ void WLED::setup()
   #endif
 
   #if ARDUINO_USB_CDC_ON_BOOT && (defined(CONFIG_IDF_TARGET_ESP32S3) || defined(CONFIG_IDF_TARGET_ESP32C3) || defined(CONFIG_IDF_TARGET_ESP32C6))
-  // Just to be very sure nothing else grabs serial...
-  portMUX_TYPE mux = portMUX_INITIALIZER_UNLOCKED;
-  portENTER_CRITICAL(&mux);
   Serial.begin(115200);     //  WLEDMM avoid "hung devices" when USB_CDC is enabled; see https://github.com/espressif/arduino-esp32/issues/9043
   Serial.setTxTimeoutMs(0); // potential side-effect: incomplete debug output, with missing characters whenever TX buffer is full.
-  portEXIT_CRITICAL(&mux);
   #else
   Serial.begin(115200);
   #endif
