@@ -9455,7 +9455,7 @@ uint16_t mode_particlefireworks(void) {
   return FRAMETIME;
 }
 #undef NUMBEROFSOURCES
-static const char _data_FX_MODE_PARTICLEFIREWORKS[] PROGMEM = "PS Fireworks@Launches,Explosion Size,Fuse,Blur,Gravity,Cylinder,Ground,Fast;;!;2;pal=11,ix=200,sx=180,c1=196,c2=0,c3=10,o3=1";
+static const char _data_FX_MODE_PARTICLEFIREWORKS[] PROGMEM = "PS Fireworks@Launches,Explosion Size,Fuse,Blur,Gravity,Cylinder,Ground,Fast;;!;2;pal=11,ix=200,sx=180,c1=196,c2=220,c3=10,o3=1";
 
 /*
   Particle Volcano
