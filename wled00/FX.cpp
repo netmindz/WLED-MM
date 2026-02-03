@@ -3012,24 +3012,28 @@ static const char _data_FX_MODE_TRI_STATIC_PATTERN[] PROGMEM = "Solid Pattern Tr
 
 uint16_t spots_base(uint16_t threshold)
 {
-  if (SEGLEN == 1) return mode_oops();
+  if (SEGLEN <= 1) return mode_oops();
   if (!SEGMENT.check2) SEGMENT.fill(SEGCOLOR(1));
 
-  unsigned maxZones = max(1, SEGLEN >> 2); // WLEDMM prevent "0 zones"
-  unsigned zones = 1U + ((uint32_t(SEGMENT.intensity) * maxZones) >> 8);
-  unsigned zoneLen = SEGLEN / zones;
-  unsigned zoneLen8 = zones < 8 ? zoneLen * 8 : SEGLEN / (zones >> 3); // WLEDMM zoneLength * 8 -> avoids gaps at right/left sides
-  unsigned offset = (uint32_t(SEGLEN) - ((zones * zoneLen8)>>3)) >> 1;
+  // constants for fixed point scaling
+  constexpr uint8_t  ZONELEN_FP_SHIFT = 3;
+  constexpr uint32_t ZONELEN_FP_SCALE = 1U << ZONELEN_FP_SHIFT;
+
+  unsigned maxZones = max(1, SEGLEN >> 2); // prevents "0 zones"
+  unsigned zones    = 1U + ((uint32_t(SEGMENT.intensity) * maxZones) >> 8);
+  unsigned zoneLen  =  uint32_t(SEGLEN) / zones;
+  unsigned zoneLen8 = (uint32_t(SEGLEN) * ZONELEN_FP_SCALE) / zones; // zoneLength * 8 (fixed‑point) -> avoids gaps at right/left sides
+  unsigned offset   = (uint32_t(SEGLEN) - ((zones * zoneLen8) >> ZONELEN_FP_SHIFT)) >> 1;
 
   for (unsigned z = 0; z < zones; z++)
   {
-    unsigned pos = offset +((z * zoneLen8)>>3);
+    unsigned pos = offset + ((z * zoneLen8) >> ZONELEN_FP_SHIFT);
     for (unsigned i = 0; i < zoneLen; i++)
     {
       unsigned wave = triwave16((i * 0xFFFF) / zoneLen);
       if (wave > threshold) {
         int index = pos + i;
-        unsigned s = ((wave - threshold)*255 / (0xFFFF - threshold)) & 0xFF; // WLEDMM prevent overflow
+        unsigned s = ((wave - threshold)*255 / (0xFFFF - threshold)) & 0xFF; // & 0xFF prevents overflow in next line
         SEGMENT.setPixelColor(index, color_blend(SEGMENT.color_from_palette(index, true, PALETTE_SOLID_WRAP, 0), SEGCOLOR(1), uint8_t(255-s)));
       }
     }
