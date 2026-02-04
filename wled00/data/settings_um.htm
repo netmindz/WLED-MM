@@ -269,6 +269,8 @@
 					// console.log("pinPost option", c, c.value, d.ro_gpio.includes(c.value));
 					for (let j=0; j<d.ro_gpio.length; j++) if (d.ro_gpio[j] == c.value) c.text += " read only 🟠"; //if (d.ro_gpio.includes(c.value)) not working ???
 					for (let j=0; j<d.rsvd.length; j++) if (d.rsvd[j] == c.value) {c.text += " reserved 🟣"; c.disabled=true;} //now always disabled as post is done last if (d.rsvd.includes(c.value))
+					for (let j=0; j<d.h_pins.length; j++) if (d.h_pins[j] == c.value && c.text.length <= 4) {c.text += " HUB75 🔴"; c.disabled=true;} // HUB75 pins
+					for (let j=0; j<d.x_pins.length; j++) if (d.x_pins[j] == c.value && c.text.length <= 4) {c.text += " DMX   🔴"; c.disabled=true;} // DMX pins
 					//remove pins > max_gpio
 					if (c.value > d.max_gpio) {
 						select.removeChild(c);
