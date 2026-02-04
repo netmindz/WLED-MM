@@ -3709,7 +3709,7 @@ function checkVersionUpgrade(info) {
 	versionCheckDone = true;
 
 	// Skip version check in AP mode (no internet connectivity)
-	if (!info.ip || info.ip === '') {
+	if (!info.ip) {
 		console.log('Skipping version check in AP mode (no IP address)');
 		return;
 	}
