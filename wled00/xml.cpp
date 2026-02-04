@@ -290,11 +290,11 @@ void appendGPIOinfo() {
 
   // WLEDMM add HUB75 pins, as they are not stored directly in cfg.json
   strcpy(ro_gpio, "d.h_pins=["); // WLEDMM we re-use this array, instead of creating an addition one; 140 bytes is more than enough for 14 pins.
-  bool isFirstHub = true;
+  bool isFirstPin = true;
   for(int pinNr = 0; pinNr < WLED_NUM_PINS; pinNr++) {
     if ((pinManager.isPinOk(pinNr)) && (pinManager.getPinOwner(pinNr) == PinOwner::HUB75)) {
-      sprintf(pinString, "%s%d", isFirstHub?"":",", pinNr);
-      strcat(ro_gpio, pinString); isFirstHub = false;
+      sprintf(pinString, "%s%d", isFirstPin ? "" : ",", pinNr);
+      strcat(ro_gpio, pinString); isFirstPin = false;
     }
   }
   oappend(ro_gpio);
@@ -302,11 +302,11 @@ void appendGPIOinfo() {
 
   // WLEDMM same procedure for DMX pins
   strcpy(ro_gpio, "d.x_pins=["); // WLEDMM we re-use this array, instead of creating an addition one; 140 bytes is more than enough for max 4 pins.
-  isFirstHub = true;
+  isFirstPin = true;
   for(int pinNr = 0; pinNr < WLED_NUM_PINS; pinNr++) {
     if ((pinManager.isPinOk(pinNr)) && (pinManager.getPinOwner(pinNr) == PinOwner::DMX || pinManager.getPinOwner(pinNr) == PinOwner::DMX_INPUT)) {
-      sprintf(pinString, "%s%d", isFirstHub?"":",", pinNr);
-      strcat(ro_gpio, pinString); isFirstHub = false;
+      sprintf(pinString, "%s%d", isFirstPin ? "" : ",", pinNr);
+      strcat(ro_gpio, pinString); isFirstPin = false;
     }
   }
   oappend(ro_gpio);
