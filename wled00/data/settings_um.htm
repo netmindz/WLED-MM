@@ -58,6 +58,8 @@
 	// function check(o,k) {}   //WLEDMM not needed as we use dropdowns
 	function getPins(o) {
 		if (isO(o)) {
+			// If this object is a bus instance, extract the "type" field
+			let busType = o.type !== undefined ? o.type : -1;
 			for (const [k,v] of Object.entries(o)) {
 				if (isO(v)) {
 					owner = k;
@@ -65,6 +67,10 @@
 					continue;
 				}
 				if (k.replace("[]","").substr(-3)=="pin") {
+					// Skip pin arrays for special bus types where pin array doesn't contain GPIO numbers, but allow all other entries
+					if (busType >= 80 && busType < 96) continue;    // Network buses - pin array stores IP address
+					if (busType >= 100 && busType <= 110) continue; // HUB75 buses - pin array stores chain length
+
 					if (Array.isArray(v)) {
 						for (var i=0; i<v.length; i++) if (v[i]>=0) { pins.push(v[i]); pinO.push(owner); }
 					} else {
