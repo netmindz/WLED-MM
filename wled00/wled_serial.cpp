@@ -76,8 +76,8 @@ void sendBytes(){
 }
 
 bool canUseSerial(void) {   // WLEDMM returns true if Serial can be used for debug output (i.e. not configured for other purpose)
-  #if ARDUINO_USB_CDC_ON_BOOT && (defined(CONFIG_IDF_TARGET_ESP32S3) || defined(CONFIG_IDF_TARGET_ESP32C3) || defined(CONFIG_IDF_TARGET_ESP32C6)) && !defined(WLED_DEBUG_HOST)
-  //  on S3/C3/C6, USB CDC blocks if disconnected! so check if Serial is active before printing to it.
+  #if ARDUINO_USB_CDC_ON_BOOT && (defined(CONFIG_IDF_TARGET_ESP32S3) || defined(CONFIG_IDF_TARGET_ESP32C3) || defined(CONFIG_IDF_TARGET_ESP32C6) || defined(CONFIG_IDF_TARGET_ESP32P4)) && !defined(WLED_DEBUG_HOST)
+  //  on S3/C3/C6/P4, USB CDC blocks if disconnected! so check if Serial is active before printing to it.
   if (!Serial) return false;
   #endif
   if (pinManager.isPinAllocated(hardwareTX) && (pinManager.getPinOwner(hardwareTX) != PinOwner::DebugOut)) 
