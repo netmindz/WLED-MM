@@ -777,6 +777,11 @@ void WLED::setup()
 
   if (strcmp(clientSSID, DEFAULT_CLIENT_SSID) == 0)
     showWelcomePage = true;
+
+  #if !defined(ESP8266) && (ESP_IDF_VERSION_MAJOR >= 4)
+  WiFi.setScanMethod(WIFI_ALL_CHANNEL_SCAN);   // bugfix: ensure that all channels are scanned, and the strongest signal is used
+  #endif
+
   WiFi.persistent(false);
   #ifdef WLED_USE_ETHERNET
   WiFi.onEvent(WiFiEvent);
