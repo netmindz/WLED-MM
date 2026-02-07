@@ -3708,6 +3708,11 @@ function checkVersionUpgrade(info) {
 	if (versionCheckDone) return;
 	versionCheckDone = true;
 
+	// Skip version check in AP mode (no internet connectivity)
+	if (info.wifi && info.wifi.ap) {
+		return;
+	}
+
 	// Fetch version-info.json using existing /edit endpoint
 	fetch('/edit?edit=/version-info.json', {
 		method: 'get'
