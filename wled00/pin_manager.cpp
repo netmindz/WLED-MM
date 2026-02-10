@@ -770,7 +770,14 @@ bool PinManagerClass::isPinOk(byte gpio, bool output) const
     // if (((strncmp_P(PSTR("ESP32-PICO"), ESP.getChipModel(), 10) == 0) ||
     //     (strncmp_P(PSTR("ESP32-U4WDH"), ESP.getChipModel(), 11) == 0))
     //    && (gpio == 16 || gpio == 17)) return false; // PICO-D4/U4WDH: gpio16+17 are in use for onboard SPI FLASH
-    // if (gpio == 16 || gpio == 17) return !psramFound(); //PSRAM pins on ESP32 (these are IO)
+    // if (gpio == 16) return !psramFound(); // PSRAM pins on modules with off-package or in-package PSRAM
+    // if (gpio == 17) {
+    //   if (strncmp_P(PSTR("ESP32-D0WDR2-V3"), ESP.getChipModel(), 15) == 0) {
+    //     return true;
+    //   } else {
+    //     return !psramFound(); // PSRAM pins on modules with in-package PSRAM
+    //   }
+    // }    
   #endif
     if (output) return digitalPinCanOutput(gpio);
     else        return true;
