@@ -144,7 +144,8 @@ String PinManagerClass::getPinSpecialText(int gpio) {  // special purpose PIN in
       //if (gpio == 15) return (F("(strapping pin - MTDO)"));
       //if (gpio > 11 && gpio < 16) return (F("(optional) JTAG debug probe"));
       #if defined(BOARD_HAS_PSRAM)
-        if (gpio == 16 || gpio == 17) return (F("(reserved) PSRAM"));
+        if (gpio == 16) return (F("(reserved) PSRAM"));
+        if ((gpio == 17) && (strncmp_P(PSTR("ESP32-D0WDR2-V3"), ESP.getChipModel(), 15) != 0) ) return (F("(reserved) PSRAM"));
       #endif
       #if defined(ARDUINO_TTGO_T7_V14_Mini32) || defined(ARDUINO_LOLIN_D32_PRO) || defined(ARDUINO_ADAFRUIT_FEATHER_ESP32_V2)
         if (gpio == 35) return (F("(reserved) _VBAT voltage monitoring"));  // WLEDMM experimental
@@ -766,7 +767,8 @@ bool PinManagerClass::isPinOk(byte gpio, bool output) const
       // for classic ESP32 (non-mini) modules, these are the SPI flash pins
       if (gpio > 5 && gpio < 12) return false;      //SPI flash pins
     }
-    //WLEDMM gpio 16/17 (PSRAM or SPI FLASH) are handled differently
+    // WLEDMM gpio 16/17 (PSRAM or SPI FLASH) are handled differently !
+    //
     // if (((strncmp_P(PSTR("ESP32-PICO"), ESP.getChipModel(), 10) == 0) ||
     //     (strncmp_P(PSTR("ESP32-U4WDH"), ESP.getChipModel(), 11) == 0))
     //    && (gpio == 16 || gpio == 17)) return false; // PICO-D4/U4WDH: gpio16+17 are in use for onboard SPI FLASH

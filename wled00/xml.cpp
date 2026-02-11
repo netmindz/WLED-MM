@@ -232,8 +232,12 @@ void appendGPIOinfo() {
   //Note: Using pin 3 (RX) disables Adalight / Serial JSON
 
   #if defined(ARDUINO_ARCH_ESP32) && defined(BOARD_HAS_PSRAM)
-    #if !defined(CONFIG_IDF_TARGET_ESP32S2) && !defined(CONFIG_IDF_TARGET_ESP32S3) && !defined(CONFIG_IDF_TARGET_ESP32C3)
-    if (psramFound()) oappend(SET_F(",16,17")); // GPIO16 & GPIO17 reserved for SPI RAM on ESP32 (not on S2, S3 or C3)
+    #if defined(CONFIG_IDF_TARGET_ESP32) // classic esp32
+    if (strncmp_P(PSTR("ESP32-D0WDR2-V3"), ESP.getChipModel(), 15) == 0) {
+      if (psramFound()) oappend(SET_F(",16")); // GPIO16 reserved for SPI RAM on ESP32-D0WDR2-V3
+    } else {
+      if (psramFound()) oappend(SET_F(",16,17")); // GPIO16 & GPIO17 reserved for SPI RAM on ESP32 (not on S2, S3 or C3)
+    }
     #elif defined(CONFIG_IDF_TARGET_ESP32S3)
     if (psramFound()) oappend(SET_F(",33,34,35,36,37")); // in use for "octal" PSRAM or "octal" FLASH -seems that octal PSRAM is very common on S3.
     #endif
