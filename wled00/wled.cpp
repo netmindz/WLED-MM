@@ -365,7 +365,8 @@ void WLED::loop()
     DEBUG_PRINT(F("Avail heap: "));     DEBUG_PRINTLN(ESP.getMaxAllocHeap());
     DEBUG_PRINTF("%s min free stack %d\n", pcTaskGetTaskName(NULL), uxTaskGetStackHighWaterMark(NULL)); //WLEDMM
 	#endif
-    #if defined(ARDUINO_ARCH_ESP32) && defined(BOARD_HAS_PSRAM)
+    #if defined(ARDUINO_ARCH_ESP32)
+    #if defined(BOARD_HAS_PSRAM) || (ESP_IDF_VERSION_MAJOR > 3) // V4 can auto-detect PSRAM
     if (psramFound()) {
       //DEBUG_PRINT(F("Total PSRAM: "));    DEBUG_PRINT(ESP.getPsramSize()/1024); DEBUG_PRINTLN("kB");
       DEBUG_PRINT(F("Free PSRAM : "));     DEBUG_PRINT(ESP.getFreePsram()/1024); DEBUG_PRINTLN("kB");
@@ -375,6 +376,7 @@ void WLED::loop()
     } else {
       //DEBUG_PRINTLN(F("No PSRAM"));
 	}
+    #endif
     #endif
     DEBUG_PRINT(F("Wifi state: "));      DEBUG_PRINTLN(WiFi.status());
 
@@ -666,7 +668,7 @@ void WLED::setup()
   // C3: reserve GPIO 12-17 for PSRAM (may fail due to isPinOk() but that will also prevent other allocation)
   //managed_pin_type pins[] = { {12, true}, {13, true}, {14, true}, {15, true}, {16, true}, {17, true} };
   //pinManager.allocateMultiplePins(pins, sizeof(pins)/sizeof(managed_pin_type), PinOwner::SPI_RAM);
-  #else
+  #elif defined(CONFIG_IDF_TARGET_ESP32)
   // GPIO16/GPIO17 reserved for SPI RAM
   if (strncmp_P(PSTR("ESP32-D0WDR2-V3"), ESP.getChipModel(), 15) == 0) {
     // ESP32-D0WDR2-V3 keeps gpio17 available
@@ -678,7 +680,7 @@ void WLED::setup()
   }
 
   #endif
-  #if defined(BOARD_HAS_PSRAM) && (defined(WLED_USE_PSRAM) || defined(WLED_USE_PSRAM_JSON))       // WLEDMM
+  #if (defined(BOARD_HAS_PSRAM) || (ESP_IDF_VERSION_MAJOR > 3)) && (defined(WLED_USE_PSRAM) || defined(WLED_USE_PSRAM_JSON))       // WLEDMM
   if (psramFound()) {
     DEBUG_PRINT(F("Total PSRAM: ")); DEBUG_PRINT(ESP.getPsramSize()/1024); DEBUG_PRINTLN("kB");
     DEBUG_PRINT(F("Free PSRAM : ")); DEBUG_PRINT(ESP.getFreePsram()/1024); DEBUG_PRINTLN("kB");
@@ -690,11 +692,19 @@ void WLED::setup()
 #if defined(ARDUINO_ARCH_ESP32)
   if ((strncmp("ESP32-PICO", ESP.getChipModel(), 10) == 0) || (strncmp("ESP32-U4WDH", ESP.getChipModel(), 11) == 0))
   { // WLEDMM detect pico board and esp32-mini1 board at runtime
-    // special handling for PICO-D4: gpio16+17 are in use for onboard SPI FLASH (not PSRAM)
+    // PICO-D4: gpio16+17 are in use for onboard SPI FLASH (not PSRAM)
+    // U4WDH / PICO-D2 / PICO-V3 / PICO-V3-02 : GPIO 16 and 17 are either used for PSRAM, or not connected
     managed_pin_type pins[] = { {16, true}, {17, true} };
     pinManager.allocateMultiplePins(pins, sizeof(pins)/sizeof(managed_pin_type), PinOwner::SPI_RAM);
   }
-#endif
+  #if !defined(BOARD_HAS_PSRAM)
+  if (strncmp_P(PSTR("ESP32-D0WDR2-V3"), ESP.getChipModel(), 15) == 0) {
+    // runtime detect ESP32-D0WDR2-V3: needs gpio16 for PSRAM, but keeps gpio17 available
+    managed_pin_type pins[] = { {16, true} };
+    pinManager.allocateMultiplePins(pins, sizeof(pins)/sizeof(managed_pin_type), PinOwner::SPI_RAM);
+  }
+  #endif
+  #endif
 
   //DEBUG_PRINT(F("LEDs inited. heap usage ~"));
   //DEBUG_PRINTLN(heapPreAlloc - ESP.getFreeHeap());
@@ -706,7 +716,7 @@ void WLED::setup()
   pinManager.allocatePin(2, true, PinOwner::DMX);
 #endif
 
-#if defined(ALL_JSON_TO_PSRAM) && defined(BOARD_HAS_PSRAM) && (defined(WLED_USE_PSRAM_JSON) || defined(WLED_USE_PSRAM))
+#if defined(ALL_JSON_TO_PSRAM) && (defined(BOARD_HAS_PSRAM) || (ESP_IDF_VERSION_MAJOR > 3)) && (defined(WLED_USE_PSRAM_JSON) || defined(WLED_USE_PSRAM))
   if (psramFound()) {
     DEBUG_PRINT(F("\nfree heap ")); DEBUG_PRINTLN(ESP.getFreeHeap());
     USER_PRINTLN(F("JSON garbage collection (initial)."));

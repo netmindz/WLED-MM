@@ -756,30 +756,32 @@ bool PinManagerClass::isPinOk(byte gpio, bool output) const
     // JTAG: GPIO39-42 are usually used for inline debugging
     // GPIO46 is input only and pulled down
   #else
-    if ((gpio > 5 && gpio < 12) &&   // WLEDMM slightly faster to first check for "potentially reserved pins" and then call ESP.getChipModel()
-        ((strncmp_P(PSTR("ESP32-U4WDH"), ESP.getChipModel(), 11) == 0) ||    // this is the correct identifier, but....
-         (strncmp_P(PSTR("ESP32-PICO-D2"), ESP.getChipModel(), 13) == 0)))   // https://github.com/espressif/arduino-esp32/issues/10683
-    {
-      // this chip has 4 MB of internal Flash and different packaging, so available pins are different!
-      if (((gpio > 5) && (gpio < 9)) || (gpio == 11))
-        return false;
-    } else {
-      // for classic ESP32 (non-mini) modules, these are the SPI flash pins
-      if (gpio > 5 && gpio < 12) return false;      //SPI flash pins
+    // WLEDMM slightly faster to first check for "potentially reserved pins" and then call ESP.getChipModel()
+    if (gpio > 5 && gpio < 12) {
+      if ((strncmp_P(PSTR("ESP32-U4WDH"), ESP.getChipModel(), 11) == 0) ||    // this is the correct identifier, but....
+          (strncmp_P(PSTR("ESP32-PICO-D"), ESP.getChipModel(), 12) == 0)) {   // https://github.com/espressif/arduino-esp32/issues/10683
+        // this chip has 4 MB of internal Flash and different packaging, so available pins are different!
+        if ((gpio > 5 && gpio < 9) || gpio == 11) return false;               // U4WDH/PICO-D2 & PICO-D4: GPIO 6, 7, 8, 11 are used for SPI flash; 9 & 10 are free
+        // if (gpio == 16 || gpio == 17) return false;                        // U4WDH/PICO-D?: GPIO 16 and 17 are used for PSRAM --> WLEDMM handled by WLED::setup()
+      } else {
+        if (strncmp_P(PSTR("ESP32-PICO-V3"), ESP.getChipModel(), 13) == 0) {
+          if (gpio == 6 || gpio == 11) return false;                            // PICO-V3: uses GPIO 6 and 11 for flash
+          if (strstr_P(ESP.getChipModel(), PSTR("V3-02")) != nullptr && (gpio == 9 || gpio == 10)) return false; // PICO-V3-02: uses GPIO 9 and 10 for PSRAM; 7, 8 are free
+        } else
+          // for classic ESP32 (non-mini) modules, these are the SPI flash pins
+          return false;      //SPI flash = pins 6, 7, 8, 9, 10, 11
+      }
     }
-    // WLEDMM gpio 16/17 (PSRAM or SPI FLASH) are handled differently !
-    //
-    // if (((strncmp_P(PSTR("ESP32-PICO"), ESP.getChipModel(), 10) == 0) ||
-    //     (strncmp_P(PSTR("ESP32-U4WDH"), ESP.getChipModel(), 11) == 0))
-    //    && (gpio == 16 || gpio == 17)) return false; // PICO-D4/U4WDH: gpio16+17 are in use for onboard SPI FLASH
-    // if (gpio == 16) return !psramFound(); // PSRAM pins on modules with off-package or in-package PSRAM
-    // if (gpio == 17) {
-    //   if (strncmp_P(PSTR("ESP32-D0WDR2-V3"), ESP.getChipModel(), 15) == 0) {
-    //     return true;
-    //   } else {
-    //     return !psramFound(); // PSRAM pins on modules with in-package PSRAM
-    //   }
-    // }    
+ 
+    // WLEDMM gpio 16/17 (PSRAM or SPI FLASH) are handled differently in WLED::setup() !!
+    //if (gpio == 16) return !psramFound(); // PSRAM pins on modules with off-package or in-package PSRAM
+    //if (gpio == 17) {
+    //  if (strncmp_P(PSTR("ESP32-D0WDR2-V3"), ESP.getChipModel(), 15) == 0) {
+    //    return true;
+    //  } else {
+    //    return !psramFound(); // PSRAM pins on modules with in-package PSRAM
+    //  }
+
   #endif
     if (output) return digitalPinCanOutput(gpio);
     else        return true;
@@ -789,7 +791,7 @@ bool PinManagerClass::isPinOk(byte gpio, bool output) const
   if (gpio < 12) return false; //SPI flash pins
   if (gpio <= NUM_DIGITAL_PINS) return true; //WLEDMM: include pin 17 / A0 / Audio in
 #endif
-  return false;
+  return false; // catches all other invalid pins
 }
 
 PinOwner PinManagerClass::getPinOwner(byte gpio) const {
