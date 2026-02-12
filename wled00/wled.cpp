@@ -569,7 +569,12 @@ void WLED::setup()
   #endif
 
   USER_PRINT(F("CPU:   ")); USER_PRINT(ESP.getChipModel());
-  USER_PRINT(F(" rev.")); USER_PRINT(ESP.getChipRevision());
+  #if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(4, 4, 3) // use the full revision if we can
+    esp_chip_info_t chip_info; esp_chip_info(&chip_info);
+    USER_PRINTF(" v%u.%u", unsigned(chip_info.full_revision / 100), unsigned(chip_info.full_revision % 100));
+  #else
+    USER_PRINT(F(" rev.")); USER_PRINT(ESP.getChipRevision());
+  #endif
   USER_PRINT(F(", ")); USER_PRINT(ESP.getChipCores()); USER_PRINT(F(" core(s)"));
   USER_PRINT(F(", ")); USER_PRINT(ESP.getCpuFreqMHz()); USER_PRINTLN(F("MHz."));
 
