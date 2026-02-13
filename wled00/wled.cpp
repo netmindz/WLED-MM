@@ -906,8 +906,9 @@ void WLED::setup()
 
   // WLEDMM : dump GPIO infos (experimental, UI integration pending)
   //#ifdef WLED_DEBUG
-  USER_PRINTLN(F("\nGPIO\t| Assigned to\t\t| Info"));
+  USER_PRINTLN(F("\n\nGPIO\t| Assigned to\t\t| Info"));
   USER_PRINTLN(F("--------|-----------------------|------------"));
+  USER_FLUSH();  // avoid lost lines (Serial buffer overflow)
   for(int pinNr = 0; pinNr < WLED_NUM_PINS; pinNr++) { // 49 = highest PIN on ESP32-S3
 #if defined(CONFIG_IDF_TARGET_ESP32S3)
     if((pinManager.isPinOk(pinNr, false)) || (pinNr > 18 && pinNr < 21)) {  // softhack007: list USB pins

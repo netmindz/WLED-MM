@@ -137,16 +137,23 @@ String PinManagerClass::getPinSpecialText(int gpio) {  // special purpose PIN in
       if (gpio > 17 && gpio < 20) return (F("USB (CDC) or JTAG"));
       //if (gpio == 2 || gpio == 8 || gpio == 9) return (F("(strapping pin)"));
 
-    #else
-      // "classic" ESP32, or ESP32 PICO-D4
+    #elif defined(CONFIG_IDF_TARGET_ESP32)
+      // "classic" ESP32, or ESP32 PICO
       //if (gpio == 0 || gpio == 2 || gpio == 5) return (F("(strapping pin)"));
       //if (gpio == 12) return (F("(strapping pin - MTDI)"));
       //if (gpio == 15) return (F("(strapping pin - MTDO)"));
       //if (gpio > 11 && gpio < 16) return (F("(optional) JTAG debug probe"));
       #if defined(BOARD_HAS_PSRAM)
-        if (gpio == 16) return (F("(reserved) PSRAM"));
-        if ((gpio == 17) && (strncmp_P(PSTR("ESP32-D0WDR2-V3"), ESP.getChipModel(), 15) != 0) ) return (F("(reserved) PSRAM"));
+        if (gpio == 16) return (F("(reserved) SPI RAM"));
+        if ((gpio == 17) && (strncmp_P(PSTR("ESP32-D0WDR2-V3"), ESP.getChipModel(), 15) != 0) ) return (F("(reserved) SPI RAM"));
+      #else
+        #if (ESP_IDF_VERSION_MAJOR > 3)
+          if (gpio == 16 && psramFound()) return (F("(reserved) SPI RAM"));
+          if ((gpio == 17) && psramFound() && (strncmp_P(PSTR("ESP32-D0WDR2-V3"), ESP.getChipModel(), 15) != 0) ) return (F("(reserved) SPI RAM"));
+        #endif
       #endif
+      if ((gpio == 9 || gpio == 10) && (strncmp_P(PSTR("ESP32-PICO-V3-02"), ESP.getChipModel(), 16) == 0)) // PICO-V3-02: uses GPIO 9 and 10 for PSRAM
+        return (F("SPI RAM"));
       #if defined(ARDUINO_TTGO_T7_V14_Mini32) || defined(ARDUINO_LOLIN_D32_PRO) || defined(ARDUINO_ADAFRUIT_FEATHER_ESP32_V2)
         if (gpio == 35) return (F("(reserved) _VBAT voltage monitoring"));  // WLEDMM experimental
       #endif
