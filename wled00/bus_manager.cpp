@@ -925,6 +925,16 @@ BusHub75Matrix::BusHub75Matrix(BusConfig &bc) : Bus(bc.type, bc.start, bc.autoWh
   USER_PRINTF("MatrixPanel_I2S_DMA config - %ux%u (type %u) length: %u, %u bits/pixel.\n", mxconfig.mx_width, mxconfig.mx_height, bc.type, mxconfig.chain_length, mxconfig.getPixelColorDepthBits() * 3);
   USER_PRINTF("MatrixPanel_I2S_DMA config - clock phase = %s, latch_blanking = %d, min refresh = %d fps.\n", 
               mxconfig.clkphase ? "positive edge":"negative edge", int(mxconfig.latch_blanking), int(mxconfig.min_refresh_rate));
+  USER_PRINTLN("MatrixPanel_I2S_DMA data pins:");
+  USER_FLUSH();
+  USER_PRINTF("\t R1 = %2d,  G1 = %2d,  B1 = %2d,\n", mxconfig.gpio.r1, mxconfig.gpio.g1, mxconfig.gpio.b1);
+  USER_PRINTF("\t R2 = %2d,  G2 = %2d,  B2 = %2d,\n", mxconfig.gpio.r2, mxconfig.gpio.g2, mxconfig.gpio.b2);
+  USER_PRINTF("\t  A = %2d,   B = %2d,   C = %2d,\n", mxconfig.gpio.a, mxconfig.gpio.b, mxconfig.gpio.c);
+  USER_FLUSH();
+  USER_PRINTF("\t  D = %2d,   E = %2d,\n", mxconfig.gpio.d, mxconfig.gpio.e);
+  USER_PRINTF("\tLAT = %2d,  OE = %2d, CLK = %2d\n\n", mxconfig.gpio.lat, mxconfig.gpio.oe, mxconfig.gpio.clk);
+  USER_FLUSH();
+
   DEBUG_PRINT(F("Free heap: ")); DEBUG_PRINTLN(ESP.getFreeHeap()); lastHeap = ESP.getFreeHeap();
 
   // check if we can re-use the existing display driver
