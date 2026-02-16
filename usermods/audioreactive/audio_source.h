@@ -65,10 +65,10 @@ constexpr i2s_port_t AR_I2S_PORT = I2S_NUM_0;       // I2S port to use (do not c
 // data type requested from the I2S driver - currently we always use 32bit
 //#define I2S_USE_16BIT_SAMPLES   // (experimental) define this to request 16bit - more efficient but possibly less compatible
 
-#if defined(WLED_ENABLE_HUB75MATRIX) && defined(CONFIG_IDF_TARGET_ESP32)
-  // this is bitter, but necessary to survive
-  #define I2S_USE_16BIT_SAMPLES
-#endif
+//#if defined(WLED_ENABLE_HUB75MATRIX) && defined(CONFIG_IDF_TARGET_ESP32)
+//  // this is bitter, but necessary to survive // disabled - does not work!!
+//  #define I2S_USE_16BIT_SAMPLES
+//#endif
 
 #ifdef I2S_USE_16BIT_SAMPLES
 #define I2S_SAMPLE_RESOLUTION I2S_BITS_PER_SAMPLE_16BIT
