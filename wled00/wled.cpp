@@ -674,14 +674,17 @@ void WLED::setup()
   //managed_pin_type pins[] = { {12, true}, {13, true}, {14, true}, {15, true}, {16, true}, {17, true} };
   //pinManager.allocateMultiplePins(pins, sizeof(pins)/sizeof(managed_pin_type), PinOwner::SPI_RAM);
   #elif defined(CONFIG_IDF_TARGET_ESP32)
-  // GPIO16/GPIO17 reserved for SPI RAM
+  // GPIO16/GPIO17 possibly reserved for SPI RAM
   if (strncmp_P(PSTR("ESP32-D0WDR2-V3"), ESP.getChipModel(), 15) == 0) {
     // ESP32-D0WDR2-V3 keeps gpio17 available
     managed_pin_type pins[] = { {16, true} };
     pinManager.allocateMultiplePins(pins, sizeof(pins)/sizeof(managed_pin_type), PinOwner::SPI_RAM);
   } else {
-    managed_pin_type pins[] = { {16, true}, {17, true} };
-    pinManager.allocateMultiplePins(pins, sizeof(pins)/sizeof(managed_pin_type), PinOwner::SPI_RAM);
+    // esp32 with PRAM, or pico board with SPI RAM on 16 / 17
+    if (psramFound() || (strncmp("ESP32-PICO", ESP.getChipModel(), 10) == 0) || (strncmp("ESP32-U4WDH", ESP.getChipModel(), 11) == 0)) {
+      managed_pin_type pins[] = { {16, true}, {17, true} };
+      pinManager.allocateMultiplePins(pins, sizeof(pins)/sizeof(managed_pin_type), PinOwner::SPI_RAM);
+    }
   }
 
   #endif
