@@ -71,6 +71,9 @@ constexpr i2s_port_t AR_I2S_PORT = I2S_NUM_0;       // I2S port to use (do not c
 //#endif
 
 #ifdef I2S_USE_16BIT_SAMPLES
+#if (ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(4, 2, 0)) // see https://github.com/MoonModules/WLED-MM/issues/333#issuecomment-3910779668
+#error "16bit sampling currently does not work with newer framework versions. Please build without I2S_USE_16BIT_SAMPLES"
+#endif
 #define I2S_SAMPLE_RESOLUTION I2S_BITS_PER_SAMPLE_16BIT
 #define I2S_datatype int16_t
 #define I2S_unsigned_datatype uint16_t
