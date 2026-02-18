@@ -131,9 +131,10 @@ static volatile bool disableSoundProcessing = false;      // if true, sound proc
 static uint8_t audioSyncEnabled = AUDIOSYNC_NONE;         // bit field: bit 0 - send, bit 1 - receive, bit 2 - use local if not receiving
 static bool audioSyncSequence = true;                     // if true, the receiver will drop out-of-sequence packets
 static uint8_t audioSyncPurge = 1;                        // 0: process each packet (don't purge); 1: auto-purge old packets; 2: only process latest received packet (always purge)
-static bool udpSyncConnected = false;         // UDP connection status -> true if connected to multicast group
+static bool udpSyncConnected = false;                     // UDP connection status -> true if connected to multicast group
+static volatile bool isOOM = false;                       // FFTask: not enough memory for buffers (audio processing failed to start)
 
-#define NUM_GEQ_CHANNELS 16                                           // number of frequency channels. Don't change !!
+#define NUM_GEQ_CHANNELS 16                               // number of frequency channels. Don't change !!
 
 // audioreactive variables
 #ifdef ARDUINO_ARCH_ESP32
@@ -454,13 +455,13 @@ static bool alocateFFTBuffers(void) {
     USER_PRINT(F("\nFree heap ")); USER_PRINTLN(ESP.getFreeHeap());
   #endif
 
-  if (vReal) free(vReal); // should not happen
-  if (vImag) free(vImag); // should not happen
-  if ((vReal = (float*) calloc(samplesFFT, sizeof(float))) == nullptr) return false; // calloc or die
-  if ((vImag = (float*) calloc(samplesFFT, sizeof(float))) == nullptr) return false;
+  if (vReal) d_free(vReal); vReal = nullptr; // should not happen
+  if (vImag) d_free(vImag); vImag = nullptr; // should not happen
+  if ((vReal = (float*) d_calloc(samplesFFT, sizeof(float))) == nullptr) return false; // calloc or die
+  if ((vImag = (float*) d_calloc(samplesFFT, sizeof(float))) == nullptr) return false;
 #ifdef FFT_MAJORPEAK_HUMAN_EAR
-  if (pinkFactors) free(pinkFactors);
-  if ((pinkFactors = (float*) calloc(samplesFFT, sizeof(float))) == nullptr) return false;
+  if (pinkFactors) p_free(pinkFactors);
+  if ((pinkFactors = (float*) p_calloc(samplesFFT, sizeof(float))) == nullptr) return false;
 #endif
 
   #ifdef SR_DEBUG
@@ -471,6 +472,27 @@ static bool alocateFFTBuffers(void) {
   #endif
   return(true); // success
 }
+
+// de-allocate FFT sample buffers from heap
+static void destroyFFTBuffers(bool panicOOM) {
+  #ifdef FFT_MAJORPEAK_HUMAN_EAR
+    if (pinkFactors) p_free(pinkFactors); pinkFactors = nullptr;
+#endif
+  if (vImag) d_free(vImag); vImag = nullptr;
+  if (vReal) d_free(vReal); vReal = nullptr;
+
+  if (panicOOM && !isOOM) { // notify user
+    isOOM = true;
+    errorFlag = ERR_LOW_MEM;
+    USER_PRINTLN("AR startup failed - out of memory!");
+  }
+  #ifdef SR_DEBUG
+    USER_PRINTLN("\ndestroyFFTBuffers() completed successfully.");
+    USER_PRINT(F("Free heap: ")); USER_PRINTLN(ESP.getFreeHeap());
+    USER_FLUSH();
+  #endif
+}
+
 
 // High-Pass "DC blocker" filter
 // see https://www.dsprelated.com/freebooks/filters/DC_Blocker.html
@@ -486,6 +508,22 @@ static void runDCBlocker(uint_fast16_t numSamples, float *sampleBuffer) {
     ym1 = filtered;    
     sampleBuffer[i] = filtered;
   }  
+}
+
+// 
+// FFT runner - "return" from a task function causes crash. This wrapper keeps the task alive
+//
+void runFFTcode(void * parameter) __attribute__((noreturn,used));
+void runFFTcode(void * parameter) {
+  bool firstFail = true; // prevents flood of warnings
+  do {
+    if (!disableSoundProcessing) {
+      FFTcode(parameter);
+      if (firstFail) {USER_PRINTLN(F("warning: unexpected exit of FFT main task."));}
+      firstFail = false;
+    } else firstFail = true; // re-enable warning message
+    vTaskDelay(1000); // if we arrive here, FFcode has returned due to OOM. Wait a bit, then try again.
+  } while (true);  
 }
 
 //
@@ -511,13 +549,18 @@ void FFTcode(void * parameter)
   static float* oldSamples = nullptr; // previous 50% of samples
   static bool haveOldSamples = false; // for sliding window FFT
   bool usingOldSamples = false;
-  if (!oldSamples) oldSamples = (float*) calloc(samplesFFT_2, sizeof(float)); // allocate on first run
-  if (!oldSamples) { disableSoundProcessing = true; return; }                 // no memory -> die
+  if (!oldSamples) oldSamples = (float*) d_calloc(samplesFFT_2, sizeof(float));       // allocate on first run
+  if (!oldSamples) { disableSoundProcessing = true; haveOldSamples = false; destroyFFTBuffers(true); return; } // no memory -> die
 #endif
 
   bool success = true;
   if ((vReal == nullptr) || (vImag == nullptr)) success = alocateFFTBuffers(); // allocate sample buffers on first run
-  if (success == false) { disableSoundProcessing = true; return; }             // no memory -> die
+  if (success == false) {
+    // no memory -> clean up heap, then suspend
+    disableSoundProcessing = true;
+    destroyFFTBuffers(true);
+    return; 
+  }
 
   // create FFT object - we have to do if after allocating buffers
 #if defined(FFT_LIB_REV) && FFT_LIB_REV > 0x19
@@ -527,7 +570,8 @@ void FFTcode(void * parameter)
   // recommended version optimized by @softhack007 (API version 1.9)
   #if defined(WLED_ENABLE_HUB75MATRIX) && defined(CONFIG_IDF_TARGET_ESP32)
     static float* windowWeighingFactors = nullptr;
-    if (!windowWeighingFactors) windowWeighingFactors = (float*) calloc(samplesFFT, sizeof(float)); // cache for FFT windowing factors - use heap
+    if (!windowWeighingFactors) windowWeighingFactors = (float*) d_calloc(samplesFFT, sizeof(float)); // cache for FFT windowing factors - use heap
+    if (!windowWeighingFactors) { disableSoundProcessing = true; haveOldSamples = false;  destroyFFTBuffers(true); return; }    // alloc failed
   #else
     static float windowWeighingFactors[samplesFFT] = {0.0f};                                        // cache for FFT windowing factors - use global RAM
   #endif
@@ -1921,6 +1965,7 @@ class AudioReactive : public Usermod {
     void setup() override
     {
       disableSoundProcessing = true; // just to be sure
+      isOOM = false;
       if (!initDone) {
         // usermod exchangeable data
         // we will assign all usermod exportable data here as pointers to original variables or arrays and allocate memory for pointers
@@ -2497,11 +2542,12 @@ class AudioReactive : public Usermod {
           vTaskResume(FFT_Task);
           connected(); // resume UDP
         } else {
+          isOOM = false;
           if (audioSource)                    // WLEDMM only create FFT task if we have a valid audio source
 //          xTaskCreatePinnedToCore(
 //          xTaskCreate(                        // no need to "pin" this task to core #0
           xTaskCreateUniversal(
-            FFTcode,                          // Function to implement the task
+            runFFTcode,                       // Function to implement the task
             "FFT",                            // Name of the task
             3592,                             // Stack size in words // 3592 leaves 800-1024 bytes of task stack free
             NULL,                             // Task input parameter
@@ -2646,7 +2692,7 @@ class AudioReactive : public Usermod {
 #else  // ESP32 only
         } else {
           // Analog or I2S digital input
-          if (audioSource && (audioSource->isInitialized())) {
+          if (audioSource && (audioSource->isInitialized()) && !isOOM) {
             // audio source successfully configured
             if (audioSource->getType() == AudioSource::Type_I2SAdc) {
               infoArr.add(F("ADC analog"));
@@ -2667,7 +2713,8 @@ class AudioReactive : public Usermod {
           } else {
             // error during audio source setup
             infoArr.add(F("not initialized"));
-            if (dmType < 254) infoArr.add(F(" - check pin settings"));
+            if (isOOM) infoArr.add(F(" - out of memory"));
+            else if (dmType < 254) infoArr.add(F(" - check pin settings"));
           }
         }
 

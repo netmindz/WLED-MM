@@ -77,16 +77,11 @@ static void doSaveState() {
 */
   #if defined(ARDUINO_ARCH_ESP32)
   if (!persist) {
-    if (tmpRAMbuffer!=nullptr) free(tmpRAMbuffer);
+    if (tmpRAMbuffer!=nullptr) p_free(tmpRAMbuffer);
     size_t len = measureJson(*fileDoc) + 1;
     DEBUG_PRINTLN(len);
     // if possible use SPI RAM on ESP32
-    #if defined(BOARD_HAS_PSRAM) && (defined(WLED_USE_PSRAM) || defined(WLED_USE_PSRAM_JSON))        // WLEDMM
-    if (psramFound())
-      tmpRAMbuffer = (char*) ps_malloc(len);
-    else
-    #endif
-      tmpRAMbuffer = (char*) malloc(len);
+    tmpRAMbuffer = (char*) p_malloc(len);
     if (tmpRAMbuffer!=nullptr) {
       serializeJson(*fileDoc, tmpRAMbuffer, len);
     } else {
@@ -298,7 +293,7 @@ void handlePresets()
   #if defined(ARDUINO_ARCH_ESP32)
   //Aircoookie recommended not to delete buffer
   if (tmpPreset==255 && tmpRAMbuffer!=nullptr) {
-    free(tmpRAMbuffer);
+    p_free(tmpRAMbuffer);
     tmpRAMbuffer = nullptr;
   }
   #endif

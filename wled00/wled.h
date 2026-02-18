@@ -204,17 +204,18 @@
 #undef  ALL_JSON_TO_PSRAM
 #define ALL_JSON_TO_PSRAM
 
+// global WLED memory functions (util.cpp)
+#include "util.h"
+
 struct PSRAM_Allocator {
   void* allocate(size_t size) {
-    if (psramFound()) return ps_malloc(size); // use PSRAM if it exists
-    else              return malloc(size);    // fallback
+    return p_malloc(size); // use PSRAM if it exists
   }
   void* reallocate(void* ptr, size_t new_size) {
-    if (psramFound()) return ps_realloc(ptr, new_size); // use PSRAM if it exists
-    else              return realloc(ptr, new_size);    // fallback
+    return p_realloc_malloc_nofree(ptr, new_size); // use PSRAM if it exists
   }
   void deallocate(void* pointer) {
-    free(pointer);
+    p_free(pointer);
   }
 };
 using PSRAMDynamicJsonDocument = BasicJsonDocument<PSRAM_Allocator>;

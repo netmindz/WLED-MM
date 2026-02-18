@@ -1133,6 +1133,8 @@ void serializeInfo(JsonObject root)
   #if defined(ARDUINO_ARCH_ESP32)
     root[F("freestack")] = uxTaskGetStackHighWaterMark(NULL); //WLEDMM
     root[F("minfreeheap")] = ESP.getMinFreeHeap();
+    auto maxFreeBlock = getContiguousFreeHeap();
+    root[F("maxalloc")] = maxFreeBlock;  // for upstream WLED compatibility
   #endif
   #if defined(ARDUINO_ARCH_ESP32)
   #if defined(BOARD_HAS_PSRAM) || (ESP_IDF_VERSION_MAJOR > 3) // V4 can auto-detect PSRAM
