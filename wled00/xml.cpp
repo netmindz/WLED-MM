@@ -112,7 +112,7 @@ void URL_response(AsyncWebServerRequest *request)
   obuf = sbuf;
   olen = 0;
 
-  oappend(SET_F("<html><body><a href=\""));
+  oappend(SET_F("<html lang=\"en\"><body><a href=\""));
   oappend(s2buf);
   oappend(SET_F("\" target=\"_blank\">"));
   oappend(s2buf);
