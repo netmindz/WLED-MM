@@ -732,6 +732,10 @@ void *d_malloc(size_t size) {
   return validateFreeHeap(buffer);
 }
 
+void *d_malloc_only(size_t size) {
+  return d_malloc(size);
+}
+
 void *d_calloc(size_t count, size_t size) {
   void *buffer = calloc(count, size);
   return validateFreeHeap(buffer);
@@ -802,7 +806,7 @@ static inline bool isOkForDRAMHeap(size_t amount) {
   size_t avail = d_measureContiguousFreeHeap();
   if ((amount < avail) && (avail - amount > MIN_HEAP_SIZE)) return true;
   else {
-    DEBUG_PRINTF("* isOkForDRAMHeap() DRAM allocation rejected (%u bytes requested, %u available) !\n", amount, avail);
+    USER_PRINTF("* isOkForDRAMHeap() DRAM allocation rejected (%u bytes requested, %u-%u available).\n", amount, avail, MIN_HEAP_SIZE);
     return(false);
   }
   #else
@@ -856,6 +860,17 @@ void *d_malloc(size_t size) {
   }
   #endif
   if (!buffer) { USER_PRINTF("* d_malloc() failed (%u bytes) !\n", size); }
+  return buffer;
+}
+
+void *d_malloc_only(size_t size) {
+  // variant of d_malloc that only allocates from "internal" DRAM (no PSRAM fallback)
+  void *buffer = nullptr;
+  if (isOkForDRAMHeap(size)) // no RTC RAM allocation allowed, always request DRAM
+    buffer = heap_caps_malloc(size, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+
+  buffer = validateFreeHeap(buffer); // make sure there is enough free heap left
+  if (!buffer) { USER_PRINTF("* d_malloc_only() failed (%u bytes) !\n", size); }
   return buffer;
 }
 

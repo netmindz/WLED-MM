@@ -88,6 +88,8 @@ inline uint8_t hw_random8(uint32_t lowerlimit, uint32_t upperlimit) { uint32_t r
 
 // memory allocation wrappers (util.cpp)
 extern "C" {
+  // only allocate from internal DRAM, never uses PSRAM
+  void *d_malloc_only(size_t);
   // prefer DRAM in d_xalloc functions, PSRAM as fallback
   void *d_malloc(size_t);
   void *d_calloc(size_t, size_t);
