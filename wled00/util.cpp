@@ -806,7 +806,7 @@ static inline bool isOkForDRAMHeap(size_t amount) {
   size_t avail = d_measureContiguousFreeHeap();
   if ((amount < avail) && (avail - amount > MIN_HEAP_SIZE)) return true;
   else {
-    USER_PRINTF("* isOkForDRAMHeap() DRAM allocation rejected (%u bytes requested, %u-%u available).\n", amount, avail, MIN_HEAP_SIZE);
+    DEBUG_PRINTF("* isOkForDRAMHeap() DRAM allocation rejected (%u bytes requested, %u-%u available).\n", amount, avail, MIN_HEAP_SIZE);
     return(false);
   }
   #else
@@ -855,22 +855,30 @@ void *d_malloc(size_t size) {
 
   #if defined(BOARD_HAS_PSRAM) || (ESP_IDF_VERSION_MAJOR > 3) // WLEDMM always try PSRAM (auto-detected)
   if (!buffer && psramFound()) {
-    DEBUG_PRINTF("* d_malloc() using PSRAM(%u bytes).\n", size);
+    DEBUG_PRINTF("* d_malloc() using PSRAM(%u bytes) fsllback.\n", size);
     return heap_caps_malloc_prefer(size, 2, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT, MALLOC_CAP_DEFAULT); // DRAM failed,try PSRAM if available
   }
   #endif
-  if (!buffer) { USER_PRINTF("* d_malloc() failed (%u bytes) !\n", size); }
+
+  if (!buffer) { errorFlag = ERR_LOW_MEM; USER_PRINTF("* d_malloc() failed (%u bytes) !\n", size); }
+  else if (errorFlag == ERR_LOW_MEM) errorFlag = ERR_NONE; // reset mem error flag
   return buffer;
 }
 
 void *d_malloc_only(size_t size) {
-  // variant of d_malloc that only allocates from "internal" DRAM (no PSRAM fallback)
-  void *buffer = nullptr;
-  if (isOkForDRAMHeap(size)) // no RTC RAM allocation allowed, always request DRAM
-    buffer = heap_caps_malloc(size, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
-
+  // variant of d_malloc that only allocates from "internal" DRAM (no PSRAM fallback) - MIN_HEAP_SIZE checking relaxed to post-malloc only
+  void *buffer = nullptr;  
+  #if !defined(CONFIG_IDF_TARGET_ESP32) // try RTCRAM on newer chips
+  if (size <= RTC_RAM_THRESHOLD || getContiguousFreeHeap() < 2*MIN_HEAP_SIZE + size) {
+    buffer = heap_caps_malloc(size, MALLOC_CAP_RTCRAM | MALLOC_CAP_8BIT);
+    DEBUG_PRINTF("* d_malloc() trying RTCRAM (%u bytes) - %s.\n", size, buffer?"success":"fail");
+  }
+  #endif
+  if (!buffer) buffer = heap_caps_malloc(size, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
   buffer = validateFreeHeap(buffer); // make sure there is enough free heap left
-  if (!buffer) { USER_PRINTF("* d_malloc_only() failed (%u bytes) !\n", size); }
+
+  if (!buffer) { errorFlag = ERR_LOW_MEM; USER_PRINTF("* d_malloc_only() failed (%u bytes) !\n", size); }
+  else if (errorFlag == ERR_LOW_MEM) errorFlag = ERR_NONE; // reset mem error flag
   return buffer;
 }
 
@@ -891,11 +899,12 @@ void *d_calloc(size_t count, size_t size) {
 
   #if defined(BOARD_HAS_PSRAM) || (ESP_IDF_VERSION_MAJOR > 3) // WLEDMM always try PSRAM (auto-detected)
   if (!buffer && psramFound()) {
-    DEBUG_PRINTF("* d_calloc() using PSRAM (%u bytes).\n", size*count);
+    DEBUG_PRINTF("* d_calloc() using PSRAM (%u bytes) fallback.\n", size*count);
     return heap_caps_calloc_prefer(count, size, 2, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT, MALLOC_CAP_DEFAULT); // DRAM failed,try PSRAM if available
   }
   #endif
-  if (!buffer) { USER_PRINTF("* d_calloc() failed (%u bytes) !\n", size*count); }
+  if (!buffer) { errorFlag = ERR_LOW_MEM; USER_PRINTF("* d_calloc() failed (%u bytes) !\n", size*count); }
+  else if (errorFlag == ERR_LOW_MEM) errorFlag = ERR_NONE; // reset mem error flag
   return buffer;
 }
 
