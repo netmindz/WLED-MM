@@ -1386,7 +1386,11 @@ void WLED::handleConnection()
       // WLEDMM
       errorFlag = ERR_LOW_MEM;
       retryCount = 1;
-    } else retryCount = 0;  // WLEDMM memory OK - reset counter
+      retryCount1++;
+    } else { 
+      retryCount = 0;  // WLEDMM memory OK - reset counter
+      retryCount1 = 0;
+    }
     lastHeap = heap;
     heapTime = now;
   }
@@ -1411,11 +1415,7 @@ void WLED::handleConnection()
       // WLEDMM
       errorFlag = ERR_LOW_MEM;
       retryCount = 1;
-      retryCount1++;
-    } else { 
-      retryCount = 0;  // WLEDMM memory OK - reset counter
-      retryCount1 = 0;
-    }
+    } else retryCount = 0;  // WLEDMM memory OK - reset counter
     lastHeap = heap;
     heapTime = now;
   }
