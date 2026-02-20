@@ -1351,6 +1351,7 @@ void WLED::handleConnection()
     return;
   }
 
+  static unsigned retryCount1 = 0;  // WLEDMM
   static unsigned retryCount = 0;  // WLEDMM
   #ifdef ARDUINO_ARCH_ESP32
   // reconnect WiFi to clear stale allocations if heap gets too low
@@ -1374,7 +1375,7 @@ void WLED::handleConnection()
         retryCount ++;
       }
       errorFlag = ERR_LOW_MEM;
-    } else if (heap < MIN_HEAP_SIZE) {
+    } else if ((heap < MIN_HEAP_SIZE) && (retryCount1 < 5)) {
       USER_PRINT(F("Heap too low! (step 1, flush unread UDP): "));
       USER_PRINTLN(heap);      
       strip.purgeSegments();
@@ -1410,7 +1411,11 @@ void WLED::handleConnection()
       // WLEDMM
       errorFlag = ERR_LOW_MEM;
       retryCount = 1;
-    } else retryCount = 0;  // WLEDMM memory OK - reset counter
+      retryCount1++;
+    } else { 
+      retryCount = 0;  // WLEDMM memory OK - reset counter
+      retryCount1 = 0;
+    }
     lastHeap = heap;
     heapTime = now;
   }
