@@ -1363,7 +1363,7 @@ void WLED::handleConnection()
     //uint32_t heap = heap_caps_get_largest_free_block(0x1800); // WLEDMM: This is a better metric for free heap.
     uint32_t heap = getContiguousFreeHeap(); // WLEDMM: This is a better metric for free heap.
 #endif
-    if (heap < MIN_HEAP_SIZE && lastHeap < MIN_HEAP_SIZE) {
+    if (heap < MIN_HEAP_CRIT_SIZE && lastHeap < MIN_HEAP_SIZE) { // WLEDMM allow 12% extra margin before "critical"
       if (retryCount < 5) {  // WLEDMM avoid repeated disconnects
         USER_PRINT(F("Heap too low! (step 2, force reconnect): "));
         USER_PRINTLN(heap);

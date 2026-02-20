@@ -536,6 +536,8 @@
   #define MIN_HEAP_SIZE (15*1024) // WLED allocation functions (util.cpp) try to keep this much contiguous heap free for other tasks
 #endif
 #endif
+#define MIN_HEAP_CRIT_SIZE (unsigned(MIN_HEAP_SIZE - (MIN_HEAP_SIZE/8)))  // allow 12% margin before for "critical low"
+
 // threshold for PSRAM use: if heap is running low, requests to allocate_buffer(prefer DRAM) above PSRAM_THRESHOLD may be put in PSRAM
 // if heap is depleted, PSRAM will be used regardless of threshold
 #if defined(CONFIG_IDF_TARGET_ESP32S3)
