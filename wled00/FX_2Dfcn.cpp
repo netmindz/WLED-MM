@@ -44,12 +44,11 @@ void WS2812FX::setUpMatrix() {
       return;
     }
 
-    USER_PRINTF("setUpMatrix %d x %d\n", Segment::maxWidth, Segment::maxHeight);
+    DEBUG_PRINTF("setUpMatrix %d x %d\n", Segment::maxWidth, Segment::maxHeight);
     
     // WLEDMM check if mapping table is necessary (avoiding heap fragmentation)
-#if defined(WLED_ENABLE_HUB75MATRIX)
-    bool needLedMap = (loadedLedmap >0);              // ledmap loaded
-    needLedMap |= WLED_FS.exists(F("/2d-gaps.json")); // gapFile found
+//#if defined(WLED_ENABLE_HUB75MATRIX)
+   bool needLedMap = (loadedLedmap >0);              // ledmap loaded
     needLedMap |= panel.size() > 1;                   // 2D config: more than one panel
     if (panel.size() == 1) {
       Panel &p = panel[0];
@@ -58,25 +57,31 @@ void WS2812FX::setUpMatrix() {
       needLedMap |= p.bottomStart | p.rightStart;        // panel not top left, or not left->light
       needLedMap |= (p.xOffset > 0) || (p.yOffset > 0);  // panel does not start at (0,0)
     }
-#else
-    bool needLedMap = true;                              // always use ledMaps on non-HUB75 builds
-#endif
+    needLedMap |= (ledMaps >1) && (loadedLedmap >0);     // ledmap1...10 loaded
+    if (!needLedMap) { // only perform file cheking if we must (may cause flicker)
+      needLedMap |= WLED_FS.exists(F("/2d-gaps.json"));  // gapFile found
+      needLedMap |= WLED_FS.exists(F("/ledmap.json"));   // global ledmap found
+    }
+//#else
+//    bool needLedMap = true;                              // un-comment to always use ledMaps on non-HUB75 builds
+//#endif
 
     //WLEDMM recreate customMappingTable if more space needed
     if (Segment::maxWidth * Segment::maxHeight > customMappingTableSize) {
       size_t size = max(ledmapMaxSize, size_t(Segment::maxWidth * Segment::maxHeight)); // TroyHacks
       if (!needLedMap) size = 0;                                                        // softhack007
-      USER_PRINTF("setupmatrix customMappingTable alloc %d from %d\n", size, customMappingTableSize);
+      DEBUG_PRINTF("setupmatrix customMappingTable alloc %d from %d\n", size, customMappingTableSize);
       //if (customMappingTable != nullptr) delete[] customMappingTable;
       //customMappingTable = new(std::nothrow) uint16_t[size];
 
       // don't use new / delete
       if ((size > 0) && (customMappingTable != nullptr)) {  // resize
-        customMappingTable = (uint16_t*) reallocf(customMappingTable, sizeof(uint16_t) * size); // reallocf will free memory if it cannot resize
+        //customMappingTable = (uint16_t*) reallocf(customMappingTable, sizeof(uint16_t) * size); // reallocf will free memory if it cannot resize
+        customMappingTable = (uint16_t*) d_realloc_malloc(customMappingTable, sizeof(uint16_t) * size); // will free memory if it cannot resize
       }
       if ((size > 0) && (customMappingTable == nullptr)) { // second try
         DEBUG_PRINTLN("setUpMatrix: trying to get fresh memory block.");
-        customMappingTable = (uint16_t*) calloc(size, sizeof(uint16_t));
+        customMappingTable = (uint16_t*) d_calloc(size, sizeof(uint16_t));
         if (customMappingTable == nullptr) { 
           USER_PRINTLN("setUpMatrix: alloc failed");
           errorFlag = ERR_LOW_MEM; // WLEDMM raise errorflag
@@ -101,7 +106,7 @@ void WS2812FX::setUpMatrix() {
       // content of the file is just raw JSON array in the form of [val1,val2,val3,...]
       // there are no other "key":"value" pairs in it
       // allowed values are: -1 (missing pixel/no LED attached), 0 (inactive/unused pixel), 1 (active/used pixel)
-      char    fileName[32]; strcpy_P(fileName, PSTR("/2d-gaps.json")); // reduce flash footprint
+      char    fileName[32]; strcpy_P(fileName, PSTR("/2d-gaps.json")); // reduce flash footprint //WLEDMM you sure?
       bool    isFile = WLED_FS.exists(fileName);
       size_t  gapSize = 0;
       int8_t *gapTable = nullptr;
@@ -118,7 +123,7 @@ void WS2812FX::setUpMatrix() {
           JsonArray map = doc.as<JsonArray>();
           gapSize = map.size();
           if (!map.isNull() && (gapSize > 0) && gapSize >= customMappingSize) { // not an empty map //softhack also check gapSize>0 
-            gapTable = new(std::nothrow) int8_t[gapSize];
+            gapTable = static_cast<int8_t*>(p_malloc(gapSize));
             if (gapTable) for (size_t i = 0; i < gapSize; i++) {
               gapTable[i] = constrain(map[i], -1, 1);
             }
@@ -148,7 +153,7 @@ void WS2812FX::setUpMatrix() {
       }
 
       // delete gap array as we no longer need it
-      if (gapTable) {delete[] gapTable; gapTable=nullptr;}   // softhack prevent dangling pointer
+      if (gapTable) {p_free(gapTable); gapTable=nullptr;}   // softhack prevent dangling pointer
 
       #ifdef WLED_DEBUG_MAPS
       DEBUG_PRINTF("Matrix ledmap: \n");
@@ -172,6 +177,7 @@ void WS2812FX::setUpMatrix() {
     }
   }
 
+#if 0 // WLEDMM this test is too early - ledmap will be loaded later
 #ifdef WLED_ENABLE_HUB75MATRIX
   // softhack007 hack: delete mapping table in case it only contains "identity"
   if (customMappingTable != nullptr && customMappingTableSize > 0) {
@@ -180,7 +186,7 @@ void WS2812FX::setUpMatrix() {
       if (customMappingTable[i] != (uint16_t)i ) isIdentity = false;
     }
     if (isIdentity) {
-      free(customMappingTable); customMappingTable = nullptr;      
+      d_free(customMappingTable); customMappingTable = nullptr;      
       USER_PRINTF("!setupmatrix: customMappingTable is not needed. Dropping %d bytes.\n", customMappingTableSize * sizeof(uint16_t));
       customMappingTableSize = 0;
       customMappingSize = 0;
@@ -188,57 +194,26 @@ void WS2812FX::setUpMatrix() {
     }
   }
 #endif
+#endif
 
 #else
   isMatrix = false; // no matter what config says
 #endif
 }
 
+
 // absolute matrix version of setPixelColor(), without error checking
-void IRAM_ATTR __attribute__((hot)) WS2812FX::setPixelColorXY_fast(int x, int y, uint32_t col) //WLEDMM: IRAM_ATTR conditionally
-{
-  uint_fast16_t index = y * Segment::maxWidth + x;
-  if (index < customMappingSize) index = customMappingTable[index];
-  if (index >= _length) return;
-  busses.setPixelColor(index, col);
-}
+// WLEDMM: WS2812FX::setPixelColorXY_fast() moved FX.h for speed (inlining)
 
 // absolute matrix version of setPixelColor()
-void IRAM_ATTR_YN WS2812FX::setPixelColorXY(int x, int y, uint32_t col) //WLEDMM: IRAM_ATTR conditionally
-{
-#ifndef WLED_DISABLE_2D
-  if (!isMatrix) return; // not a matrix set-up
-  uint_fast16_t index = y * Segment::maxWidth + x;
-#else
-  uint16_t index = x;
-#endif
-  if (index < customMappingSize) index = customMappingTable[index];
-  if (index >= _length) return;
-  busses.setPixelColor(index, col);
-}
+// WLEDMM: WS2812FX::setPixelColorXY() moved FX.h for speed (inlining)
 
 // returns RGBW values of pixel
-uint32_t __attribute__((hot)) WS2812FX::getPixelColorXY(uint16_t x, uint16_t y) const {
-#ifndef WLED_DISABLE_2D
-  uint_fast16_t index = (y * Segment::maxWidth + x); //WLEDMM: use fast types
-#else
-  uint16_t index = x;
-#endif
-  if (index < customMappingSize) index = customMappingTable[index];
-  if (index >= _length) return 0;
-  return busses.getPixelColor(index);
-}
+// WLEDMM: WS2812FX::getPixelColorXY() moved FX.h for speed (inlining)
 
-uint32_t __attribute__((hot)) WS2812FX::getPixelColorXYRestored(uint16_t x, uint16_t y)  const {  // WLEDMM gets the original color from the driver (without downscaling by _bri)
-  #ifndef WLED_DISABLE_2D
-    uint_fast16_t index = (y * Segment::maxWidth + x); //WLEDMM: use fast types
-  #else
-    uint16_t index = x;
-  #endif
-  if (index < customMappingSize) index = customMappingTable[index];
-  if (index >= _length) return 0;
-  return busses.getPixelColorRestored(index);
-}
+// WLEDMM gets the original color from the driver (without downscaling by _bri)
+// WLEDMM: WS2812FX::getPixelColorXYRestored() moved FX.h for speed (inlining)
+
 
 ///////////////////////////////////////////////////////////
 // Segment:: routines
@@ -281,7 +256,7 @@ void IRAM_ATTR __attribute__((hot)) Segment::setPixelColorXY_fast(int x, int y, 
   }
 
 #if 0 // this is still a dangerous optimization
-  if ((i < UINT_MAX) && sameColor && (call > 0) && (!transitional)  && (mode != FX_MODE_2DSCROLLTEXT) && (ledsrgb[i] == CRGB(scaled_col))) return; // WLEDMM looks like nothing to do
+  if ((i < UINT_MAX) && sameColor && (call > 0) && (!transitional) && (!freeze) && (mode != FX_MODE_2DSCROLLTEXT) && (ledsrgb[i] == CRGB(scaled_col))) return; // WLEDMM looks like nothing to do
 #endif
 
   // handle reverse and transpose
@@ -343,7 +318,7 @@ void IRAM_ATTR_YN Segment::setPixelColorXY(int x, int y, uint32_t col) //WLEDMM:
   }
 
 #if 0 // this is a dangerous optimization
-  if ((i < UINT_MAX) && sameColor && (call > 0) && (!transitional) && (mode != FX_MODE_2DSCROLLTEXT) && (ledsrgb[i] == CRGB(col))) return; // WLEDMM looks like nothing to do
+  if ((i < UINT_MAX) && sameColor && (call > 0) && (!transitional) && (!freeze) && (mode != FX_MODE_2DSCROLLTEXT) && (ledsrgb[i] == CRGB(col))) return; // WLEDMM looks like nothing to do
 #endif
 
   if (reverse  ) x = cols  - x - 1;
@@ -367,7 +342,7 @@ void IRAM_ATTR_YN Segment::setPixelColorXY(int x, int y, uint32_t col) //WLEDMM:
 
   x *= glen_; // expand to physical pixels
   y *= glen_; // expand to physical pixels
-  if (x >= wid_ || y >= hei_) return;  // if pixel would fall out of segment just exit
+  if (unsigned(x) >= wid_ || unsigned(y) >= hei_) return;  // if pixel would fall out of segment just exit
 
   const int grp_ = grouping; // WLEDMM optimization
   for (int j = 0; j < grp_; j++) {   // groupping vertically
@@ -394,7 +369,7 @@ void IRAM_ATTR_YN Segment::setPixelColorXY(int x, int y, uint32_t col) //WLEDMM:
 
 // WLEDMM setPixelColorXY(float x, float y, uint32_t col, ..) is depricated. use wu_pixel(x,y,col) instead.
 // anti-aliased version of setPixelColorXY()
-void Segment::setPixelColorXY(float x, float y, uint32_t col, bool aa, bool fast) // WLEDMM some speedups due to fast int and faster sqrt16
+void Segment::setPixelColorXY(float x, float y, uint32_t col, bool aa, bool fast) // WLEDMM some speedups due to fast int and faster sqrt32_bw
 {
   if (Segment::maxHeight==1) return; // not a matrix set-up
   if (x<0.0f || x>1.0f || y<0.0f || y>1.0f) return; // not normalized
@@ -426,10 +401,10 @@ void Segment::setPixelColorXY(float x, float y, uint32_t col, bool aa, bool fast
         setPixelColorXY(xL, yB, color_blend(col, cXLYB, uint8_t(sqrtf(dL*dB)*255.0f))); // blend BL pixel
         setPixelColorXY(xR, yB, color_blend(col, cXRYB, uint8_t(sqrtf(dR*dB)*255.0f))); // blend BR pixel
       } else {
-        setPixelColorXY(xL, yT, color_blend(col, cXLYT, uint8_t(sqrt16(dL*dT*65025.0f)))); // blend TL pixel     // WLEDMM: use faster sqrt16 for integer; perform multiplication by 255^2 before sqrt
-        setPixelColorXY(xR, yT, color_blend(col, cXRYT, uint8_t(sqrt16(dR*dT*65025.0f)))); // blend TR pixel     //         this is possible because sqrt(a) * sqrt(b)  =  sqrt(a * b)
-        setPixelColorXY(xL, yB, color_blend(col, cXLYB, uint8_t(sqrt16(dL*dB*65025.0f)))); // blend BL pixel
-        setPixelColorXY(xR, yB, color_blend(col, cXRYB, uint8_t(sqrt16(dR*dB*65025.0f)))); // blend BR pixel
+        setPixelColorXY(xL, yT, color_blend(col, cXLYT, uint8_t(sqrt32_bw(dL*dT*65025.0f)))); // blend TL pixel     // WLEDMM: use faster sqrt32_bw for integer; perform multiplication by 255^2 before sqrt
+        setPixelColorXY(xR, yT, color_blend(col, cXRYT, uint8_t(sqrt32_bw(dR*dT*65025.0f)))); // blend TR pixel     //         this is possible because sqrt(a) * sqrt(b)  =  sqrt(a * b)
+        setPixelColorXY(xL, yB, color_blend(col, cXLYB, uint8_t(sqrt32_bw(dL*dB*65025.0f)))); // blend BL pixel
+        setPixelColorXY(xR, yB, color_blend(col, cXRYB, uint8_t(sqrt32_bw(dR*dB*65025.0f)))); // blend BR pixel
       }
     } else if (xR!=xL && yT==yB) {
       setPixelColorXY(xR, yT, color_blend(col, cXLYT, uint8_t(dL*255.0f))); // blend L pixel
@@ -874,11 +849,11 @@ void Segment::drawArc(unsigned x0, unsigned y0, int radius, uint32_t color, uint
 //WLEDMM for artifx
 bool Segment::jsonToPixels(char * name, uint8_t fileNr) {
   if (!isActive()) return true; // segment not active, nothing to do
-  char fileName[32] = { '\0' };
+  char fileName[WLED_MAX_SEGNAME_LEN+12] = { '\0' }; // we need up to 40 bytes (seg.name is 32 bytes max)
   //WLEDMM: als support segment name ledmaps
   bool isFile = false;
   // strcpy_P(fileName, PSTR("/mario"));
-  snprintf(fileName, sizeof(fileName), "/%s%d.json", name, fileNr); //WLEDMM: trick to not include 0 in ledmap.json
+  snprintf(fileName, sizeof(fileName)-1, "/%s%d.json", name, fileNr); //WLEDMM: trick to not include 0 in ledmap.json
   // strcat(fileName, ".json");
   isFile = WLED_FS.exists(fileName);
 
@@ -909,21 +884,51 @@ bool Segment::jsonToPixels(char * name, uint8_t fileNr) {
   return true;
 }
 
-#include "src/font/console_font_4x6.h"
-#include "src/font/console_font_5x8.h"
-#include "src/font/console_font_5x12.h"
-#include "src/font/console_font_6x8.h"
-#include "src/font/console_font_7x9.h"
+#include "wled_fonts.hpp"
+#if defined(WLED_ENABLE_FULL_FONTS)
+#include "src/font/codepages.h"
+#endif
+
+// unicode-aware wrapper for drawCharacter(), to be called from  mode_2Dscrollingtext()
+void Segment::drawText(const unsigned char* text, size_t maxLen, int16_t x, int16_t y, uint8_t w, uint8_t h, uint32_t color, uint32_t col2, bool drawShadow) {
+  if (!isActive()) return; // not active
+  //size_t maxLetters = WLED_MAX_SEGNAME_LEN;
+  const size_t numberOfChars = strnlen((const char *) text, maxLen); // size in bytes // toDo check if this is needed - duplicate of maxLen?
+
+#if defined(WLED_ENABLE_FULL_FONTS)
+  FontInfo_t font = getFontInfo(w, h);                    // use central font selection legic
+  uint16_t decoded_text[WLED_MAX_SEGNAME_LEN+1] = { 0 };  // UTF-16 converted text. Cannot be longer than WLED_MAX_SEGNAME_LEN
+  size_t utf16_index = 0;
+  for(const unsigned char* now = text; now != nullptr && now[0] != '\0'; now = nextUnicode(now, maxLen)) {
+    if (utf16_index < WLED_MAX_SEGNAME_LEN) {
+      decoded_text[utf16_index] = unicodeToWchar16(now, maxLen);                   // UTF-8 decode into decoded_text
+      decoded_text[utf16_index] = wchar16ToCodepage437(decoded_text[utf16_index]); // decoded_text to CP437 (in-place conversion)
+      if ((decoded_text[utf16_index] >= font.firstChar) && ((decoded_text[utf16_index] <= font.lastChar))) // don't advance on NUL, or on codes not suppoted in DrawCharacter
+        utf16_index++;
+    }
+  }
+  decoded_text[utf16_index] = 0; // NUL terminate string
+  size_t textLength = min(utf16_index, numberOfChars);
+#else
+  const unsigned char* decoded_text = text;  // fallback
+  size_t textLength = min(strnlen((char*)text, maxLen), numberOfChars);
+#endif
+  // pass characters to drawCharacter()
+  for (int i = 0; i < textLength; i++) {
+    SEGMENT.drawCharacter((unsigned char) decoded_text[i], x + w*i, y, w, h, color, col2, drawShadow);
+  }
+}
 
 // draws a raster font character on canvas
 // only supports: 4x6=24, 5x8=40, 5x12=60, 6x8=48 and 7x9=63 fonts ATM
 void Segment::drawCharacter(unsigned char chr, int16_t x, int16_t y, uint8_t w, uint8_t h, uint32_t color, uint32_t col2, bool drawShadow) {
   if (!isActive()) return; // not active
-  if (chr < 32 || chr > 126) return; // only ASCII 32-126 supported
-  chr -= 32; // align with font table entries
   const uint16_t cols = virtualWidth();
   const uint16_t rows = virtualHeight();
-  const int font = w*h;
+  FontInfo_t font = getFontInfo(w, h);                      // use central font selection logic
+  if (!font.isProgMem || font.width_bytes > 1) return;      // do nothing for not (yet) supported font features: width_bytes > 1, !isProgMem
+  if (chr < font.firstChar || chr > font.lastChar) return;  // do nothing when out of limits
+  chr = chr - font.firstChar;                               // adjust chr to point to the first allowed character byte
 
   CRGB col = CRGB(color);
   CRGBPalette16 grad = CRGBPalette16(col, (col2 != BLACK) ? CRGB(col2) : col);
@@ -931,41 +936,30 @@ void Segment::drawCharacter(unsigned char chr, int16_t x, int16_t y, uint8_t w, 
 
   //if (w<5 || w>6 || h!=8) return;
   if (drawShadow) w++; // one more column for shadow on right side
-  for (int i = 0; i<h; i++) { // character height
-    int16_t y0 = y + i;
+  for (int i = 0; i<h; i++) { //  // paint character - top down by row (height)
+    int y0 = y + i;
     if (y0 < 0) continue; // drawing off-screen
     if (y0 >= rows) break; // drawing off-screen
     uint8_t bits = 0;
     uint8_t bits_up = 0; // WLEDMM this is the previous line: font[(chr * h) + i -1]
-    switch (font) {
-      case 24: bits = pgm_read_byte_near(&console_font_4x6[(chr * h) + i]);
-        if ((i>0) && drawShadow) bits_up = pgm_read_byte_near(&console_font_4x6[(chr * h) + i -1]);
-        break;  // 5x8 font
-      case 40: bits = pgm_read_byte_near(&console_font_5x8[(chr * h) + i]); 
-        if ((i>0) && drawShadow) bits_up = pgm_read_byte_near(&console_font_5x8[(chr * h) + i -1]);
-        break;  // 5x8 font
-      case 48: bits = pgm_read_byte_near(&console_font_6x8[(chr * h) + i]); 
-        if ((i>0) && drawShadow) bits_up = pgm_read_byte_near(&console_font_6x8[(chr * h) + i -1]);
-        break;  // 6x8 font
-      case 63: bits = pgm_read_byte_near(&console_font_7x9[(chr * h) + i]); 
-        if ((i>0) && drawShadow) bits_up = pgm_read_byte_near(&console_font_7x9[(chr * h) + i -1]);
-        break;  // 7x9 font
-      case 60: bits = pgm_read_byte_near(&console_font_5x12[(chr * h) + i]); 
-        if ((i>0) && drawShadow) bits_up = pgm_read_byte_near(&console_font_5x12[(chr * h) + i -1]);
-        break; // 5x12 font
-      default: return;
-    }
+
+    // for wide fonts, we can add a loop here :for(offset=0, offset < font.width_bytes; offset++) {}
+
+    // get 8 pixels (byte) from raw font data
+    bits = pgm_read_byte_near(&font.raw[(chr * h) + i]);
+    if ((i>0) && drawShadow) bits_up = pgm_read_byte_near(&font.raw[(chr * h) + i -1]);
+
     if (col2 != BLACK) col = ColorFromPalette(grad, (i+1)*255/h, 255, NOBLEND);
     uint32_t fgCol = uint32_t(col) & 0x00FFFFFF; // WLEDMM cache color value
 
-    for (int j = 0; j<w; j++) { // character width
-      int16_t x0 = x + (w-1) - j;
-      if ((x0 >= 0) || (x0 < cols)) {
+    for (int j = 0; j<w; j++) { // paint character - single row of pixels (width)
+      int x0 = x + (w-1) - j;
+      if (unsigned(x0) < cols) { // WLEDMM same as "x0 > 0 && x0 < cols"
         if ((bits>>(j+(8-w))) & 0x01) { // bit set & drawing on-screen
         setPixelColorXY(x0, y0, fgCol);
         } else {
           if (drawShadow) {
-			// WLEDMM
+			      // WLEDMM
             if ((j < (w-1)) && (bits>>(j+(8-w) +1)) & 0x01) setPixelColorXY(x0, y0, bgCol); // blank when pixel to the right is set
             else if ((j > 0) && (bits>>(j+(8-w) -1)) & 0x01) setPixelColorXY(x0, y0, bgCol);// blank when pixel to the left is set
             else if ((bits_up>>(j+(8-w))) & 0x01) setPixelColorXY(x0, y0, bgCol);           // blank when pixel above is set

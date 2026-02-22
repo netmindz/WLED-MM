@@ -91,6 +91,22 @@
   #endif
 #endif
 
+#ifndef WLED_MAX_SEGNAME_LEN
+  #ifdef ESP8266
+    #define WLED_MAX_SEGNAME_LEN 32
+  #else
+    #define WLED_MAX_SEGNAME_LEN 48  // WLEDMM upstream uses 64, but 48 seems to be a good compromise between flexibility and memory needed
+  #endif
+#else
+  #if WLED_MAX_SEGNAME_LEN<32
+    #undef WLED_MAX_SEGNAME_LEN
+    #define WLED_MAX_SEGNAME_LEN 32
+  #else
+    #warning WLED UI does not support your modified maximum segment name length!
+  #endif
+#endif
+
+
 //Usermod IDs
 #define USERMOD_ID_RESERVED               0     //Unused. Might indicate no usermod present
 #define USERMOD_ID_UNSPECIFIED            1     //Default value for a general user mod that does not specify a custom ID
@@ -152,14 +168,17 @@
 #define AP_BEHAVIOR_NO_CONN               1     //Open when no connection (either after boot or if connection is lost)
 #define AP_BEHAVIOR_ALWAYS                2     //Always open
 #define AP_BEHAVIOR_BUTTON_ONLY           3     //Only when button pressed for 6 sec
-
+#define AP_BEHAVIOR_TEMPORARY             4     //Open AP when no connection after boot but only temporary //WLEDMM not yet supported
+#ifndef WLED_AP_TIMEOUT
+  #define WLED_AP_TIMEOUT            300000     //Temporary AP timeout
+#endif
 //Notifier callMode
 #define CALL_MODE_INIT           0     //no updates on init, can be used to disable updates
 #define CALL_MODE_DIRECT_CHANGE  1
 #define CALL_MODE_BUTTON         2     //default button actions applied to selected segments
-#define CALL_MODE_NOTIFICATION   3
-#define CALL_MODE_NIGHTLIGHT     4
-#define CALL_MODE_NO_NOTIFY      5
+#define CALL_MODE_NOTIFICATION   3     //caused by incoming notification (UDP or DMX preset)
+#define CALL_MODE_NIGHTLIGHT     4     //nightlight progress
+#define CALL_MODE_NO_NOTIFY      5     //change state but do not send notifications (UDP)
 #define CALL_MODE_FX_CHANGED     6     //no longer used
 #define CALL_MODE_HUE            7
 #define CALL_MODE_PRESET_CYCLE   8     //no longer used
@@ -275,6 +294,10 @@
 #define COL_ORDER_GBR             5
 #define COL_ORDER_MAX             5
 
+//ESP-NOW  //WLEDMM not yet supported
+#define ESP_NOW_STATE_UNINIT       0
+#define ESP_NOW_STATE_ON           1
+#define ESP_NOW_STATE_ERROR        2
 
 //Button type
 #define BTN_TYPE_NONE             0
@@ -286,9 +309,10 @@
 #define BTN_TYPE_TOUCH            6
 #define BTN_TYPE_ANALOG           7
 #define BTN_TYPE_ANALOG_INVERTED  8
+#define BTN_TYPE_TOUCH_SWITCH     9    //WLEDMM not yet supported
 
 //Ethernet board types
-#define WLED_NUM_ETH_TYPES       12 //WLEDMM +1 for Olimex ESP32-Gateway
+#define WLED_NUM_ETH_TYPES       15 //WLEDMM +1 for Olimex ESP32-Gateway
 
 #define WLED_ETH_NONE             0
 #define WLED_ETH_WT32_ETH01       1
@@ -301,7 +325,10 @@
 #define WLED_ETH_QUINLED_OCTA     8
 #define WLED_ETH_ABCWLEDV43ETH    9
 #define WLED_ETH_SERG74          10
-#define WLED_ETH_OLIMEX_GTW      11
+#define WLED_ETH_ESP32_POE_WROVER 11
+#define WLED_ETH_LILYGO_T_POE_PRO 12
+#define WLED_ETH_GLEDOPTO         13
+#define WLED_ETH_OLIMEX_GTW      14
 
 //Hue error codes
 #define HUE_ERROR_INACTIVE        0
@@ -335,6 +362,7 @@
 
 //Playlist option byte
 #define PL_OPTION_SHUFFLE      0x01
+#define PL_OPTION_RESTORE      0x02     //WLEDMM not yet supported
 
 // Segment capability byte
 #define SEG_CAPABILITY_RGB     0x01
@@ -344,8 +372,11 @@
 // WLED Error modes
 #define ERR_NONE         0  // All good :)
 #define ERR_DENIED       1  // Permission denied
-#define ERR_EEP_COMMIT   2  // Could not commit to EEPROM (wrong flash layout?) OBSOLETE
+#define ERR_CONCURRENCY  2  // Conurrency (client active)  //WLEDMM was ERR_EEP_COMMIT (obsolete)
 #define ERR_NOBUF        3  // JSON buffer was not released in time, request cannot be handled at this time
+#define ERR_NOT_IMPL     4  // Not implemented
+#define ERR_NORAM_PX     7  // not enough RAM for pixels
+#define ERR_NORAM        8  // effect RAM depleted
 #define ERR_JSON         9  // JSON parsing failed (input too large?)
 #define ERR_FS_BEGIN    10  // Could not init filesystem (no partition?)
 #define ERR_FS_QUOTA    11  // The FS is full or the maximum file size is reached
@@ -438,7 +469,7 @@
   #if !defined(USERMOD_AUDIOREACTIVE)
     #define SETTINGS_STACK_BUF_SIZE 3834   // WLEDMM added 696+32 bytes of margin (was 3096)
   #else
-    #define SETTINGS_STACK_BUF_SIZE 4000   // WLEDMM more buffer for audioreactive UI (add '-D CONFIG_ASYNC_TCP_TASK_STACK_SIZE=9216' to your build_flags)
+    #define SETTINGS_STACK_BUF_SIZE 4000   // WLEDMM more buffer for audioreactive UI (add '-D CONFIG_ASYNC_TCP_STACK_SIZE=9216' to your build_flags)
   #endif
 #endif
 
@@ -500,10 +531,46 @@
 #endif
 #endif
 
-//#define MIN_HEAP_SIZE (8k for AsyncWebServer)
+// minimum heap size required to process web requests: try to keep free heap above this value
 #if !defined(MIN_HEAP_SIZE)
-#define MIN_HEAP_SIZE 8192
+#ifdef ESP8266
+  #define MIN_HEAP_SIZE (9*1024)
+#else
+  #define MIN_HEAP_SIZE (15*1024) // WLED allocation functions (util.cpp) try to keep this much contiguous heap free for other tasks
 #endif
+#endif
+#define MIN_HEAP_CRIT_SIZE (unsigned(MIN_HEAP_SIZE - (MIN_HEAP_SIZE/8)))  // allow 12% margin before for "critical low"
+
+// threshold for PSRAM use: if heap is running low, requests to allocate_buffer(prefer DRAM) above PSRAM_THRESHOLD may be put in PSRAM
+// if heap is depleted, PSRAM will be used regardless of threshold
+#if defined(CONFIG_IDF_TARGET_ESP32S3)
+  #define PSRAM_THRESHOLD (12*1024) // S3 has plenty of DRAM
+#elif defined(CONFIG_IDF_TARGET_ESP32)
+  #define PSRAM_THRESHOLD (5*1024)
+#else
+  #define PSRAM_THRESHOLD (2*1024) // S2 does not have a lot of RAM. C3 and ESP8266 do not support PSRAM: the value is not used
+#endif
+
+// Web server limits (8k for AsyncWebServer)
+//#if !defined(MIN_HEAP_SIZE)
+//#define MIN_HEAP_SIZE 8192
+//#endif
+
+#ifdef ESP8266
+// Minimum heap to consider handling a request
+#define WLED_REQUEST_MIN_HEAP (8*1024)
+// Estimated maximum heap required by any one request
+#define WLED_REQUEST_HEAP_USAGE (6*1024)
+#else
+// ESP32 TCP stack needs much more RAM than ESP8266
+// Minimum heap remaining before queuing a request
+#define WLED_REQUEST_MIN_HEAP (12*1024)
+// Estimated maximum heap required by any one request
+#define WLED_REQUEST_HEAP_USAGE (12*1024)
+#endif
+// Maximum number of requests in queue; absolute cap on web server resource usage.
+// Websockets do not count against this limit.
+#define WLED_REQUEST_MAX_QUEUE 6
 
 // Maximum size of node map (list of other WLED instances)
 #ifdef ESP8266
@@ -568,8 +635,18 @@
 //         error only in MM, not in upstream... tbd: find out why
 #ifdef ARDUINO_ARCH_ESP32
   #define IRAM_ATTR_YN IRAM_ATTR
+  #define DRAM_ATTR_YN DRAM_ATTR
 #else
   #define IRAM_ATTR_YN
+  #define DRAM_ATTR_YN 
+#endif
+
+#define WLED_O2_ATTR __attribute__((optimize("O2")))
+
+#if !defined(WLEDMM_SAVE_FLASH) // WLEDMM
+#define WLED_O3_ATTR __attribute__((optimize("O3,fast-math")))
+#else
+#define WLED_O3_ATTR WLED_O2_ATTR   // -O3 increases flash size due to loop unrolling
 #endif
 
 #endif

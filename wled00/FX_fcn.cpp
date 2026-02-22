@@ -8,7 +8,10 @@
 #include "FX.h"
 #include "palettes.h"
 #ifdef ARDUINO_ARCH_ESP32
-#include <esp_timer.h>     // WLEDMM to get esp_timer_get_time() 
+#include <esp_timer.h>     // WLEDMM to get esp_timer_get_time()
+#include "freertos/FreeRTOS.h"
+#include "freertos/portmacro.h"
+WLED_create_spinlock(ledsrgb_mux); // to protect deleting Segment::_globalLeds and Segment::ledsrgb
 #endif
 
 /*
@@ -53,12 +56,12 @@
   #error "Max segments must be at least max number of busses!"
 #endif
 
-// WLEDMM experimental . this is a "C style" wrapper for strip.waitUntilIdle()
+// WLEDMM experimental . this is a "C style" wrapper for strip.waitUntilIdle();
 // This workaround is just needed for the segment class, that does't know about "strip"
 void strip_wait_until_idle(String whoCalledMe) {
 #if defined(ARDUINO_ARCH_ESP32) && defined(WLEDMM_PROTECT_SERVICE)  // WLEDMM experimental 
   if (strip.isServicing() && (strncmp(pcTaskGetTaskName(NULL), "loopTask", 8) != 0)) { // if we are in looptask (arduino loop), its safe to proceed without waiting
-  USER_PRINTLN(whoCalledMe + String(": strip is still drawing effects."));
+  DEBUG_PRINTLN(whoCalledMe + String(": strip is still drawing effects."));
   strip.waitUntilIdle();
   }
 #endif
@@ -94,7 +97,7 @@ Segment::Segment(const Segment &orig) {
   _t = nullptr;
   if (ledsrgb && !Segment::_globalLeds) {ledsrgb = nullptr; ledsrgbSize = 0;}  // WLEDMM
   if (orig.name) { name = new(std::nothrow) char[strlen(orig.name)+1]; if (name) strcpy(name, orig.name); }
-  if (orig.data) { if (allocateData(orig._dataLen)) memcpy(data, orig.data, orig._dataLen); }
+  if (orig.data) { if (allocateData(orig._dataLen, true)) memcpy(data, orig.data, orig._dataLen); }
   //if (orig._t)   { _t = new(std::nothrow) Transition(orig._t->_dur, orig._t->_briT, orig._t->_cctT, orig._t->_colorT); }
   //else markForReset(); // WLEDMM
   // if (orig.ledsrgb && !Segment::_globalLeds) { allocLeds(); if (ledsrgb) memcpy(ledsrgb, orig.ledsrgb, sizeof(CRGB)*length()); } // WLEDMM
@@ -108,13 +111,26 @@ void Segment::allocLeds() {
     DEBUG_PRINTF("allocLeds warning: size == %u !!\n", size);
     if (ledsrgb && (ledsrgbSize == 0)) {
       USER_PRINTLN("allocLeds warning: ledsrgbSize == 0 but ledsrgb!=NULL");
-      free(ledsrgb); ledsrgb=nullptr;
+      d_free(ledsrgb); ledsrgb=nullptr;
     } // softhack007 clean up buffer
   }
   if ((size > 0) && (!ledsrgb || size > ledsrgbSize)) {    //softhack dont allocate zero bytes
-    USER_PRINTF("allocLeds (%d,%d to %d,%d), %u from %u\n", start, startY, stop, stopY, size, ledsrgb?ledsrgbSize:0);
-    if (ledsrgb) free(ledsrgb);   // we need a bigger buffer, so free the old one first
-    ledsrgb = (CRGB*)calloc(size, 1);
+    DEBUG_PRINTF("allocLeds (%d,%d to %d,%d), %u from %u\n", start, startY, stop, stopY, size, ledsrgb?ledsrgbSize:0);
+
+    // DONG - Valkyrie needs food, badly     [Gauntlet, 1985]
+    // WLEDMM this looks a bit over-compilicated, but it makes the re-allocation step an atomic and threadsafe operation
+    CRGB* oldLedsRgb = ledsrgb;
+    portENTER_CRITICAL(&ledsrgb_mux);
+    ledsrgb = nullptr;
+    portEXIT_CRITICAL(&ledsrgb_mux);
+
+    if (oldLedsRgb) d_free(oldLedsRgb);   // we need a bigger buffer, so free the old one first
+    CRGB* newLedsRgb = (CRGB*)d_calloc(size, 1);   // WLEDMM This is an OS call, so we should not wrap it in portEnterCRITICAL
+
+    portENTER_CRITICAL(&ledsrgb_mux);
+    ledsrgb = newLedsRgb;
+    portEXIT_CRITICAL(&ledsrgb_mux);
+
     ledsrgbSize = ledsrgb?size:0;
     if (ledsrgb == nullptr) {
       USER_PRINTLN("allocLeds failed!!");
@@ -159,7 +175,7 @@ Segment& Segment::operator= (const Segment &orig) {
     if (_t)   delete _t;
     CRGB* oldLeds = ledsrgb;
     size_t oldLedsSize = ledsrgbSize;
-    if (ledsrgb && !Segment::_globalLeds) free(ledsrgb);
+    if (ledsrgb && !Segment::_globalLeds) d_free(ledsrgb);
     deallocateData();
     // copy source
     memcpy((void*)this, (void*)&orig, sizeof(Segment));
@@ -179,7 +195,7 @@ Segment& Segment::operator= (const Segment &orig) {
     if (!Segment::_globalLeds) {ledsrgb = nullptr; ledsrgbSize = 0;};             // WLEDMM copy has no buffers (yet)
     // copy source data
     if (orig.name) { name = new(std::nothrow) char[strlen(orig.name)+1]; if (name) strcpy(name, orig.name); }
-    if (orig.data) { if (allocateData(orig._dataLen)) memcpy(data, orig.data, orig._dataLen); }
+    if (orig.data) { if (allocateData(orig._dataLen, true)) memcpy(data, orig.data, orig._dataLen); }
     //if (orig._t)   { _t = new(std::nothrow) Transition(orig._t->_dur, orig._t->_briT, orig._t->_cctT, orig._t->_colorT); }
     //else markForReset(); // WLEDMM
     //if (orig.ledsrgb && !Segment::_globalLeds) { allocLeds(); if (ledsrgb) memcpy(ledsrgb, orig.ledsrgb, sizeof(CRGB)*length()); } // WLEDMM don't copy old buffer
@@ -196,7 +212,7 @@ Segment& Segment::operator= (Segment &&orig) noexcept {
     if (name) { delete[] name; name = nullptr; } // free old name
     deallocateData(); // free old runtime data
     if (_t) { delete _t; _t = nullptr; }
-    if (ledsrgb && !Segment::_globalLeds) free(ledsrgb); //WLEDMM: not needed anymore as we will use leds from copy. no need to nullify ledsrgb as it gets new value in memcpy
+    if (ledsrgb && !Segment::_globalLeds) d_free(ledsrgb); //WLEDMM: not needed anymore as we will use leds from copy. no need to nullify ledsrgb as it gets new value in memcpy
 
     // WLEDMM temporarily prevent any fast draw calls to old and new segment
     orig._isSimpleSegment = false;
@@ -218,7 +234,7 @@ Segment& Segment::operator= (Segment &&orig) noexcept {
   return *this;
 }
 
-bool Segment::allocateData(size_t len) {
+bool Segment::allocateData(size_t len, bool allowOverdraft) {  // WLEDMM allowOverdraft for temporary overdraft by segment copy constructor
   // WLEDMM
   if (data && _dataLen >= len) {                          // already allocated enough (reduce fragmentation)
     if ((call == 0) && (len > 0)) memset(data, 0, len);   // erase buffer if called during effect initialisation
@@ -227,37 +243,58 @@ bool Segment::allocateData(size_t len) {
   //DEBUG_PRINTF("allocateData(%u) start %d, stop %d, vlen %d\n", len, start, stop, virtualLength());
   deallocateData();
   if (len == 0) return false; // nothing to do
+
+  // limit to MAX_SEGMENT_DATA if there is no PSRAM, otherwise prefer functionality over speed
+  #ifndef BOARD_HAS_PSRAM
   if (Segment::getUsedSegmentData() + len > MAX_SEGMENT_DATA) {
-    //USER_PRINTF("Segment::allocateData: Segment data quota exceeded! used:%u request:%u max:%d\n", Segment::getUsedSegmentData(), len, MAX_SEGMENT_DATA);
-    if (len > 0) errorFlag = ERR_LOW_SEG_MEM;  // WLEDMM raise errorflag
-    return false; //not enough memory
+    if (!allowOverdraft || (Segment::getUsedSegmentData() + len > MAX_SEGMENT_OVERDATA)) { // WLEDMM 50% overdraft allowed temporarily
+      static unsigned lastMsgTime = 0;
+      if (millis() - lastMsgTime > 5000) {
+        USER_PRINTF("Segment::allocateData: Segment data quota exceeded! used:%u request:%u max:%d\n", Segment::getUsedSegmentData(), len, MAX_SEGMENT_DATA);
+        lastMsgTime = millis();
+      }
+      if (len > 0) errorFlag = ERR_LOW_SEG_MEM;  // WLEDMM raise errorflag
+      return false; //not enough memory
+    }
   }
+  #endif
+
   // do not use SPI RAM on ESP32 since it is slow
   //#if defined(ARDUINO_ARCH_ESP32) && defined(BOARD_HAS_PSRAM) && defined(WLED_USE_PSRAM)
   //if (psramFound())
   //  data = (byte*) ps_malloc(len);
   //else
   //#endif
-    data = (byte*) malloc(len);
+    data = (byte*) d_malloc(len);
   if (!data) {
       _dataLen = 0; // WLEDMM reset dataLen
+      if ((errorFlag != ERR_LOW_MEM) && (errorFlag != ERR_LOW_SEG_MEM)) { // spam filter
+        USER_PRINT(F("Segment::allocateData: FAILED to allocate ")); 
+        USER_PRINT(len); USER_PRINTLN(F(" bytes."));
+      }
       errorFlag = ERR_LOW_MEM; // WLEDMM raise errorflag
-      USER_PRINT(F("Segment::allocateData: FAILED to allocate ")); 
-      USER_PRINT(len); USER_PRINTLN(F(" bytes."));
       return false;
   } //allocation failed
   Segment::addUsedSegmentData(len);
+  DEBUG_PRINTF("Segment::allocateData: %u bytes allocated (%u used)\n", len, Segment::getUsedSegmentData());
   _dataLen = len;
   memset(data, 0, len);
-  if (errorFlag == ERR_LOW_SEG_MEM) errorFlag = ERR_NONE; // WLEDMM reset errorflag on success
+  if ((errorFlag == ERR_LOW_SEG_MEM) || (errorFlag == ERR_LOW_MEM) || (errorFlag == ERR_NORAM_PX)) errorFlag = ERR_NONE; // WLEDMM reset errorflag on success
   return true;
 }
 
 void Segment::deallocateData() {
-  if (!data) {_dataLen = 0; return;}  // WLEDMM reset dataLen
-  free(data);
+  if (!data) {
+    if (_dataLen>0) {
+      Segment::addUsedSegmentData(-_dataLen); // WLEDMM fix housekeeping
+      DEBUG_PRINTF("Segment::deallocateData unregistering %u bytes as unused.", _dataLen);
+    }
+    _dataLen = 0;
+    return;
+  }  // WLEDMM reset dataLen
+  d_free(data);
   data = nullptr;
-  //USER_PRINTF("Segment::deallocateData: free'd   %d bytes.\n", _dataLen);
+  DEBUG_PRINTF("Segment::deallocateData: free'd   %d bytes.\n", _dataLen);
   Segment::addUsedSegmentData(-_dataLen);
   _dataLen = 0;
 }
@@ -271,7 +308,7 @@ void Segment::deallocateData() {
   */
 void Segment::resetIfRequired() {
   if (reset) {
-    if (ledsrgb && !Segment::_globalLeds) { free(ledsrgb); ledsrgb = nullptr; ledsrgbSize=0;} // WLEDMM segment has changed, so we need a fresh buffer.
+    if (ledsrgb && !Segment::_globalLeds) { d_free(ledsrgb); ledsrgb = nullptr; ledsrgbSize=0;} // WLEDMM segment has changed, so we need a fresh buffer.
     if (transitional && _t) { transitional = false; delete _t; _t = nullptr; }
     deallocateData();
     next_time = 0; step = 0; call = 0; aux0 = 0; aux1 = 0;
@@ -478,13 +515,11 @@ uint8_t IRAM_ATTR_YN Segment::currentBri(uint8_t briNew, bool useCct) const {
 }
 #endif
 
-uint8_t Segment::currentMode(uint8_t newMode) {
+inline uint8_t Segment::currentMode(uint8_t newMode) {
   return (progress()>32767U) ? newMode : (_t ? _t->_modeP : newMode); // change effect in the middle of transition
 }
 
-uint32_t Segment::currentColor(uint8_t slot, uint32_t colorNew) {
-  return transitional && _t ? color_blend(_t->_colorT[slot], colorNew, progress(), true) : colorNew;
-}
+// WLEDMM: Segment::currentColor() moved to FX.h for better optimization by the compiler
 
 void Segment::setCurrentPalette() {
   loadPalette(_currentPalette, palette);
@@ -525,29 +560,43 @@ void Segment::setUp(uint16_t i1, uint16_t i2, uint8_t grp, uint8_t spc, uint16_t
 
   stateChanged = true; // send UDP/WS broadcast
 
-  if (stop>start) markForBlank(); //turn old segment range off // WLEDMM stop > start
+  if (stop>start) markForBlank(); //turn old segment range off // WLEDMM stop > start // toDo: check if this can be skipped when boundsUnchanged
   if (i2 <= i1) { //disable segment
+    #ifdef WLED_ENABLE_GIF
+    endImagePlayback(this);
+    #endif
     stop = 0;
     markForReset();
     return;
   }
-  if (i1 < Segment::maxWidth || (i1 >= Segment::maxWidth*Segment::maxHeight && i1 < strip.getLengthTotal())) start = i1; // Segment::maxWidth equals strip.getLengthTotal() for 1D
-  stop = i2 > Segment::maxWidth*Segment::maxHeight ? min(i2,strip.getLengthTotal()) : (i2 > Segment::maxWidth ? Segment::maxWidth : max((uint16_t)1,i2));  // WLEDMM: use native min/max
-  startY = 0;
-  stopY  = 1;
-  #ifndef WLED_DISABLE_2D
-  if (Segment::maxHeight>1) { // 2D
-    if (i1Y < Segment::maxHeight) startY = i1Y;
-    stopY = i2Y > Segment::maxHeight ? Segment::maxHeight : max((uint16_t)1,i2Y);         // WLEDMM: use native min/max
+
+  if (esp32SemTake(segmentMux, 2100) == pdTRUE) { // wait long, but don't wait forever
+    // WLEDMM acquire lock before doing critical changes to segment
+    if (i1 < Segment::maxWidth || (i1 >= Segment::maxWidth*Segment::maxHeight && i1 < strip.getLengthTotal())) start = i1; // Segment::maxWidth equals strip.getLengthTotal() for 1D
+    stop = i2 > Segment::maxWidth*Segment::maxHeight ? min(i2,strip.getLengthTotal()) : (i2 > Segment::maxWidth ? Segment::maxWidth : max((uint16_t)1,i2));  // WLEDMM: use native min/max
+    startY = 0;
+    stopY  = 1;
+    #ifndef WLED_DISABLE_2D
+    if (Segment::maxHeight>1) { // 2D
+      if (i1Y < Segment::maxHeight) startY = i1Y;
+      stopY = i2Y > Segment::maxHeight ? Segment::maxHeight : max((uint16_t)1,i2Y);         // WLEDMM: use native min/max
+    }
+    #endif
+    if (grp) {
+      grouping = grp;
+      spacing = spc;
+    }
+    if (ofs < UINT16_MAX) offset = ofs;
+    esp32SemGive(segmentMux);
+  } else {
+    DEBUG_PRINTLN(F("Segment::setUp: Failed to acquire segmentMux, skipping bounds update."));
+    boundsUnchanged = true;
   }
-  #endif
-  if (grp) {
-    grouping = grp;
-    spacing = spc;
+
+  if (!boundsUnchanged) {
+    markForReset();
+    refreshLightCapabilities();
   }
-  if (ofs < UINT16_MAX) offset = ofs;
-  markForReset();
-  if (!boundsUnchanged) refreshLightCapabilities();
 }
 
 
@@ -672,12 +721,12 @@ struct XandY {
   uint8_t y;
 };
 struct ArrayAndSize {
-  uint8_t size;
+  uint16_t size;
   XandY *array;
 };
 class JMapC {
   public:
-    char previousSegmentName[50] = "";
+    char previousSegmentName[WLED_MAX_SEGNAME_LEN+12] = "";
 
     ~JMapC() {
       DEBUG_PRINTLN("~JMapC");
@@ -712,7 +761,7 @@ class JMapC {
     }
     uint32_t getPixelColor(uint16_t i) {
       updatejMapDoc();
-      if (jVectorMap.size() > 0)
+      if (jVectorMap.size() > i)  // implies jVectorMap.size() > 0, because i is unsigned
         return SEGMENT.getPixelColorXY(jVectorMap[i].array[0].x * scale, jVectorMap[i].array[0].y * scale);
       else
         return 0;
@@ -720,7 +769,7 @@ class JMapC {
   private:
     std::vector<ArrayAndSize> jVectorMap; 
     StaticJsonDocument<4096> docChunk; //must fit forks with about 32 points each
-    uint8_t scale;
+    uint8_t scale=1;
 
     void updatejMapDoc() {
       if (SEGMENT.name == nullptr && jVectorMap.size() > 0) {
@@ -730,7 +779,7 @@ class JMapC {
         uint32_t dataSize = 0;
         deletejVectorMap();
         DEBUG_PRINT("New "); DEBUG_PRINTLN(SEGMENT.name);
-        char jMapFileName[50];
+        char jMapFileName[WLED_MAX_SEGNAME_LEN+12] = {'\0'}; // we need at most 32 + 7 bytes
         strcpy(jMapFileName, "/");
         strcat(jMapFileName, SEGMENT.name);
         strcat(jMapFileName, ".json");
@@ -750,7 +799,10 @@ class JMapC {
           {
             USER_PRINTF("deserializeJson() of parseTree failed with code %s\n", err.c_str());
             USER_FLUSH();
-            if (SEGMENT.name) delete[] SEGMENT.name; SEGMENT.name = nullptr; //need to clear the name as otherwise continuously loaded // softhack007 avoid deleting nullptr
+            // softhack007: DO NOT delete SEGMENT.name - it's owned by Segment class, deleting it from outside can lead to use-after-free
+            // if (SEGMENT.name) delete[] SEGMENT.name; SEGMENT.name = nullptr; //need to clear the name as otherwise continuously loaded // softhack007 avoid deleting nullptr
+            strlcpy(previousSegmentName, SEGMENT.name, sizeof(previousSegmentName)); // Mark name as processed to avoid reload loop
+            if (jMapFile) jMapFile.close();  // make sure the file is closed
             return;
           }
 
@@ -795,7 +847,7 @@ class JMapC {
         USER_PRINT(dataSize);
         USER_PRINT(" scale ");
         USER_PRINTLN(scale);
-        strcpy(previousSegmentName, SEGMENT.name);
+        strlcpy(previousSegmentName, SEGMENT.name, sizeof(previousSegmentName));
       }
     } //updatejMapDoc
 }; //class JMapC
@@ -880,7 +932,7 @@ uint16_t Segment::calc_virtualLength() const {
         break;
       case M12_pArc:
         { unsigned vLen2 = vW * vW + vH * vH;            // length ^2
-          if (vLen2 < UINT16_MAX) vLen = sqrt16(vLen2);  // use faster function for 16bit values
+          if (vLen2 < UINT16_MAX) vLen = sqrt32_bw(vLen2);  // use faster function for 16bit values
           else vLen = sqrtf(vLen2);                      // fall-back to float if bigger
           if (vW != vH) vLen++; // round up
         }
@@ -907,9 +959,9 @@ uint16_t Segment::calc_virtualLength() const {
   }
 #endif
   uint16_t groupLen = groupLength();
-  uint16_t vLength = (length() + groupLen - 1) / groupLen;
-  if (mirror && width() > 1) vLength = (vLength + 1) /2;  // divide by 2 if mirror, leave at least a single LED // WLEDMM bugfix for pseudo 2d strips
-  return vLength;
+  uint16_t virtLength = (length() + groupLen - 1) / groupLen;
+  if (mirror && width() > 1) virtLength = (virtLength + 1) /2;  // divide by 2 if mirror, leave at least a single LED // WLEDMM bugfix for pseudo 2d strips
+  return virtLength;
 }
 
 //WLEDMM used for M12_sBlock
@@ -935,18 +987,19 @@ static void xyFromBlock(uint16_t &x,uint16_t &y, uint16_t i, uint16_t vW, uint16
     x = vW / 2 - vStrip - 1;
     y = vH / 2 + vStrip - i2 * vStrip * 2;
   }
-
+  // softhack007 not sure if clamping is necessary
+  //x = min(x, uint16_t(vW-1)); // clamp x at vW-1  
+  //y = min(y, uint16_t(vH-1)); // clamp y at vH-1
 }
 
-void IRAM_ATTR_YN __attribute__((hot)) Segment::setPixelColor(int i, uint32_t col) //WLEDMM: IRAM_ATTR conditionally
+void IRAM_ATTR_YN WLED_O2_ATTR __attribute__((hot)) Segment::setPixelColor(int i, uint32_t col) //WLEDMM: IRAM_ATTR conditionally
 {
   if (!isActive()) return; // not active
 #ifndef WLED_DISABLE_2D
   int vStrip = i>>16; // hack to allow running on virtual strips (2D segment columns/rows)
 #endif
   i &= 0xFFFF;
-
-  if (i >= virtualLength() || i<0) return;  // if pixel would fall out of segment just exit
+  if (unsigned(i) >= virtualLength()) return;  // if pixel would fall out of segment just exit //WLEDMM unsigned(i)>SEGLEN also catches "i<0"
 
 #ifndef WLED_DISABLE_2D
   if (is2D()) {
@@ -1212,7 +1265,7 @@ void Segment::setPixelColor(float i, uint32_t col, bool aa)
   }
 }
 
-uint32_t __attribute__((hot)) Segment::getPixelColor(int i) const
+uint32_t WLED_O2_ATTR __attribute__((hot)) Segment::getPixelColor(int i) const
 {
   if (!isActive()) return 0; // not active
 #ifndef WLED_DISABLE_2D
@@ -1339,6 +1392,9 @@ uint8_t Segment::differs(Segment& b) const {
   if (custom1 != b.custom1)     d |= SEG_DIFFERS_FX;
   if (custom2 != b.custom2)     d |= SEG_DIFFERS_FX;
   if (custom3 != b.custom3)     d |= SEG_DIFFERS_FX;
+  if (check1 != b.check1)       d |= SEG_DIFFERS_FX;
+  if (check2 != b.check2)       d |= SEG_DIFFERS_FX;
+  if (check3 != b.check3)       d |= SEG_DIFFERS_FX;
   if (startY != b.startY)       d |= SEG_DIFFERS_BOUNDS;
   if (stopY != b.stopY)         d |= SEG_DIFFERS_BOUNDS;
 
@@ -1406,8 +1462,9 @@ void Segment::refreshLightCapabilities() {
 void __attribute__((hot)) Segment::fill(uint32_t c) {
   if (!isActive()) return; // not active
 
-  const uint_fast16_t cols = is2D() ? virtualWidth() : virtualLength();             // WLEDMM use fast int types
-  const uint_fast16_t rows = virtualHeight(); // will be 1 for 1D
+  // WLEDMM use "calc_" functions because fill() is also called from json.cpp without previous seg.startFrame
+  const uint_fast16_t cols = is2D() ? calc_virtualWidth() : calc_virtualLength();             // WLEDMM use fast int types
+  const uint_fast16_t rows = calc_virtualHeight(); // will be 1 for 1D
 
   if (is2D()) {
     // pre-calculate scaled color
@@ -1545,12 +1602,12 @@ void __attribute__((hot)) Segment::blur(uint8_t blur_amount, bool smear) {
 #endif
   uint8_t keep = smear ? 255 : 255 - blur_amount;
   uint8_t seep = blur_amount >> 1;
-  unsigned vlength = virtualLength();
+  unsigned virtlength = virtualLength();
   uint32_t carryover = BLACK;
   uint32_t lastnew;
   uint32_t last;
   uint32_t curnew = 0;
-  for (unsigned i = 0; i < vlength; i++) {
+  for (unsigned i = 0; i < virtlength; i++) {
     uint32_t cur = getPixelColor(i);
     uint32_t part = color_fade(cur, seep);
     curnew = color_fade(cur, keep);
@@ -1567,7 +1624,7 @@ void __attribute__((hot)) Segment::blur(uint8_t blur_amount, bool smear) {
     last = cur; // save original value for comparison on next iteration
     carryover = part;
   }
-  setPixelColor(int(vlength - 1), curnew);
+  setPixelColor(int(virtlength - 1), curnew);
 }
 
 /*
@@ -1575,19 +1632,7 @@ void __attribute__((hot)) Segment::blur(uint8_t blur_amount, bool smear) {
  * The colours are a transition r -> g -> b -> back to r
  * Inspired by the Adafruit examples.
  */
-uint32_t Segment::color_wheel(uint8_t pos) {
-  if (palette) return color_from_palette(pos, false, true, 0);
-  pos = 255 - pos;
-  if(pos < 85) {
-    return ((uint32_t)(255 - pos * 3) << 16) | ((uint32_t)(0) << 8) | (pos * 3);
-  } else if(pos < 170) {
-    pos -= 85;
-    return ((uint32_t)(0) << 16) | ((uint32_t)(pos * 3) << 8) | (255 - pos * 3);
-  } else {
-    pos -= 170;
-    return ((uint32_t)(pos * 3) << 16) | ((uint32_t)(255 - pos * 3) << 8) | (0);
-  }
-}
+// WLEDMM: Segment::color_wheel(uint8_t pos) moved to FX.h for better optimization by the compiler
 
 /*
  * Returns a new, random wheel index with a minimum distance of 42 from pos.
@@ -1613,24 +1658,7 @@ uint8_t Segment::get_random_wheel_index(uint8_t pos) const { // WLEDMM use fast 
  * @param pbri Value to scale the brightness of the returned color by. Default is 255. (no scaling)
  * @returns Single color from palette
  */
-uint32_t __attribute__((hot)) Segment::color_from_palette(uint_fast16_t i, bool mapping, bool wrap, uint8_t mcol, uint8_t pbri) // WLEDMM use fast int types
-{
-  // default palette or no RGB support on segment
-  if ((palette == 0 && mcol < NUM_COLORS) || !_isRGB) {
-    uint32_t color = currentColor(mcol, colors[mcol]);
-    color = gamma32(color);
-    if (pbri == 255) return color;
-    return RGBW32(scale8_video(R(color),pbri), scale8_video(G(color),pbri), scale8_video(B(color),pbri), scale8_video(W(color),pbri));
-  }
-
-  uint8_t paletteIndex = i;
-  uint_fast16_t vLen = mapping ? virtualLength() : 1;
-  if (mapping && vLen > 1) paletteIndex = (i*255)/(vLen -1);
-  if (!wrap) paletteIndex = scale8(paletteIndex, 240); //cut off blend at palette "end"
-  CRGB fastled_col = ColorFromPalette(_currentPalette, paletteIndex, pbri, (strip.paletteBlend == 3)? NOBLEND:LINEARBLEND); // NOTE: paletteBlend should be global
-
-  return RGBW32(fastled_col.r, fastled_col.g, fastled_col.b, 0);
-}
+// WLEDMM: Segment::color_from_palette() moved to FX.h for better optimization by the compiler
 
  //WLEDMM netmindz ar palette
 uint8_t * Segment::getAudioPalette(int pal) const {
@@ -1703,22 +1731,22 @@ void WS2812FX::enumerateLedmaps() {
         f = WLED_FS.open(fileName, "r");
         if (f) {
           f.find("\"n\":");
-          char name[34] = { '\0' };  // ensure string termination
+          char name[WLED_MAX_SEGNAME_LEN+2] = { '\0' };  // ensure string termination
           f.readBytesUntil('\n', name, sizeof(name)-1);
 
           size_t len = strlen(name);
-          if (len > 0 && len < 33) {
+          if (len > 0 && len < (sizeof(name)-1)) {
             (void) cleanUpName(name);
             len = strlen(name);
             ledmapNames[i-1] = new(std::nothrow) char[len+1]; // +1 to include terminating \0 
-            if (ledmapNames[i-1]) strlcpy(ledmapNames[i-1], name, 33);
+            if (ledmapNames[i-1]) strlcpy(ledmapNames[i-1], name, len+1);
           }
           if (!ledmapNames[i-1]) {
             char tmp[33];
             snprintf_P(tmp, 32, PSTR("ledmap%d.json"), i);
-            len = strlen(tmp);
-            ledmapNames[i-1] = new(std::nothrow) char[len+1];
-            if (ledmapNames[i-1]) strlcpy(ledmapNames[i-1], tmp, 33);
+            size_t tmplen = strlen(tmp);
+            ledmapNames[i-1] = new(std::nothrow) char[tmplen+1];
+            if (ledmapNames[i-1]) strlcpy(ledmapNames[i-1], tmp, tmplen+1);
           }
 
           USER_PRINTF("enumerateLedmaps %s \"%s\"", fileName, name);
@@ -1754,8 +1782,8 @@ void WS2812FX::enumerateLedmaps() {
   uint8_t segment_index = 0;
   for (segment &seg : _segments) {
     if (seg.name != nullptr && strlen(seg.name) > 0) {
-      char fileName[33];
-      snprintf_P(fileName, sizeof(fileName), PSTR("/lm%s.json"), seg.name);
+      char fileName[WLED_MAX_SEGNAME_LEN+12] = { '\0' }; // segment name is 32 chars max, so we need 43 chars in worst case
+      snprintf_P(fileName, sizeof(fileName)-1, PSTR("/lm%s.json"), seg.name);
       bool isFile = WLED_FS.exists(fileName);
       if (isFile) ledMaps |= 1 << (10+segment_index);
     }
@@ -1830,8 +1858,15 @@ void WS2812FX::finalizeInit(void)
 
   //initialize leds array. TBD: realloc if nr of leds change
   if (Segment::_globalLeds) {
-    free(Segment::_globalLeds);
+    // DONG - Valkyrie is about to die     [Gauntlet, 1985]
+    // this is a critical section that will be removed with PR #278 which removes _globalLeds
+    // problem: suspendStripService provides interlocking, but there’s a window before service() observes it, 
+    //          and ESP32 is dual-core. A critical section closes that window so the pointer swap is atomic across cores.
+    CRGB* oldGLeds = Segment::_globalLeds;
+    portENTER_CRITICAL(&ledsrgb_mux);
     Segment::_globalLeds = nullptr;
+    portEXIT_CRITICAL(&ledsrgb_mux);
+    d_free(oldGLeds);
     purgeSegments(true);   // WLEDMM moved here, because it seems to improve stability.
   }
   if (useLedsArray && getLengthTotal()>0) { // WLEDMM avoid malloc(0)
@@ -1842,9 +1877,9 @@ void WS2812FX::finalizeInit(void)
     //  Segment::_globalLeds = (CRGB*) ps_malloc(arrSize);
     //else
     //#endif
-      if (arrSize > 0) Segment::_globalLeds = (CRGB*) malloc(arrSize); // WLEDMM avoid malloc(0)
+      if (arrSize > 0) Segment::_globalLeds = (CRGB*) d_malloc(arrSize); // WLEDMM avoid malloc(0)
     if ((Segment::_globalLeds != nullptr) && (arrSize > 0)) memset(Segment::_globalLeds, 0, arrSize); // WLEDMM avoid dereferencing nullptr
-    if ((Segment::_globalLeds == nullptr) && (arrSize > 0)) errorFlag = ERR_LOW_MEM; // WLEDMM raise errorflag
+    if ((Segment::_globalLeds == nullptr) && (arrSize > 0)) errorFlag = ERR_NORAM_PX; // WLEDMM raise errorflag
   }
 
   //segments are created in makeAutoSegments();
@@ -1858,16 +1893,19 @@ void WS2812FX::finalizeInit(void)
 
 // WLEDMM wait until strip is idle (=not servicing).
 // on 8266 this function does nothing, because we can only do "busy waiting" on ESP32
-#define MAX_IDLE_WAIT_MS 50  // seems to work in most cases
-void WS2812FX::waitUntilIdle(void) {
+//#define MAX_IDLE_WAIT_MS 50  // seems to work in most cases
+#define MAX_IDLE_WAIT_MS 120   // better safe than sorry - similar to the timeout used by upstream WLED
+void WS2812FX::waitUntilIdle(unsigned timeout) {
 #if defined(ARDUINO_ARCH_ESP32) && defined(WLEDMM_PROTECT_SERVICE)
+  if (timeout < MAX_IDLE_WAIT_MS) timeout = MAX_IDLE_WAIT_MS;
   if (isServicing()) {
     unsigned long waitStarted = millis();
     do {
       delay(2);  // Suspending for 1 tick (or more) gives other tasks a chance to run.
       //yield(); // seems to be a no-op on esp32
-    } while (isServicing() && (millis() - waitStarted < MAX_IDLE_WAIT_MS));
-    USER_PRINTF("strip.waitUntilIdle(): strip %sidle after %d ms. (task %s with prio=%d)\n", isServicing()?"not ":"", int(millis() - waitStarted), pcTaskGetTaskName(NULL), uxTaskPriorityGet(NULL));
+    } while (isServicing() && (millis() - waitStarted < timeout));
+    DEBUG_PRINTF("strip.waitUntilIdle(): strip %sidle after %d ms. (task %s with prio=%d)\n", isServicing()?"not ":"", int(millis() - waitStarted), pcTaskGetTaskName(NULL), uxTaskPriorityGet(NULL));
+    if (isServicing()) USER_PRINTF("strip.waitUntilIdle(): strip NOT idle after %d ms - overriding access. (task %s with prio=%d)\n", int(millis() - waitStarted), pcTaskGetTaskName(NULL), uxTaskPriorityGet(NULL));
   }
   return;
 #else
@@ -1878,6 +1916,10 @@ void WS2812FX::waitUntilIdle(void) {
 void WS2812FX::service() {
   unsigned long nowUp = millis(); // Be aware, millis() rolls over every 49 days // WLEDMM avoid losing precision
   if (OTAisRunning) return; // WLEDMM avoid flickering during OTA
+ 
+  //#ifdef ARDUINO_ARCH_ESP32
+  //if ((_isServicing == true) && (strncmp(pcTaskGetTaskName(NULL), "loopTask", 8) != 0)) return; // WLEDMM experimental: not in looptask context - avoid self-blocking (DDP over webSockets)
+  //#endif
 
   now = nowUp + timebase;
   unsigned long elapsed = nowUp - _lastServiceShow;
@@ -1885,11 +1927,7 @@ void WS2812FX::service() {
   //if (_suspend) return;
   if (elapsed < 2) return;                                                       // keep wifi alive
   if ( !_triggered && (_targetFps != FPS_UNLIMITED) && (_targetFps != FPS_UNLIMITED_AC)) {
-#if 0
-    if (elapsed < MIN_SHOW_DELAY) return;                                        // WLEDMM too early for service - delivers higher fps
-#else
     if ((elapsed+1) < _frametime) return;                                            // code from upstream - stricter on FPS
-#endif
   }
   #else  // legacy
   if (elapsed < _frametime) return;
@@ -1900,6 +1938,7 @@ void WS2812FX::service() {
 
   _isServicing = true;
   _segment_index = 0;
+  if (esp32SemTake(segmentMux, 250) == pdTRUE) {      // WLEDMM prevent changes to segments while servicing
   for (segment &seg : _segments) {
 #ifdef WLEDMM_FASTPATH
     _currentSeg = &seg;
@@ -1914,7 +1953,7 @@ void WS2812FX::service() {
     if(nowUp >= seg.next_time || _triggered || (doShow && seg.mode == FX_MODE_STATIC))  // WLEDMM ">=" instead of ">"
     {
       if (seg.grouping == 0) seg.grouping = 1; //sanity check
-      if (!seg.freeze) doShow = true;
+      if ((!seg.freeze) || _triggered) doShow = true;   // WLEDMM "triggered" overrules "freeze"
       uint16_t frameDelay = FRAMETIME;    // WLEDMM avoid name clash with "delay" function
 
       if (!seg.freeze) { //only run effect function if not frozen
@@ -1926,14 +1965,15 @@ void WS2812FX::service() {
 
         if (!cctFromRgb || correctWB) busses.setSegmentCCT(seg.currentBri(seg.cct, true), correctWB);
         for (uint8_t c = 0; c < NUM_COLORS; c++) _colors_t[c] = gamma32(_colors_t[c]);
-#if 0  // WARNING this would kill _supersync_
-        now = millis() + timebase;
-#endif
         seg.startFrame();   // WLEDMM
         if (!_triggered && (seg.currentBri(seg.opacity) == 0) && (seg.lastBri == 0)) continue; // WLEDMM skip totally black segments
         // effect blending (execute previous effect)
         // actual code may be a bit more involved as effects have runtime data including allocated memory
         //if (seg.transitional && seg._modeP) (*_mode[seg._modeP])(progress());
+
+        // WLEDMM protect against parallel drawing
+        if (esp32SemTake(busDrawMux, 200) != pdTRUE) { delay(1); continue;}      // WLEDMM first acquire draw mutex
+
         frameDelay = (*_mode[seg.currentMode(seg.mode)])();
 
         if (frameDelay < speedLimit) frameDelay = FRAMETIME;                    // WLEDMM limit effects that want to go faster than target FPS
@@ -1944,24 +1984,24 @@ void WS2812FX::service() {
 
         seg.lastBri = seg.currentBri(seg.on ? seg.opacity:0);                   // WLEDMM remember for next time
         seg.handleTransition();
+
+        esp32SemGive(busDrawMux); // WLEDMM unlock mutex
       }
 
       seg.next_time = nowUp + frameDelay;
     }
     _segment_index++;
   }
+  esp32SemGive(segmentMux);
+  } // end of critical section
+
+  #ifdef WLEDMM_FASTPATH
+  _currentSeg = & strip.getMainSegment(); // WLEDMM safe default
+  #endif
   _virtualSegmentLength = 0;
   busses.setSegmentCCT(-1);
-  if(doShow) {
-#if 0 && defined(ARDUINO_ARCH_ESP32)      // EXPERIMENTAL - enabled this to enforce stricter frametime limits
-    static unsigned long lastTimeShow = 0;
-    long tdelta = millis() - lastTimeShow;
-    if ((lastTimeShow > 0) && (tdelta > 1) && (tdelta < _frametime))  // too early - release CPU to slow down
-      vTaskDelay((tdelta-1) / portTICK_PERIOD_MS);                    // "-1" because vTaskDelay() may actually delay longer than requested
-    lastTimeShow = millis();
-#else
+  if(doShow || _triggered) {
     yield();
-#endif
     show();
     _lastServiceShow = nowUp; // WLEDMM use correct timestamp
   }
@@ -1969,26 +2009,11 @@ void WS2812FX::service() {
   _isServicing = false;
 }
 
-void IRAM_ATTR WS2812FX::setPixelColor(int i, uint32_t col)
-{
-  if (i < customMappingSize) i = customMappingTable[i];
-  if (i >= _length) return;
-  busses.setPixelColor(i, col);
-}
 
-uint32_t WS2812FX::getPixelColor(uint_fast16_t i) const // WLEDMM fast int types
-{
-  if (i < customMappingSize) i = customMappingTable[i];
-  if (i >= _length) return 0;
-  return busses.getPixelColor(i);
-}
+// WLEDMM: WS2812FX::setPixelColor() moved FX.h for speed (inlining)
+// WLEDMM: WS2812FX::getPixelColor() moved FX.h for speed (inlining)
+// WLEDMM: WS2812FX::getPixelColorRestored() moved FX.h for speed (inlining)
 
-uint32_t WS2812FX::getPixelColorRestored(uint_fast16_t i)  const  // WLEDMM gets the original color from the driver (without downscaling by _bri)
-{
-  if (i < customMappingSize) i = customMappingTable[i];
-  if (i >= _length) return 0;
-  return busses.getPixelColorRestored(i);
-}
 
 //DISCLAIMER
 //The following function attemps to calculate the current LED power usage,
@@ -2033,6 +2058,7 @@ void WS2812FX::estimateCurrentAndLimitBri() {
 
   for (uint_fast8_t bNum = 0; bNum < busses.getNumBusses(); bNum++) {
     Bus *bus = busses.getBus(bNum);
+    if (!bus || !bus->isOk()) continue;    // WLEDMM skip busses that are not initialized yet
     auto btype = bus->getType();
     if (EXCLUDE_FROM_ABL(btype)) continue; // WLEDMM exclude non-ABL and network busses
     uint16_t len = bus->getLength();
@@ -2095,7 +2121,11 @@ void WS2812FX::show(void) {
   // some buses send asynchronously and this method will return before
   // all of the data has been sent.
   // See https://github.com/Makuna/NeoPixelBus/wiki/ESP32-NeoMethods#neoesp32rmt-methods
+
+  // WLEDMM protect against parallel access
+  if (esp32SemTake(busDrawMux, 200) != pdTRUE) { delay(1); return;}      // WLEDMM first acquire drawing permission (mutex), wait max 200ms
   busses.show();
+  esp32SemGive(busDrawMux);                                              // WLEDMM return permissions
 
   unsigned long diff = showNow - _lastShow;
   uint16_t fpsCurr = 200;
@@ -2294,15 +2324,19 @@ void WS2812FX::purgeSegments(bool force) {
   // remove all inactive segments (from the back)
   int deleted = 0;
   if (_segments.size() <= 1) return;
-  for (size_t i = _segments.size()-1; i > 0; i--)
+  // WLEDMM protect against parallel access while drawing
+  if (esp32SemTake(segmentMux, 300) != pdTRUE) return;
+
+  for (size_t i = _segments.size()-1; i > 0; i--) {
     if (_segments[i].stop == 0 || force) {
       deleted++;
       _segments.erase(_segments.begin() + i);
-    }
+  } }
   if (deleted) {
     _segments.shrink_to_fit();
     /*if (_mainSegment >= _segments.size())*/ setMainSegmentId(0);
   }
+  esp32SemGive(segmentMux);
 }
 
 Segment& WS2812FX::getSegment(uint8_t id) {
@@ -2330,6 +2364,9 @@ void WS2812FX::restartRuntime(bool doReset) {
 void WS2812FX::resetSegments(bool boundsOnly) { //WLEDMM add boundsonly
   DEBUG_PRINTF("resetSegments %d %dx%d\n", boundsOnly, Segment::maxWidth, Segment::maxHeight);
   if (!boundsOnly) {
+    // WLEDMM protect against parallel access while drawing
+    if (esp32SemTake(segmentMux, 2100) != pdTRUE) return;  // wait long, but don't wait forever
+
     _segments.clear(); // destructs all Segment as part of clearing
     #ifndef WLED_DISABLE_2D
     segment seg = isMatrix ? Segment(0, Segment::maxWidth, 0, Segment::maxHeight) : Segment(0, _length);
@@ -2338,7 +2375,10 @@ void WS2812FX::resetSegments(bool boundsOnly) { //WLEDMM add boundsonly
     #endif
     _segments.push_back(seg);
     _mainSegment = 0;
+    esp32SemGive(segmentMux);
   } else { //WLEDMM boundsonly
+    // WLEDMM protect against parallel access while drawing
+    if (esp32SemTake(segmentMux, 2100) != pdTRUE) return;  // wait long, but don't wait forever
     for (segment &seg : _segments) {
       #ifndef WLED_DISABLE_2D
       seg.start = 0;
@@ -2351,11 +2391,15 @@ void WS2812FX::resetSegments(bool boundsOnly) { //WLEDMM add boundsonly
       #endif
       seg.allocLeds();
     }
+    esp32SemGive(segmentMux);
   }
 }
 
 void WS2812FX::makeAutoSegments(bool forceReset) {
   if (autoSegments) { //make one segment per bus
+    // WLEDMM protect against parallel access while drawing
+    if (esp32SemTake(segmentMux, 2100) != pdTRUE) return;  // wait long, but don't wait forever
+
     uint16_t segStarts[MAX_NUM_SEGMENTS] = {0};
     uint16_t segStops [MAX_NUM_SEGMENTS] = {0};
     size_t s = 0;
@@ -2404,7 +2448,7 @@ void WS2812FX::makeAutoSegments(bool forceReset) {
     for (size_t i = 1; i < s; i++) {
       _segments.push_back(Segment(segStarts[i], segStops[i]));
     }
-
+    esp32SemGive(segmentMux);
   } else {
 
     if (forceReset || getSegmentsNum() == 0) resetSegments();
@@ -2430,6 +2474,9 @@ void WS2812FX::makeAutoSegments(bool forceReset) {
 }
 
 void WS2812FX::fixInvalidSegments() {
+  // WLEDMM protect against parallel access while drawing
+  if (esp32SemTake(segmentMux, 2100) != pdTRUE) return; // wait long, but don't wait forever
+
   //make sure no segment is longer than total (sanity check)
   for (size_t i = getSegmentsNum()-1; i > 0; i--) {
     if (isMatrix) {
@@ -2449,6 +2496,8 @@ void WS2812FX::fixInvalidSegments() {
       if (_segments[i].stop  >  _length) _segments[i].stop = _length;
     }
   }
+  esp32SemGive(segmentMux);  // give back the lock now, so purgeSegments can acquire it again
+
   // if any segments were deleted free memory
   purgeSegments();
   // this is always called as the last step after finalizeInit(), update covered bus types
@@ -2471,6 +2520,7 @@ bool WS2812FX::checkSegmentAlignment() {
   return true;
 }
 
+#if 0 // WLEDMM dead code
 //After this function is called, setPixelColor() will use that segment (offsets, grouping, ... will apply)
 //Note: If called in an interrupt (e.g. JSON API), original segment must be restored,
 //otherwise it can lead to a crash on ESP32 because _segment_index is modified while in use by the main thread
@@ -2482,6 +2532,7 @@ uint8_t WS2812FX::setPixelSegment(uint8_t n) {
   }
   return prevSegId;
 }
+#endif
 
 void WS2812FX::setRange(uint16_t i, uint16_t i2, uint32_t col) {
   if (i2 >= i)
@@ -2563,7 +2614,7 @@ void WS2812FX::loadCustomPalettes() {
 bool WS2812FX::deserializeMap(uint8_t n) {
   // 2D support creates its own ledmap (on the fly) if a ledmap.json exists it will overwrite built one.
 
-  char fileName[32] = {'\0'};
+  char fileName[WLED_MAX_SEGNAME_LEN+10] = {'\0'}; // WLEDMM we need at least 32 + 7 bytes
   //WLEDMM: als support segment name ledmaps
   bool isFile = false;;
   if (n<10) {
@@ -2575,7 +2626,8 @@ bool WS2812FX::deserializeMap(uint8_t n) {
     uint8_t segment_index = 0;
     for (segment &seg : _segments) {
       if (n == 10 + segment_index && !isFile && seg.name != nullptr) {
-        sprintf_P(fileName, PSTR("/%s.json"), seg.name);
+        snprintf_P(fileName, sizeof(fileName) -1, PSTR("/%s.json"), seg.name);
+        fileName[sizeof(fileName) -1] = '\0';
         isFile = WLED_FS.exists(fileName);
       }
       if (isFile) break;
@@ -2617,13 +2669,14 @@ bool WS2812FX::deserializeMap(uint8_t n) {
     //WLEDMM: read width and height
     memset(fileName, 0, sizeof(fileName));              // clear old buffer - readBytesUntil() does not terminate strings !!!
     f.find("\"width\":");
-    f.readBytesUntil('\n', fileName, sizeof(fileName)); //hack: use fileName as we have this allocated already
+    f.readBytesUntil('\n', fileName, sizeof(fileName)-1); //hack: use fileName as we have this allocated already
     uint16_t maxWidth = atoi(cleanUpName(fileName));
     //DEBUG_PRINTF(" (\"width\": %s) ", fileName)
 
     memset(fileName, 0, sizeof(fileName));              // clear old buffer
+    f.seek(0);                                          // rewind to start
     f.find("\"height\":");
-    f.readBytesUntil('\n', fileName, sizeof(fileName));
+    f.readBytesUntil('\n', fileName, sizeof(fileName)-1);
     uint16_t maxHeight = atoi(cleanUpName(fileName));
     //DEBUG_PRINTF(" (\"height\": %s) \n", fileName)
 
@@ -2639,7 +2692,7 @@ bool WS2812FX::deserializeMap(uint8_t n) {
     #endif
   }
 
-  USER_PRINTF("deserializeMap %d x %d\n", Segment::maxWidth, Segment::maxHeight);
+  DEBUG_PRINTF("deserializeMap %d x %d\n", Segment::maxWidth, Segment::maxHeight);
 
   //WLEDMM recreate customMappingTable if more space needed
   if (Segment::maxWidth * Segment::maxHeight > customMappingTableSize) {
@@ -2650,16 +2703,18 @@ bool WS2812FX::deserializeMap(uint8_t n) {
 
     // don't use new / delete
     if ((size > 0) && (customMappingTable != nullptr)) {
-      customMappingTable = (uint16_t*) reallocf(customMappingTable, sizeof(uint16_t) * size);  // reallocf will free memory if it cannot resize
+      //customMappingTable = (uint16_t*) reallocf(customMappingTable, sizeof(uint16_t) * size);  // reallocf will free memory if it cannot resize
+      customMappingTable = (uint16_t*) d_realloc_malloc(customMappingTable, sizeof(uint16_t) * size);  // will free memory if it cannot resize
     }
     if ((size > 0) && (customMappingTable == nullptr)) { // second try
       DEBUG_PRINTLN("deserializeMap: trying to get fresh memory block.");
-      customMappingTable = (uint16_t*) calloc(size, sizeof(uint16_t));
+      customMappingTable = (uint16_t*) d_calloc(size, sizeof(uint16_t));
       if (customMappingTable == nullptr) { 
         DEBUG_PRINTLN("deserializeMap: alloc failed!");
         errorFlag = ERR_LOW_MEM; // WLEDMM raise errorflag
       }
     }
+    if ((errorFlag == ERR_LOW_MEM) && (size > 0) && (customMappingTable != nullptr)) errorFlag = ERR_NONE;  // reset error flag
     if (customMappingTable != nullptr) customMappingTableSize = size;
   }
 
@@ -2668,20 +2723,27 @@ bool WS2812FX::deserializeMap(uint8_t n) {
     // WLEDMM reset mapping table before loading
     //memset(customMappingTable, 0xFF, customMappingTableSize * sizeof(uint16_t)); // FFFF = no pixel
     for (unsigned i=0; i<customMappingTableSize; i++) customMappingTable[i]=i;     // "neutral" 1:1 mapping
-
     //WLEDMM: find the map values
-    f.find("\"map\":[");
+    f.seek(0);                                           // rewind to start
+    f.find("\"map\":");
+    f.readBytesUntil('[', fileName, sizeof(fileName)-1); // drop everything until "["
     uint16_t i=0;
+    bool endOfArray = false;
     do { //for each element in the array
-      int mapi = f.readStringUntil(',').toInt();
-      // USER_PRINTF(", %d(%d)", mapi, i);
+      String entry = f.readStringUntil(',');
+      int mapi = entry.toInt();
+      //DEBUG_PRINTF("%c %d(%d)", i>0?',':' ', mapi, i);
       if (i < customMappingSize) customMappingTable[i++] = (uint16_t) (mapi<0 ? 0xFFFFU : mapi);  // WLEDMM do not write past array bounds
-    } while (f.available());
+      endOfArray  = entry.indexOf("]") >= 0;             // if we hit "]", stop reading
+    } while (f.available() && (i < customMappingSize) && !endOfArray);
+    //DEBUG_PRINTLN("");
 
     loadedLedmap = n;
     f.close();
 
-    USER_PRINTF("Custom ledmap: %d size=%d\n", loadedLedmap, customMappingSize);
+    if ((customMappingTable != nullptr) && (customMappingSize>0)) { 
+      USER_PRINTF(PSTR("Ledmap #%d read. Size=%d (%d x %d); %d items found.\n"), loadedLedmap, customMappingSize, Segment::maxWidth, Segment::maxHeight, i);
+    }
     #ifdef WLED_DEBUG_MAPS
       for (uint16_t j=0; j<customMappingSize; j++) { // fixing a minor warning: declaration of 'i' shadows a previous local
         if (!(j%Segment::maxWidth)) DEBUG_PRINTLN();
@@ -2691,6 +2753,7 @@ bool WS2812FX::deserializeMap(uint8_t n) {
     #endif
   } else { // memory allocation error
     customMappingTableSize = 0;
+    errorFlag = ERR_LOW_MEM; // WLEDMM raise errorflag
     USER_PRINTLN(F("Deserializemap: Ledmap alloc error."));
     USER_FLUSH();
   }

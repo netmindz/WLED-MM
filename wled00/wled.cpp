@@ -26,31 +26,37 @@
   #if defined(ESP8266) || defined(ARDUINO_ARCH_ESP8266)
     #error please fix your build environment. ESP32 and ESP8266 are both defined.
   #endif
-  // only one of ARDUINO_ARCH_ESP32S2, ARDUINO_ARCH_ESP32S3, ARDUINO_ARCH_ESP32C3 allowed
-  #if defined(ARDUINO_ARCH_ESP32S3) && ( defined(ARDUINO_ARCH_ESP32S2) || defined(ARDUINO_ARCH_ESP32C3) )
-    #error please fix your build environment. only one of ARDUINO_ARCH_ESP32S3, ARDUINO_ARCH_ESP32S2, ARDUINO_ARCH_ESP32C3 may be defined
+  // only one of ARDUINO_ARCH_ESP32S2, ARDUINO_ARCH_ESP32S3, ARDUINO_ARCH_ESP32C3, ARDUINO_ARCH_ESP32C6 allowed
+  #if defined(ARDUINO_ARCH_ESP32S3) && ( defined(ARDUINO_ARCH_ESP32S2) || defined(ARDUINO_ARCH_ESP32C3) || defined(ARDUINO_ARCH_ESP32C6) )
+    #error please fix your build environment. only one of ARDUINO_ARCH_ESP32S3, ARDUINO_ARCH_ESP32S2, ARDUINO_ARCH_ESP32C3, ARDUINO_ARCH_ESP32C6 may be defined
   #endif
-  #if defined(ARDUINO_ARCH_ESP32S2) && ( defined(ARDUINO_ARCH_ESP32S3) || defined(ARDUINO_ARCH_ESP32C3) )
-    #error please fix your build environment. only one of ARDUINO_ARCH_ESP32S3, ARDUINO_ARCH_ESP32S2, ARDUINO_ARCH_ESP32C3 may be defined
+  #if defined(ARDUINO_ARCH_ESP32S2) && ( defined(ARDUINO_ARCH_ESP32S3) || defined(ARDUINO_ARCH_ESP32C3) || defined(ARDUINO_ARCH_ESP32C6) )
+    #error please fix your build environment. only one of ARDUINO_ARCH_ESP32S3, ARDUINO_ARCH_ESP32S2, ARDUINO_ARCH_ESP32C3, ARDUINO_ARCH_ESP32C6 may be defined
   #endif
-  #if defined(CONFIG_IDF_TARGET_ESP32) && ( defined(CONFIG_IDF_TARGET_ESP32S3) || defined(CONFIG_IDF_TARGET_ESP32S2) || defined(CONFIG_IDF_TARGET_ESP32C3))
+  #if defined(ARDUINO_ARCH_ESP32C6) && ( defined(ARDUINO_ARCH_ESP32S3) || defined(ARDUINO_ARCH_ESP32S2) || defined(ARDUINO_ARCH_ESP32C3) )
+    #error please fix your build environment. only one of ARDUINO_ARCH_ESP32S3, ARDUINO_ARCH_ESP32S2, ARDUINO_ARCH_ESP32C3, ARDUINO_ARCH_ESP32C6 may be defined
+  #endif
+  #if defined(CONFIG_IDF_TARGET_ESP32) && ( defined(CONFIG_IDF_TARGET_ESP32S3) || defined(CONFIG_IDF_TARGET_ESP32S2) || defined(CONFIG_IDF_TARGET_ESP32C3) || defined(CONFIG_IDF_TARGET_ESP32C6))
     #error please fix your build environment. only one CONFIG_IDF_TARGET may be defined
   #endif
   // make sure we have a supported CONFIG_IDF_TARGET_
-  #if !defined(CONFIG_IDF_TARGET_ESP32) && !defined(CONFIG_IDF_TARGET_ESP32S3) && !defined(CONFIG_IDF_TARGET_ESP32S2) && !defined(CONFIG_IDF_TARGET_ESP32C3)
+  #if !defined(CONFIG_IDF_TARGET_ESP32) && !defined(CONFIG_IDF_TARGET_ESP32S3) && !defined(CONFIG_IDF_TARGET_ESP32S2) && !defined(CONFIG_IDF_TARGET_ESP32C3) && !defined(CONFIG_IDF_TARGET_ESP32C6)
     #error please fix your build environment. No supported CONFIG_IDF_TARGET was defined
   #endif
   #if CONFIG_IDF_TARGET_ESP32_SOLO || CONFIG_IDF_TARGET_ESP32SOLO
     #warning ESP32 SOLO (single core) is not supported.
   #endif
-  // only one of CONFIG_IDF_TARGET_ESP32, CONFIG_IDF_TARGET_ESP32S2, CONFIG_IDF_TARGET_ESP32S3, CONFIG_IDF_TARGET_ESP32C3 is allowed
-  #if defined(CONFIG_IDF_TARGET_ESP32) && ( defined(CONFIG_IDF_TARGET_ESP32S3) || defined(CONFIG_IDF_TARGET_ESP32S2) || defined(CONFIG_IDF_TARGET_ESP32C3))
+  // only one of CONFIG_IDF_TARGET_ESP32, CONFIG_IDF_TARGET_ESP32S2, CONFIG_IDF_TARGET_ESP32S3, CONFIG_IDF_TARGET_ESP32C3, CONFIG_IDF_TARGET_ESP32C6 is allowed
+  #if defined(CONFIG_IDF_TARGET_ESP32) && ( defined(CONFIG_IDF_TARGET_ESP32S3) || defined(CONFIG_IDF_TARGET_ESP32S2) || defined(CONFIG_IDF_TARGET_ESP32C3) || defined(CONFIG_IDF_TARGET_ESP32C6))
     #error please fix your build environment. only one CONFIG_IDF_TARGET may be defined
   #endif
-  #if defined(CONFIG_IDF_TARGET_ESP32S3) && ( defined(CONFIG_IDF_TARGET_ESP32) || defined(CONFIG_IDF_TARGET_ESP32S2) || defined(CONFIG_IDF_TARGET_ESP32C3))
+  #if defined(CONFIG_IDF_TARGET_ESP32S3) && ( defined(CONFIG_IDF_TARGET_ESP32) || defined(CONFIG_IDF_TARGET_ESP32S2) || defined(CONFIG_IDF_TARGET_ESP32C3) || defined(CONFIG_IDF_TARGET_ESP32C6))
     #error please fix your build environment. only one CONFIG_IDF_TARGET may be defined
   #endif
-  #if defined(CONFIG_IDF_TARGET_ESP32C3) && ( defined(CONFIG_IDF_TARGET_ESP32) || defined(CONFIG_IDF_TARGET_ESP32S3) || defined(CONFIG_IDF_TARGET_ESP32S2))
+  #if defined(CONFIG_IDF_TARGET_ESP32C3) && ( defined(CONFIG_IDF_TARGET_ESP32) || defined(CONFIG_IDF_TARGET_ESP32S3) || defined(CONFIG_IDF_TARGET_ESP32S2) || defined(CONFIG_IDF_TARGET_ESP32C6))
+    #error please fix your build environment. only one CONFIG_IDF_TARGET may be defined
+  #endif
+  #if defined(CONFIG_IDF_TARGET_ESP32C6) && ( defined(CONFIG_IDF_TARGET_ESP32) || defined(CONFIG_IDF_TARGET_ESP32S3) || defined(CONFIG_IDF_TARGET_ESP32S2) || defined(CONFIG_IDF_TARGET_ESP32C3))
     #error please fix your build environment. only one CONFIG_IDF_TARGET may be defined
   #endif
 
@@ -99,7 +105,11 @@ void WLED::reset()
   #endif
   long dly = millis();
   while (millis() - dly < 450) {
+#ifdef ARDUINO_ARCH_ESP32
+    delay(2);       // yield => BS
+#else
     yield();        // enough time to send response to client
+#endif
   }
   applyBri();
   USER_PRINTLN(F("\nWLED RESTART\n"));
@@ -191,6 +201,9 @@ void WLED::loop()
     reset();
 
   if (doCloseFile) {
+#ifdef ARDUINO_ARCH_ESP32
+    delay(0);       // yield => BS
+#endif
     closeFile();
     yield();
   }
@@ -203,7 +216,11 @@ void WLED::loop()
     #endif
     handleNightlight();
     handlePlaylist();
+#ifdef ARDUINO_ARCH_ESP32
+    delay(0);       // yield => BS
+#else
     yield();
+#endif
 
     #ifndef WLED_DISABLE_HUESYNC
     handleHue();
@@ -211,7 +228,11 @@ void WLED::loop()
     #endif
 
     handlePresets();
+#ifdef ARDUINO_ARCH_ESP32
+    delay(0);       // yield => BS
+#else
     yield();
+#endif
 
 #if defined(_MoonModules_WLED_) && defined(WLEDMM_FASTPATH)
     #ifdef WLED_DEBUG
@@ -308,10 +329,10 @@ void WLED::loop()
       delete busConfigs[i]; busConfigs[i] = nullptr;
     }
     strip.finalizeInit();
-    busses.setBrightness(bri); // fix re-initialised bus' brightness #4005
     loadLedmap = true;
     if (aligned) strip.makeAutoSegments();
     else strip.fixInvalidSegments();
+    busses.setBrightness(scaledBri(bri)); // fix re-initialised bus' brightness #4005 and #4824
     yield();
     serializeConfig();
   }
@@ -337,14 +358,29 @@ void WLED::loop()
     DEBUG_PRINT(F("Name: "));       DEBUG_PRINTLN(serverDescription);
     DEBUG_PRINT(F("Runtime: "));       DEBUG_PRINTLN(millis());
     DEBUG_PRINT(F("Unix time: "));     toki.printTime(toki.getTime());
-    DEBUG_PRINT(F("Free heap : "));     DEBUG_PRINTLN(ESP.getFreeHeap());
-    DEBUG_PRINT(F("Free heap: "));     DEBUG_PRINTLN(ESP.getFreeHeap());
+    DEBUG_PRINT(F("Free heap: "));     DEBUG_PRINTLN(getFreeHeapSize());
   //WLEDMM
 	#ifdef ARDUINO_ARCH_ESP32
     DEBUG_PRINT(F("Avail heap: "));     DEBUG_PRINTLN(ESP.getMaxAllocHeap());
     DEBUG_PRINTF("%s min free stack %d\n", pcTaskGetTaskName(NULL), uxTaskGetStackHighWaterMark(NULL)); //WLEDMM
 	#endif
-    #if defined(ARDUINO_ARCH_ESP32) && defined(BOARD_HAS_PSRAM)
+    #if defined(ARDUINO_ARCH_ESP32)
+    // Internal DRAM (standard 8-bit accessible heap)
+    size_t dram_free = heap_caps_get_free_size(MALLOC_CAP_8BIT | MALLOC_CAP_INTERNAL);
+    size_t dram_largest = heap_caps_get_largest_free_block(MALLOC_CAP_8BIT | MALLOC_CAP_INTERNAL);
+    DEBUG_PRINTF_P(PSTR("DRAM 8-bit:   Free: %7u bytes | Largest block: %7u bytes\n"), dram_free, dram_largest);
+    #if defined(CONFIG_IDF_TARGET_ESP32)
+      // 32-bit DRAM (not byte accessible, only available on ESP32)
+      size_t dram32_free = heap_caps_get_free_size(MALLOC_CAP_32BIT | MALLOC_CAP_INTERNAL) - dram_free; // returns all 32bit DRAM, subtract 8bit DRAM
+      //size_t dram32_largest = heap_caps_get_largest_free_block(MALLOC_CAP_32BIT | MALLOC_CAP_INTERNAL); // returns largest DRAM block -> not useful
+      DEBUG_PRINTF_P(PSTR("DRAM 32-bit:  Free: %7u bytes | Largest block: N/A\n"), dram32_free);
+    #else
+      // Fast RTC Memory (not available on ESP32)
+      size_t rtcram_free = heap_caps_get_free_size(MALLOC_CAP_RTCRAM);
+      size_t rtcram_largest = heap_caps_get_largest_free_block(MALLOC_CAP_RTCRAM);
+      DEBUG_PRINTF_P(PSTR("RTC RAM:      Free: %7u bytes | Largest block: %7u bytes\n"), rtcram_free, rtcram_largest);
+    #endif
+    #if defined(BOARD_HAS_PSRAM) || (ESP_IDF_VERSION_MAJOR > 3) // V4 can auto-detect PSRAM
     if (psramFound()) {
       //DEBUG_PRINT(F("Total PSRAM: "));    DEBUG_PRINT(ESP.getPsramSize()/1024); DEBUG_PRINTLN("kB");
       DEBUG_PRINT(F("Free PSRAM : "));     DEBUG_PRINT(ESP.getFreePsram()/1024); DEBUG_PRINTLN("kB");
@@ -354,6 +390,7 @@ void WLED::loop()
     } else {
       //DEBUG_PRINTLN(F("No PSRAM"));
 	}
+    #endif
     #endif
     DEBUG_PRINT(F("Wifi state: "));      DEBUG_PRINTLN(WiFi.status());
 
@@ -382,13 +419,13 @@ void WLED::loop()
 #endif
 #ifdef WLED_DEBUG_HEAP
   if (millis() - debugTime > 4999 ) { // WLEDMM: Special case for debugging heap faster
-    DEBUG_PRINT(F("*** Free heap: "));     DEBUG_PRINT(heap_caps_get_free_size(0x1800));
-    DEBUG_PRINT(F("\tLargest free block: "));     DEBUG_PRINT(heap_caps_get_largest_free_block(0x1800));
-    DEBUG_PRINT(F(" *** \t\tArduino min free stack: ")); DEBUG_PRINT(uxTaskGetStackHighWaterMark(NULL));
+    USER_PRINT(F("*** Free heap: "));     USER_PRINT(heap_caps_get_free_size(0x1800));
+    USER_PRINT(F("\tLargest free block: "));     USER_PRINT(heap_caps_get_largest_free_block(0x1800));
+    USER_PRINT(F(" *** \t\tArduino min free stack: ")); USER_PRINT(uxTaskGetStackHighWaterMark(NULL));
 #if INCLUDE_xTaskGetHandle
-    DEBUG_PRINT(F("   TCP min free stack: ")); DEBUG_PRINT(wledmm_get_tcp_stacksize());
+    USER_PRINT(F("   TCP min free stack: ")); USER_PRINT(wledmm_get_tcp_stacksize());
 #endif
-    DEBUG_PRINTLN(F(" ***"));    
+    USER_PRINTLN(F(" ***"));    
     debugTime = millis();
   }
 #endif        // WLED_DEBUG_HEAP
@@ -451,22 +488,44 @@ void WLED::setup()
   #ifdef WLED_BOOTUPDELAY
   delay(WLED_BOOTUPDELAY); // delay to let voltage stabilize, helps with boot issues on some setups
   #endif
-  Serial.begin(115200);
 
-#if !defined(WLEDMM_NO_SERIAL_WAIT) || defined(WLED_DEBUG)
+  #if ARDUINO_USB_CDC_ON_BOOT && (defined(CONFIG_IDF_TARGET_ESP32S3) || defined(CONFIG_IDF_TARGET_ESP32C3) || defined(CONFIG_IDF_TARGET_ESP32C6) || defined(CONFIG_IDF_TARGET_ESP32P4))
+  Serial.begin(115200);     //  WLEDMM avoid "hung devices" when USB_CDC is enabled; see https://github.com/espressif/arduino-esp32/issues/9043
+  Serial.setTxTimeoutMs(0); // potential side-effect: incomplete debug output, with missing characters whenever TX buffer is full.
+  #else
+  Serial.begin(115200);
+  #endif
+
+  #if !defined(WLEDMM_NO_SERIAL_WAIT) || defined(WLED_DEBUG)
   if (!Serial) delay(1000); // WLEDMM make sure that Serial has initalized
-#else
+  #else
   if (!Serial) delay(300);  // just a tiny wait to avoid problems later when acessing serial
-#endif
+  #endif
+
+  init_math();  // WLEDMM: pre-calculate some lookup tables
+
+  #ifdef ARDUINO_ARCH_ESP32
+  busDrawMux = xSemaphoreCreateRecursiveMutex();       // WLEDMM prevent concurrent running of strip.show and strip.service
+  segmentMux = xSemaphoreCreateRecursiveMutex();       // WLEDMM prevent segment changes while effects are running
+  jsonBufferLockMutex = xSemaphoreCreateRecursiveMutex(); // WLEDMM prevent concurrent JSON buffer writing
+  presetFileMux = xSemaphoreCreateRecursiveMutex();   // WLEDMM prevent concurrent presets.json file writing
+  if ((busDrawMux == nullptr) || (segmentMux == nullptr) || (jsonBufferLockMutex == nullptr) || (presetFileMux == nullptr)) {
+    USER_PRINTLN(F("setup error: xSemaphoreCreateRecursiveMutex failed.")); // should never happen.
+  }
+  xSemaphoreGiveRecursive(busDrawMux);                 // init semaphores to initially allow drawing
+  xSemaphoreGiveRecursive(segmentMux);
+  xSemaphoreGiveRecursive(jsonBufferLockMutex);
+  xSemaphoreGiveRecursive(presetFileMux);
+  #endif
 
   #ifdef ARDUINO_ARCH_ESP32
   #if defined(WLED_DEBUG) && (defined(CONFIG_IDF_TARGET_ESP32S2) || defined(CONFIG_IDF_TARGET_ESP32C3) || ARDUINO_USB_CDC_ON_BOOT)
   if (!Serial) delay(2500);  // WLEDMM allow CDC USB serial to initialise (WLED_DEBUG only)
   #endif
   #if ARDUINO_USB_CDC_ON_BOOT || ARDUINO_USB_MODE
-    #if ARDUINO_USB_CDC_ON_BOOT && (defined(CONFIG_IDF_TARGET_ESP32S3) || defined(CONFIG_IDF_TARGET_ESP32C3) || defined(CONFIG_IDF_TARGET_ESP32C6))
+    #if ARDUINO_USB_CDC_ON_BOOT && (defined(CONFIG_IDF_TARGET_ESP32S3) || defined(CONFIG_IDF_TARGET_ESP32C3) || defined(CONFIG_IDF_TARGET_ESP32C6) || defined(CONFIG_IDF_TARGET_ESP32P4))
     //  WLEDMM avoid "hung devices" when USB_CDC is enabled; see https://github.com/espressif/arduino-esp32/issues/9043
-    Serial.setTxTimeoutMs(0);    // potential side-effect: incomplete debug output, with missing characters whenever TX buffer is full.
+    Serial.setTxTimeoutMs(0);    
     #endif
 #if !defined(WLEDMM_NO_SERIAL_WAIT) || defined(WLED_DEBUG)
   if (!Serial) delay(2500);  // WLEDMM: always allow CDC USB serial to initialise
@@ -524,7 +583,12 @@ void WLED::setup()
   #endif
 
   USER_PRINT(F("CPU:   ")); USER_PRINT(ESP.getChipModel());
-  USER_PRINT(F(" rev.")); USER_PRINT(ESP.getChipRevision());
+  #if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(4, 4, 3) // use the full revision if we can
+    esp_chip_info_t chip_info; esp_chip_info(&chip_info);
+    USER_PRINTF(" v%u.%u", unsigned(chip_info.full_revision / 100), unsigned(chip_info.full_revision % 100));
+  #else
+    USER_PRINT(F(" rev.")); USER_PRINT(ESP.getChipRevision());
+  #endif
   USER_PRINT(F(", ")); USER_PRINT(ESP.getChipCores()); USER_PRINT(F(" core(s)"));
   USER_PRINT(F(", ")); USER_PRINT(ESP.getCpuFreqMHz()); USER_PRINTLN(F("MHz."));
 
@@ -599,7 +663,7 @@ void WLED::setup()
   DEBUG_PRINT(F("esp8266 "));
   DEBUG_PRINTLN(ESP.getCoreVersion());
 #endif
-  DEBUG_PRINT(F("heap ")); DEBUG_PRINTLN(ESP.getFreeHeap());
+  DEBUG_PRINT(F("heap ")); DEBUG_PRINTLN(getFreeHeapSize());
 #ifdef ARDUINO_ARCH_ESP32
   #if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(4, 4, 0)  // unfortunately not available in older framework versions
   DEBUG_PRINT(F("\nArduino  max stack  ")); DEBUG_PRINTLN(getArduinoLoopTaskStackSize());
@@ -623,12 +687,22 @@ void WLED::setup()
   // C3: reserve GPIO 12-17 for PSRAM (may fail due to isPinOk() but that will also prevent other allocation)
   //managed_pin_type pins[] = { {12, true}, {13, true}, {14, true}, {15, true}, {16, true}, {17, true} };
   //pinManager.allocateMultiplePins(pins, sizeof(pins)/sizeof(managed_pin_type), PinOwner::SPI_RAM);
-  #else
-  // GPIO16/GPIO17 reserved for SPI RAM
-  managed_pin_type pins[] = { {16, true}, {17, true} };
-  pinManager.allocateMultiplePins(pins, sizeof(pins)/sizeof(managed_pin_type), PinOwner::SPI_RAM);
+  #elif defined(CONFIG_IDF_TARGET_ESP32)
+  // GPIO16/GPIO17 possibly reserved for SPI RAM
+  if (strncmp_P(PSTR("ESP32-D0WDR2-V3"), ESP.getChipModel(), 15) == 0) {
+    // ESP32-D0WDR2-V3 keeps gpio17 available
+    managed_pin_type pins[] = { {16, true} };
+    pinManager.allocateMultiplePins(pins, sizeof(pins)/sizeof(managed_pin_type), PinOwner::SPI_RAM);
+  } else {
+    // esp32 with PRAM, or pico board with SPI RAM on 16 / 17
+    if (psramFound() || (strncmp("ESP32-PICO", ESP.getChipModel(), 10) == 0) || (strncmp("ESP32-U4WDH", ESP.getChipModel(), 11) == 0)) {
+      managed_pin_type pins[] = { {16, true}, {17, true} };
+      pinManager.allocateMultiplePins(pins, sizeof(pins)/sizeof(managed_pin_type), PinOwner::SPI_RAM);
+    }
+  }
+
   #endif
-  #if defined(BOARD_HAS_PSRAM) && (defined(WLED_USE_PSRAM) || defined(WLED_USE_PSRAM_JSON))       // WLEDMM
+  #if (defined(BOARD_HAS_PSRAM) || (ESP_IDF_VERSION_MAJOR > 3)) && (defined(WLED_USE_PSRAM) || defined(WLED_USE_PSRAM_JSON))       // WLEDMM
   if (psramFound()) {
     DEBUG_PRINT(F("Total PSRAM: ")); DEBUG_PRINT(ESP.getPsramSize()/1024); DEBUG_PRINTLN("kB");
     DEBUG_PRINT(F("Free PSRAM : ")); DEBUG_PRINT(ESP.getFreePsram()/1024); DEBUG_PRINTLN("kB");
@@ -640,11 +714,19 @@ void WLED::setup()
 #if defined(ARDUINO_ARCH_ESP32)
   if ((strncmp("ESP32-PICO", ESP.getChipModel(), 10) == 0) || (strncmp("ESP32-U4WDH", ESP.getChipModel(), 11) == 0))
   { // WLEDMM detect pico board and esp32-mini1 board at runtime
-    // special handling for PICO-D4: gpio16+17 are in use for onboard SPI FLASH (not PSRAM)
+    // PICO-D4: gpio16+17 are in use for onboard SPI FLASH (not PSRAM)
+    // U4WDH / PICO-D2 / PICO-V3 / PICO-V3-02 : GPIO 16 and 17 are either used for PSRAM, or not connected
     managed_pin_type pins[] = { {16, true}, {17, true} };
     pinManager.allocateMultiplePins(pins, sizeof(pins)/sizeof(managed_pin_type), PinOwner::SPI_RAM);
   }
-#endif
+  #if !defined(BOARD_HAS_PSRAM)
+  if (strncmp_P(PSTR("ESP32-D0WDR2-V3"), ESP.getChipModel(), 15) == 0) {
+    // runtime detect ESP32-D0WDR2-V3: needs gpio16 for PSRAM, but keeps gpio17 available
+    managed_pin_type pins[] = { {16, true} };
+    pinManager.allocateMultiplePins(pins, sizeof(pins)/sizeof(managed_pin_type), PinOwner::SPI_RAM);
+  }
+  #endif
+  #endif
 
   //DEBUG_PRINT(F("LEDs inited. heap usage ~"));
   //DEBUG_PRINTLN(heapPreAlloc - ESP.getFreeHeap());
@@ -656,10 +738,10 @@ void WLED::setup()
   pinManager.allocatePin(2, true, PinOwner::DMX);
 #endif
 
-#if defined(ALL_JSON_TO_PSRAM) && defined(BOARD_HAS_PSRAM) && (defined(WLED_USE_PSRAM_JSON) || defined(WLED_USE_PSRAM))
+#if defined(ALL_JSON_TO_PSRAM) && (defined(BOARD_HAS_PSRAM) || (ESP_IDF_VERSION_MAJOR > 3)) && (defined(WLED_USE_PSRAM_JSON) || defined(WLED_USE_PSRAM))
   if (psramFound()) {
     DEBUG_PRINT(F("\nfree heap ")); DEBUG_PRINTLN(ESP.getFreeHeap());
-    USER_PRINTLN(F("JSON gabage collection (initial)."));
+    USER_PRINTLN(F("JSON garbage collection (initial)."));
     doc.garbageCollect();   // WLEDMM experimental - this seems to move the complete doc[] into PSRAM
 	  USER_PRINT(F("PSRAM in use:")); USER_PRINT(int(ESP.getPsramSize() - ESP.getFreePsram())); USER_PRINTLN(F(" Bytes."));
     DEBUG_PRINT(F("free heap ")); DEBUG_PRINTLN(ESP.getFreeHeap());
@@ -687,7 +769,7 @@ void WLED::setup()
   DEBUG_PRINTLN(F("Registering usermods ..."));
   registerUsermods();
 
-  DEBUG_PRINT(F("heap ")); DEBUG_PRINTLN(ESP.getFreeHeap());
+  DEBUG_PRINT(F("heap ")); DEBUG_PRINTLN(getFreeHeapSize());
   #ifdef ARDUINO_ARCH_ESP32
     DEBUG_PRINTF("%s min free stack %d\n", pcTaskGetTaskName(NULL), uxTaskGetStackHighWaterMark(NULL)); //WLEDMM
   #endif
@@ -737,15 +819,20 @@ void WLED::setup()
 
   DEBUG_PRINTLN(F("Initializing strip"));
   beginStrip();
-  DEBUG_PRINT(F("heap ")); DEBUG_PRINTLN(ESP.getFreeHeap());
+  DEBUG_PRINT(F("heap ")); DEBUG_PRINTLN(getFreeHeapSize());
 
   USER_PRINTLN(F("\nUsermods setup ..."));
   userSetup();
   usermods.setup();
-  DEBUG_PRINT(F("heap ")); DEBUG_PRINTLN(ESP.getFreeHeap());
+  DEBUG_PRINT(F("heap ")); DEBUG_PRINTLN(getFreeHeapSize());
 
   if (strcmp(clientSSID, DEFAULT_CLIENT_SSID) == 0)
     showWelcomePage = true;
+
+  #if !defined(ESP8266) && (ESP_IDF_VERSION_MAJOR >= 4)
+  WiFi.setScanMethod(WIFI_ALL_CHANNEL_SCAN);   // bugfix: ensure that all channels are scanned, and the strongest signal is used
+  #endif
+
   WiFi.persistent(false);
   #ifdef WLED_USE_ETHERNET
   WiFi.onEvent(WiFiEvent);
@@ -801,7 +888,7 @@ void WLED::setup()
   // HTTP server page init
   DEBUG_PRINTLN(F("initServer"));
   initServer();
-  DEBUG_PRINT(F("heap ")); DEBUG_PRINTLN(ESP.getFreeHeap());
+  DEBUG_PRINT(F("heap ")); DEBUG_PRINTLN(getFreeHeapSize());
   #ifdef ARDUINO_ARCH_ESP32
   DEBUG_PRINT(pcTaskGetTaskName(NULL)); DEBUG_PRINT(F(" free stack ")); DEBUG_PRINTLN(uxTaskGetStackHighWaterMark(NULL));
   #endif
@@ -836,8 +923,9 @@ void WLED::setup()
 
   // WLEDMM : dump GPIO infos (experimental, UI integration pending)
   //#ifdef WLED_DEBUG
-  USER_PRINTLN(F("\nGPIO\t| Assigned to\t\t| Info"));
+  USER_PRINTLN(F("\n\nGPIO\t| Assigned to\t\t| Info"));
   USER_PRINTLN(F("--------|-----------------------|------------"));
+  USER_FLUSH();  // avoid lost lines (Serial buffer overflow)
   for(int pinNr = 0; pinNr < WLED_NUM_PINS; pinNr++) { // 49 = highest PIN on ESP32-S3
 #if defined(CONFIG_IDF_TARGET_ESP32S3)
     if((pinManager.isPinOk(pinNr, false)) || (pinNr > 18 && pinNr < 21)) {  // softhack007: list USB pins
@@ -885,7 +973,12 @@ void WLED::setup()
   USER_PRINTLN(F("\n"));
 #endif
 
-  USER_PRINT(F("Free heap ")); USER_PRINTLN(ESP.getFreeHeap());USER_PRINTLN();
+  USER_PRINT(F("Free heap ")); USER_PRINTLN(getFreeHeapSize());USER_PRINTLN();
+
+  // WLEDMM force initial calculation of gamma correction LUT
+  if ((gammaCorrectVal < 0.999f) || (gammaCorrectVal > 3.0f)) calcGammaTable(1.0f); // no gamma => create linear LUT
+  else calcGammaTable(gammaCorrectVal);
+
   USER_PRINTLN(F("WLED initialization done.\n"));
   delay(50);
   // repeat Ada prompt
@@ -926,6 +1019,7 @@ void WLED::beginStrip()
   if (rlyPin>=0) {
     if (strip.isUpdating()) delay(FRAMETIME_FIXED); // WLEDMM ensure that no background led communication is happening while powering on the strip
     digitalWrite(rlyPin, (rlyMde ? bri : !bri));
+    offMode = !bri; // WLEDMM quickfix for sporadic "relay does not turn on" problems
     delay(75); // wait for relay to switch and power to stabilize
     strip.show(); // update LEDs
     delay(5);
@@ -1076,17 +1170,18 @@ bool WLED::initEthernet()
 
 void WLED::initConnection()
 {
+  #ifdef WLED_ENABLE_WEBSOCKETS
+  ws.onEvent(wsEvent);
+  #endif
+
 #ifdef ARDUINO_ARCH_ESP32
   unsigned long t_wait = millis();
   while(strip.isUpdating() && (millis() - t_wait < 86)) delay(1); // WLEDMM try to catch a moment when strip is idle
   //if (strip.isUpdating()) USER_PRINTLN("WLED::initConnection: strip still updating.");
 #endif
 
-  #ifdef WLED_ENABLE_WEBSOCKETS
-  ws.onEvent(wsEvent);
-  #endif
-
   WiFi.disconnect(true);        // close old connections
+  delay(5);                     // wait for hardware to be ready
 #ifdef ESP8266
   WiFi.setPhyMode(force802_3g ? WIFI_PHY_MODE_11G : WIFI_PHY_MODE_11N);
 #endif
@@ -1256,16 +1351,20 @@ void WLED::handleConnection()
     return;
   }
 
+  static unsigned retryCount1 = 0;  // WLEDMM
   static unsigned retryCount = 0;  // WLEDMM
-  #ifdef ARDUINO_ARCH_ESP32 
+  #ifdef ARDUINO_ARCH_ESP32
   // reconnect WiFi to clear stale allocations if heap gets too low
-  if ((!strip.isUpdating()) && (now - heapTime > 5000)) { // WLEDMM: updated with better logic for small heap available by block, not total. // WLEDMM trying to use a moment when the strip is idle
+  if ((now - heapTime > 5000) && !strip.isUpdating()) { // WLEDMM: updated with better logic for small heap available by block, not total. // WLEDMM trying to use a moment when the strip is idle
+
 #if defined(ARDUINO_ARCH_ESP32S2) || defined(WLED_ENABLE_HUB75MATRIX)
-    uint32_t heap = ESP.getFreeHeap(); // WLEDMM works better on -S2
+    //uint32_t heap = ESP.getFreeHeap(); // WLEDMM works better on -S2; also avoid too-early panic on HUB75 builds
+    uint32_t heap = getFreeHeapSize(); // WLEDMM works better on -S2
 #else
-    uint32_t heap = heap_caps_get_largest_free_block(0x1800); // WLEDMM: This is a better metric for free heap.
+    //uint32_t heap = heap_caps_get_largest_free_block(0x1800); // WLEDMM: This is a better metric for free heap.
+    uint32_t heap = getContiguousFreeHeap(); // WLEDMM: This is a better metric for free heap.
 #endif
-    if (heap < MIN_HEAP_SIZE && lastHeap < MIN_HEAP_SIZE) {
+    if (heap < MIN_HEAP_CRIT_SIZE && lastHeap < MIN_HEAP_SIZE) { // WLEDMM allow 12% extra margin before "critical"
       if (retryCount < 5) {  // WLEDMM avoid repeated disconnects
         USER_PRINT(F("Heap too low! (step 2, force reconnect): "));
         USER_PRINTLN(heap);
@@ -1276,7 +1375,7 @@ void WLED::handleConnection()
         retryCount ++;
       }
       errorFlag = ERR_LOW_MEM;
-    } else if (heap < MIN_HEAP_SIZE) {
+    } else if ((heap < MIN_HEAP_SIZE) && (retryCount1 < 5)) {
       USER_PRINT(F("Heap too low! (step 1, flush unread UDP): "));
       USER_PRINTLN(heap);      
       strip.purgeSegments();
@@ -1287,7 +1386,11 @@ void WLED::handleConnection()
       // WLEDMM
       errorFlag = ERR_LOW_MEM;
       retryCount = 1;
-    } else retryCount = 0;  // WLEDMM memory OK - reset counter
+      retryCount1++;
+    } else { 
+      retryCount = 0;  // WLEDMM memory OK - reset counter
+      retryCount1 = 0;
+    }
     lastHeap = heap;
     heapTime = now;
   }
@@ -1428,7 +1531,7 @@ void WLED::handleStatusLED()
   if (ledStatusType) {
     if (millis() - ledStatusLastMillis >= (1000/ledStatusType)) {
       ledStatusLastMillis = millis();
-#if 0
+#if 1
       // WLEDMM un-comment this to stop the blinking
       if ((ledStatusType != 2) && (ledStatusType != 4))
         ledStatusState = !ledStatusState;

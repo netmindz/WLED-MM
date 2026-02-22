@@ -51,9 +51,16 @@ bool getJsonValue(const JsonVariant& element, DestType& destination, const Defau
 
 //colors.cpp
 #if !defined(ARDUINO_ARCH_ESP32) || !defined(WLEDMM_FASTPATH) || defined(WLEDMM_SAVE_FLASH)  // WLEDMM: color utils moved into colorTools.hpp, so the compiler may inline these functions (faster)
+#if !defined(FASTLED_VERSION) // pull in FastLED if we don't have it yet (we need the CRGB type)
+  #define FASTLED_INTERNAL
+  #include <FastLED.h>
+#endif
 uint32_t __attribute__((const)) color_blend(uint32_t,uint32_t,uint_fast16_t,bool b16=false);  // WLEDMM: added attribute const
 uint32_t __attribute__((const)) color_add(uint32_t,uint32_t, bool fast=false);                // WLEDMM: added attribute const
 uint32_t __attribute__((const)) color_fade(uint32_t c1, uint8_t amount, bool video=false);
+#undef ColorFromPalette // overwrite any existing override
+CRGB __attribute__((hot,const)) ColorFromPaletteWLED(const CRGBPalette16& pal, unsigned index, uint8_t brightness=255, TBlendType blendType=LINEARBLEND);
+#define ColorFromPalette ColorFromPaletteWLED // override fastled function
 #else
 #include "colorTools.hpp"
 #endif
@@ -66,15 +73,51 @@ void colorXYtoRGB(float x, float y, byte* rgb); // only defined if huesync disab
 void colorRGBtoXY(byte* rgb, float* xy); // only defined if huesync disabled TODO
 void colorFromDecOrHexString(byte* rgb, char* in);
 bool colorFromHexString(byte* rgb, const char* in);
-uint32_t colorBalanceFromKelvin(uint16_t kelvin, uint32_t rgb);
+//uint32_t colorBalanceFromKelvin(uint16_t kelvin, uint32_t rgb);                             // WLEDMM function moved into bus_manager.cpp for better optimization
 uint16_t __attribute__((const)) approximateKelvinFromRGB(uint32_t rgb);                       // WLEDMM: added attribute const
 void setRandomColor(byte* rgb);
 uint8_t gamma8_cal(uint8_t b, float gamma);
 void calcGammaTable(float gamma);
-uint8_t __attribute__((pure)) gamma8(uint8_t b);                                              // WLEDMM: added attribute pure
-uint32_t __attribute__((pure)) gamma32(uint32_t);                                             // WLEDMM: added attribute pure
+uint8_t __attribute__((pure)) gamma8_slow(uint8_t b);                                         // WLEDMM: added attribute pure
 uint8_t unGamma8(uint8_t value);                                                              // WLEDMM revert gamma correction
 uint32_t unGamma24(uint32_t c);                                                               // WLEDMM for 24bit color (white left as-is)
+
+// WLEDMM: speedup - inline function for gamma correction
+extern uint8_t gammaTinv[256]; // colors.cpp
+extern uint8_t gammaT[256];    // colors.cpp
+inline uint8_t gamma8(uint8_t value) { return gammaT[value];}           // WLEDMM inlined for speed
+inline uint8_t fast_unGamma8(uint8_t value) { return gammaTinv[value];}
+
+#if defined(ARDUINO_ARCH_ESP32)
+#if !defined(RGBW32)           // WLEDMM define color macros in case they are missing
+#define RGBW32(r,g,b,w) (uint32_t((byte(w) << 24) | (byte(r) << 16) | (byte(g) << 8) | (byte(b))))
+#endif
+#if !defined(W) && !defined(R) // WLEDMM define color macros in case they are missing
+#define R(c) (byte((c) >> 16))
+#define G(c) (byte((c) >> 8))
+#define B(c) (byte(c))
+#define W(c) (byte((c) >> 24))
+#endif
+
+extern bool gammaCorrectCol;   // wled.h
+inline uint32_t __attribute__((hot)) gamma32(uint32_t color) {          // WLEDMM: moved here for inlining
+  if (!gammaCorrectCol) return color;
+  uint8_t w = W(color);
+  uint8_t r = R(color);
+  uint8_t g = G(color);
+  uint8_t b = B(color);
+  w = gammaT[w];
+  r = gammaT[r];
+  g = gammaT[g];
+  b = gammaT[b];
+  return RGBW32(r, g, b, w);
+}
+#else
+uint32_t __attribute__((pure)) gamma32(uint32_t);
+#endif
+
+#define gamma32inv(c) unGamma24(c)      // WLEDMM alias for upstream compatibility
+#define gamma8inv(c)  fast_unGamma8(c)  // WLEDMM alias for upstream compatibility
 
 //dmx_output.cpp
 void initDMXOutput();
@@ -104,10 +147,10 @@ void invalidateFileNameCache();   // WLEDMM call when new files were uploaded
 //hue.cpp
 void handleHue();
 void reconnectHue();
-void onHueError(void* arg, AsyncClient* client, int8_t error);
-void onHueConnect(void* arg, AsyncClient* client);
-void sendHuePoll();
-void onHueData(void* arg, AsyncClient* client, void *data, size_t len);
+//void onHueError(void* arg, AsyncClient* client, int8_t error);
+//void onHueConnect(void* arg, AsyncClient* client);
+//void sendHuePoll();
+//void onHueData(void* arg, AsyncClient* client, void *data, size_t len);
 
 #include "FX.h" // must be below colors.cpp declarations (potentially due to duplicate declarations of e.g. color_blend)
 
@@ -382,34 +425,10 @@ void userConnected();
 void userLoop();
 
 //util.cpp
-int getNumVal(const String* req, uint16_t pos);
-void parseNumber(const char* str, byte* val, byte minv=0, byte maxv=255);
-bool getVal(JsonVariant elem, byte* val, byte minv=0, byte maxv=255);
-bool updateVal(const char* req, const char* key, byte* val, byte minv=0, byte maxv=255);
-void oappendUseDeflate(bool OnOff); // enable / disable string squeezing
-bool oappend(const char* txt); // append new c string to temp buffer efficiently
-bool oappendi(int i);          // append new number to temp buffer efficiently
-void sappend(char stype, const char* key, int val);
-void sappends(char stype, const char* key, char* val);
-void prepareHostname(char* hostname);
-bool isAsterisksOnly(const char* str, byte maxLen)  __attribute__((pure));
-bool requestJSONBufferLock(uint8_t module=255);
-void releaseJSONBufferLock();
-uint8_t extractModeName(uint8_t mode, const char *src, char *dest, uint8_t maxLen);
-uint8_t extractModeSlider(uint8_t mode, uint8_t slider, char *dest, uint8_t maxLen, uint8_t *var = nullptr);
-int16_t extractModeDefaults(uint8_t mode, const char *segVar);
-void checkSettingsPIN(const char *pin);
-uint16_t  __attribute__((pure)) crc16(const unsigned char* data_p, size_t length);   // WLEDMM: added attribute pure
-
-uint16_t beatsin88_t(accum88 beats_per_minute_88, uint16_t lowest = 0, uint16_t highest = 65535, uint32_t timebase = 0, uint16_t phase_offset = 0);
-uint16_t beatsin16_t(accum88 beats_per_minute, uint16_t lowest = 0, uint16_t highest = 65535, uint32_t timebase = 0, uint16_t phase_offset = 0);
-uint8_t beatsin8_t(accum88 beats_per_minute, uint8_t lowest = 0, uint8_t highest = 255, uint32_t timebase = 0, uint8_t phase_offset = 0);
-
+#include "util.h"   // WLEDMM
 um_data_t* simulateSound(uint8_t simulationId);
 // WLEDMM enumerateLedmaps(); moved to FX.h
-uint8_t get_random_wheel_index(uint8_t pos);
-CRGB getCRGBForBand(int x, uint8_t *fftResult, int pal); //WLEDMM netmindz ar palette
-char *cleanUpName(char *in); // to clean up a name that was read from file
+
 
 // RAII guard class for the JSON Buffer lock
 // Modeled after std::lock_guard
@@ -436,27 +455,65 @@ void clearEEPROM();
 #endif
 
 //wled_math.cpp
+void init_math();
+
+// WLEDMM: math functions inlined for speed
+
+// 16-bit, integer based Bhaskara I's sine approximation: 16*x*(pi - x) / (5*pi^2 - 4*x*(pi - x))
+// input is 16bit unsigned (0-65535), output is 16bit signed (-32767 to +32767)
+// optimized integer implementation by @dedehai
+inline int16_t sin16_t(uint16_t theta) {
+  int scale = 1;
+  if (theta > 0x7FFF) {
+    theta = 0xFFFF - theta;
+    scale = -1; // second half of the sine function is negative (pi - 2*pi)
+  }
+  uint32_t precal = theta * (0x7FFF - theta);
+  uint64_t numerator = (uint64_t)precal * (4 * 0x7FFF); // 64bit required
+  int32_t denominator = 1342095361 - precal; // 1342095361 is 5 * 0x7FFF^2 / 4
+  int16_t result = numerator / denominator;
+  return result * scale;
+}
+inline int16_t cos16_t(uint16_t theta) {
+  return sin16_t(theta + 0x4000); //cos(x) = sin(x+pi/2)
+}
+
+#if defined(ARDUINO_ARCH_ESP32)
+// WLEDMM: use pre-calculated lookup-table for sin8_t
+extern uint8_t sinT[256];    // wled_math.cpp
+inline uint8_t sin8_t(uint8_t theta) { return sinT[theta];}           
+#else
+// no LUT on 8266, to save 256 bytes of RAM
+inline uint8_t sin8_t(uint8_t theta) {
+  int32_t sin16 = sin16_t((uint16_t)theta * 257); // 255 * 257 = 0xFFFF
+  sin16 += 0x7FFF + 128; //shift result to range 0-0xFFFF, +128 for rounding
+  return min(sin16, int32_t(0xFFFF)) >> 8; // min performs saturation, and prevents overflow
+}
+#endif
+inline uint8_t cos8_t(uint8_t theta) {
+  return sin8_t(theta + 64); //cos(x) = sin(x+pi/2)
+}
+
 //float cos_t(float phi); // use float math
 //float sin_t(float phi);
 //float tan_t(float x);
-int16_t sin16_t(uint16_t theta);
-int16_t cos16_t(uint16_t theta);
-uint8_t sin8_t(uint8_t theta);
-uint8_t cos8_t(uint8_t theta);
 
-float sin_approx(float theta); // uses integer math (converted to float), accuracy +/-0.0015 (compared to sinf())
-float cos_approx(float theta);
-float tan_approx(float x);
-//float atan2_t(float y, float x);
-//float acos_t(float x);
-//float asin_t(float x);
-//template <typename T> T atan_t(T x);
-//float floor_t(float x);
-//float fmod_t(float num, float denom);
+float  __attribute__((pure)) sin_approx(float theta); // uses integer math (converted to float), accuracy +/-0.0015 (compared to sinf())
+float  __attribute__((pure)) cos_approx(float theta);
+float  __attribute__((pure)) tan_approx(float x);
+#if defined(WLED_USE_UNREAL_MATH)
+float atan2_t(float y, float x);
+float acos_t(float x);
+float asin_t(float x);
+template <typename T> T atan_t(T x);
+float floor_t(float x);
+float fmod_t(float num, float denom);
+#endif
 #define sin_t sin_approx
 #define cos_t cos_approx
 #define tan_t tan_approx
 
+#if !defined(WLED_USE_UNREAL_MATH)
 #include <math.h>  // standard math functions. use a lot of flash
 #define atan2_t atan2f
 #define asin_t asinf
@@ -464,11 +521,13 @@ float tan_approx(float x);
 #define atan_t atanf
 #define fmod_t fmodf
 #define floor_t floorf
+#endif
 /*
 #define sin_t sinf
 #define cos_t cosf
 #define tan_t tanf
 */
+uint32_t __attribute__((const)) sqrt32_bw(uint32_t x);
 
 //wled_serial.cpp
 void handleSerial();

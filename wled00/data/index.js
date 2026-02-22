@@ -323,9 +323,19 @@ function showToast(text, error = false)
 	if (error) console.log(text);
 }
 
-function showErrorToast()
+function showErrorToast(ereason=0)
 {
-	showToast('Connection to light failed!', true);
+	var etext = 'Connection to light failed!';
+	switch(ereason) {
+	case 1: etext = '(loadPalettes) ' + etext; break;
+	case 2: etext = '(loadFX) ' + etext; break;
+	case 3: etext = '(loadFXData) ' + etext; break;
+	case 4: etext = '(requestJson) ' + etext; break;
+	case 5: etext = '(requestJson urlfetch) ' + etext; break;
+	case 6: etext = '(getPalettesData) ' + etext; break;
+	default: break;
+	}
+	showToast(etext,true);
 }
 
 function clearErrorToast(n=5000)
@@ -489,7 +499,7 @@ function loadPalettes(callback = null)
 		method: 'get'
 	})
 	.then((res)=>{
-		if (!res.ok) showErrorToast();
+		if (!res.ok) showErrorToast(1);
 		return res.json();
 	})
 	.then((json)=>{
@@ -513,7 +523,7 @@ function loadFX(callback = null)
 		method: 'get'
 	})
 	.then((res)=>{
-		if (!res.ok) showErrorToast();
+		if (!res.ok) showErrorToast(2);
 		return res.json();
 	})
 	.then((json)=>{
@@ -537,7 +547,7 @@ function loadFXData(callback = null)
 		method: 'get'
 	})
 	.then((res)=>{
-		if (!res.ok) showErrorToast();
+		if (!res.ok) showErrorToast(3);
 		return res.json();
 	})
 	.then((json)=>{
@@ -668,7 +678,7 @@ function parseInfo(i) {
 function populateInfo(i)
 {
 	var cn="";
-	var heap = i.freeheap/1000;
+	//var heap = i.freeheap/1000;
 	var heap = Math.round(i.freeheap/100)/10;        // WLEDMM bugfix
 	var theap = (i.totalheap>0)?i.totalheap/1000:-1; //WLEDMM - total heap is not available on 8266
 	var flashsize = i.getflash/1000; //WLEDMM and Athom
@@ -699,6 +709,8 @@ function populateInfo(i)
 	//if (i.ver.includes("0.14.1-b")) vcn = "Fried Chicken";  // final line of "One Vision" by Queen
 	if (i.ver.includes("0.14.3-b")) vcn = "Fried Chicken";
 	if (i.ver.includes("14.5.")) vcn = "Small Step";
+	if (i.ver.includes("14.6.")) vcn = "New Light";
+	if ((i.ver.includes("14.7."))||(i.ver.includes("14.8."))) vcn = "Next Step";
 
 	cn += `v${i.ver} &nbsp;<i>"${vcn}"</i><p>(WLEDMM ${i.rel}.bin)</p><p><em>build ${i.vid}</em></p><table>
 ${urows}
@@ -717,14 +729,15 @@ ${inforow("Uptime",getRuntimeStr(i.uptime))}
 ${inforow("Filesystem",i.fs.u + "/" + i.fs.t + " kB, " +Math.round(i.fs.u*100/i.fs.t) + "%")}
 ${theap>0?inforow("Heap ☾",((i.totalheap-i.freeheap)/1000).toFixed(0)+"/"+theap.toFixed(0)+" kB",", "+Math.round((i.totalheap-i.freeheap)/(10*theap))+"%"):inforow("Free heap",heap," kB")}  <!--WLEDMM different for 8266-->
 ${i.minfreeheap?inforow("Max used heap ☾",((i.totalheap-i.minfreeheap)/1000).toFixed(0)+" kB",", "+Math.round((i.totalheap-i.minfreeheap)/(10*theap))+"%"):""} 
-${i.psram?inforow("PSRAM ☾",((i.tpram-i.psram)/1024).toFixed(0)+"/"+(i.tpram/1024).toFixed(0)+" kB",", "+((i.tpram-i.psram)*100.0/i.tpram).toFixed(1)+"%"):""} 
-${i.psusedram?inforow("Max used PSRAM ☾",((i.tpram-i.psusedram)/1024).toFixed(0)+" kB",", "+((i.tpram-i.psusedram)*100.0/i.tpram).toFixed(1)+"%"):""} 
+${i.psram?inforow("PSRAM ☾",((i.tpsram-i.psram)/1024).toFixed(0)+"/"+(i.tpsram/1024).toFixed(0)+" kB",", "+((i.tpsram-i.psram)*100.0/i.tpsram).toFixed(1)+"%"):""} 
+${i.psusedram?inforow("Max used PSRAM ☾",((i.tpsram-i.psusedram)/1024).toFixed(0)+" kB",", "+((i.tpsram-i.psusedram)*100.0/i.tpsram).toFixed(1)+"%"):""} 
 ${i.freestack?inforow("Free stack ☾",(i.freestack/1000).toFixed(3)," kB"):""} <!--WLEDMM-->
 <tr><td colspan=2><hr style="height:1px;border-width:0;color:SeaGreen;background-color:SeaGreen"></td></tr>
-${i.tpram?inforow("PSRAM " + (i.psrmode?"("+i.psrmode+" mode) ":"") + " ☾",(i.tpram/1024/1024).toFixed(0)," MB"):inforow("NO PSRAM found.", "")}
+${i.tpsram?inforow("PSRAM " + (i.psrmode?"("+i.psrmode+" mode) ":"") + " ☾",(i.tpsram/1024/1024).toFixed(0)," MB"):inforow("NO PSRAM found.", "")}
 ${i.e32flash?inforow("Flash mode "+i.e32flashmode+i.e32flashtext + " ☾",i.e32flash+" MB, "+i.e32flashspeed," Mhz"):""}
 ${i.e32model?inforow(i.e32model + " ☾",i.e32cores +" core(s),"," "+i.e32speed+" Mhz"):""}
 ${inforow("Environment",i.arch + " " + i.core + " (" + i.lwip + ")")}
+${i.repo?inforow("Github",i.repo):""}
 <tr><td colspan=2><hr style="height:1px;border-width:0;color:SeaGreen;background-color:SeaGreen"></td></tr>
 ${i.e32code?inforow("Last ESP Restart ☾",i.e32code+" "+i.e32text):""}
 ${i.e32core0code?inforow("Core0 rst reason ☾",i.e32core0code, " "+i.e32core0text):""}
@@ -827,7 +840,7 @@ function populateSegments(s)
 				(cfg.comp.segpwr ? segp : '') +
 				`<div class="segin" id="seg${i}in">`+
 					`<input id="seg${i}fx" value="${inst.fx}" type="hidden"/>` + // <!--WLEDMM-->
-					`<input type="text" class="ptxt" id="seg${i}t" autocomplete="off" maxlength=32 value="${inst.n?inst.n:""}" placeholder="Enter name..."/>`+
+					`<input type="text" class="ptxt" id="seg${i}t" autocomplete="off" maxlength=64 value="${inst.n?inst.n:""}" placeholder="Enter name..."/>`+
 					`<table class="infot segt">`+
 					`<tr>`+
 						`<td>${isMSeg?'Start X':'Start LED'}</td>`+
@@ -1783,7 +1796,8 @@ function updateSelectedPalette(s)
 	if (selElement) selElement.classList.remove('selected');
 
 	var selectedPalette = parent.querySelector(`.lstI[data-id="${s}"]`);
-	if (selectedPalette)  parent.querySelector(`.lstI[data-id="${s}"]`).classList.add('selected');
+	if (!selectedPalette) return; // palette not yet loaded (custom palette on initial load)
+	selectedPalette.classList.add('selected');
 
 	// in case of special palettes (* Colors...), force show color selectors (if hidden by effect data)
 	let cd = gId('csl').children; // color selectors
@@ -1828,8 +1842,8 @@ function updateSelectedFx()
 		var selectedName = selectedEffect.querySelector(".lstIname").innerText;
 		var segs = gId("segcont").querySelectorAll(`div[data-map="map2D"]`);
 		for (const seg of segs) if (selectedName.indexOf("\u25A6")<0) seg.classList.remove('hide'); else seg.classList.add('hide');
-		var segs = gId("segcont").querySelectorAll(`div[data-snd="si"]`);
-		for (const seg of segs) if (selectedName.indexOf("\u266A")<0 && selectedName.indexOf("\u266B")<0) seg.classList.add('hide'); else seg.classList.remove('hide'); // also "♫ "?
+		var segs2 = gId("segcont").querySelectorAll(`div[data-snd="si"]`);
+		for (const seg2 of segs2) if (selectedName.indexOf("\u266A")<0 && selectedName.indexOf("\u266B")<0) seg2.classList.add('hide'); else seg2.classList.remove('hide'); // also "♫ "?
 	}
 }
 
@@ -1975,6 +1989,9 @@ function readState(s,command=false)
 			break;
 		case  3:
 			errstr = "Buffer locked!";
+			break;
+		case  7:
+			errstr = "No RAM for pixel buffer!";
 			break;
 		case  8:
 			errstr = "Effect RAM depleted!";
@@ -2178,7 +2195,7 @@ function requestJson(command=null)
 {
 	gId('connind').style.backgroundColor = "var(--c-y)";
 	if (command && !reqsLegal) return; // stop post requests from chrome onchange event on page restore
-	if (!jsonTimeout) jsonTimeout = setTimeout(()=>{if (ws) ws.close(); ws=null; showErrorToast()}, 3000);
+	if (!jsonTimeout) jsonTimeout = setTimeout(()=>{if (ws) ws.close(); ws=null; showErrorToast(4)}, 3000);
 	var req = null;
 	var url = (loc?`http://${locip}`:'') + '/json/si';
 	var useWs = (ws && ws.readyState === WebSocket.OPEN);
@@ -2194,7 +2211,7 @@ function requestJson(command=null)
 		req = JSON.stringify(command);
 		if (req.length > 1340) useWs = false; // do not send very long requests over websocket
 		if (req.length >  500 && lastinfo && lastinfo.arch == "esp8266") useWs = false; // esp8266 can only handle 500 bytes
-	};
+	}
 
 	if (useWs) {
 		// console.log("requestJson ws.send", command); //WLEDMM Debug
@@ -2213,7 +2230,7 @@ function requestJson(command=null)
 	.then(res => {
 		clearTimeout(jsonTimeout);
 		jsonTimeout = null;
-		if (!res.ok) showErrorToast();
+		if (!res.ok) showErrorToast(5);
 		return res.json();
 	})
 	.then(json => {
@@ -2226,6 +2243,7 @@ function requestJson(command=null)
 		if (json.info) {
 			let i = json.info;
 			parseInfo(i);
+			checkVersionUpgrade(i); // Check for version upgrade
 			populatePalettes(i);
 			if (isInfo) populateInfo(i);
 		}
@@ -2292,7 +2310,8 @@ function toggleLiveview()
 	if (isM) {
 		//WLEDMM adding liveview2D support on main ui
 		isLv = !isLv;
-		gId("colorGFX").style.display = isLv? "inline":"none"; //WLEDMM: set off if explicitly gfx pushed
+		//WLEDMM: set off if explicitly gfx pushed
+		gId("colorGFX").style.display = "inline"; // always keep colors visible
 		gId("effectGFX").style.display = isLv? "inline":"none";
 		gId("segGFX").style.display = isLv? "inline":"none";
 
@@ -3221,7 +3240,7 @@ setInterval(()=>{
 	gId('heartMM').style.color = `hsl(${hc}, 100%, 50%)`;
 }, 910);
 
-function openGH() { window.open("https://github.com/Aircoookie/WLED/wiki"); }
+function openGH() { window.open("https://mm.kno.wled.ge/"); }
 
 var cnfr = false;
 function cnfReset()
@@ -3334,7 +3353,8 @@ function genPresets()
 					addToPlaylist(m, ef.id);
 				}
 				addToPlaylist("All", ef.id, "ALL");
-				if(ef.name.startsWith("Y💡")) addToPlaylist("AnimARTrix", ef.id, "AA");
+				if(ef.name.startsWith("Y💡")) addToPlaylist("AnimARTrix", ef.id, "AM");
+				if(ef.name.startsWith("PS ")) addToPlaylist("Particle System", ef.id, "PS");
 				if(ef.name.startsWith("Y💡") || m == "2") addToPlaylist("Ambient", ef.id, "A");
 				if (m.includes("1")) addToPlaylist("All 1D", ef.id, "1D");
 				if (m.includes("2")) addToPlaylist("All 2D", ef.id, "2D");
@@ -3464,7 +3484,7 @@ function getPalettesData(page, callback)
 		}
 	})
 	.then(res => {
-		if (!res.ok) showErrorToast();
+		if (!res.ok) showErrorToast(6);
 		return res.json();
 	})
 	.then(json => {
@@ -3699,6 +3719,190 @@ function mergeDeep(target, ...sources)
 		}
 	}
 	return mergeDeep(target, ...sources);
+}
+// Version reporting feature
+var versionCheckDone = false;
+
+function checkVersionUpgrade(info) {
+	// Only check once per page load
+	if (versionCheckDone) return;
+	versionCheckDone = true;
+
+	// Skip version check in AP mode (no internet connectivity)
+	if (info.wifi && info.wifi.ap) {
+		return;
+	}
+
+	// Fetch version-info.json using existing /edit endpoint
+	fetch('/edit?edit=/version-info.json', {
+		method: 'get'
+	})
+		.then(res => {
+			if (res.status === 404) {
+				// File doesn't exist - first install, show install prompt
+				showVersionUpgradePrompt(info, null, info.ver);
+				return null;
+			}
+			if (!res.ok) {
+				throw new Error('Failed to fetch version-info.json');
+			}
+			return res.json();
+		})
+		.then(versionInfo => {
+			if (!versionInfo) return; // 404 case already handled
+
+			// Check if user opted out
+			if (versionInfo.neverAsk) return;
+
+			// Check if version has changed
+			const currentVersion = info.ver;
+			const storedVersion = versionInfo.version || '';
+
+			if (storedVersion && storedVersion !== currentVersion) {
+				// Version has changed, show upgrade prompt
+				showVersionUpgradePrompt(info, storedVersion, currentVersion);
+			} else if (!storedVersion) {
+				// Empty version in file, show install prompt
+				showVersionUpgradePrompt(info, null, currentVersion);
+			}
+		})
+		.catch(e => {
+			console.log('Failed to load version-info.json', e);
+		});
+}
+
+function showVersionUpgradePrompt(info, oldVersion, newVersion) {
+	// Determine if this is an install or upgrade
+	const isInstall = !oldVersion;
+
+	// Create overlay and dialog
+	const overlay = d.createElement('div');
+	overlay.id = 'versionUpgradeOverlay';
+	overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.7);z-index:10000;display:flex;align-items:center;justify-content:center;';
+
+	const dialog = d.createElement('div');
+	dialog.style.cssText = 'background:var(--c-1);border-radius:10px;padding:25px;max-width:500px;margin:20px;box-shadow:0 4px 6px rgba(0,0,0,0.3);';
+
+	// Build contextual message based on install vs upgrade
+	const title = isInstall
+		? '🎉 Thank you for installing WLED-MM!'
+		: '🎉 WLED-MM Upgrade Detected!';
+
+	const description = isInstall
+		? `You are now running WLED-MM <strong>${newVersion}</strong>.`
+		: `Your WLED-MM has been upgraded from <strong>${oldVersion}</strong> to <strong>${newVersion}</strong>.`;
+
+	const question = 'Would you like to help the WLED development team by reporting your installation? This helps us understand what hardware and versions are being used.'
+
+	dialog.innerHTML = `
+		<h2 style="margin-top:0;color:var(--c-f);">${title}</h2>
+		<p style="color:var(--c-f);">${description}</p>
+		<p style="color:var(--c-f);">${question}</p>
+		<div style="margin-top:20px;">
+			<button id="versionReportYes" class="btn">Yes</button>
+			<button id="versionReportNo" class="btn">Not Now</button>
+			<button id="versionReportNever" class="btn">Never Ask</button>
+		</div>
+	`;
+
+	overlay.appendChild(dialog);
+	d.body.appendChild(overlay);
+
+	// Add event listeners
+	gId('versionReportYes').addEventListener('click', () => {
+		reportUpgradeEvent(oldVersion, newVersion);
+		d.body.removeChild(overlay);
+	});
+
+	gId('versionReportNo').addEventListener('click', () => {
+		// Don't update version, will ask again on next load
+		d.body.removeChild(overlay);
+	});
+
+	gId('versionReportNever').addEventListener('click', () => {
+		updateVersionInfo(newVersion, true);
+		d.body.removeChild(overlay);
+		showToast('You will not be asked again.');
+	});
+}
+
+function reportUpgradeEvent(oldVersion, newVersion) {
+	showToast('Reporting upgrade...');
+
+	// Fetch fresh data from /json/info endpoint as requested
+	fetch('/json/info', {
+		method: 'get'
+	})
+	.then(res => res.json())
+	.then(infoData => {
+		// Map to UpgradeEventRequest structure per OpenAPI spec
+		// Required fields: deviceId, version, previousVersion, releaseName, chip, ledCount, isMatrix, bootloaderSHA256
+		const upgradeData = {
+				deviceId: infoData.deviceId,                     // Use anonymous unique device ID
+				version: infoData.ver || '',                     // Current version string
+				previousVersion: oldVersion || '',               // Previous version from version-info.json
+				releaseName: infoData.release || '',             // Release name (e.g., "WLED 0.15.0")
+				chip: infoData.arch || '',                       // Chip architecture (esp32, esp8266, etc)
+				ledCount: infoData.leds ? infoData.leds.count : 0,  // Number of LEDs
+				isMatrix: !!(infoData.leds && infoData.leds.matrix),  // Whether it's a 2D matrix setup
+				bootloaderSHA256: infoData.bootloaderSHA256 || '',   // Bootloader SHA256 hash - not yet availeable in WLEDMM
+				brand: infoData.brand,                           // Device brand (always present)
+				product: infoData.product,                       // Product name (always present)
+				flashSize: infoData.flash,                       // Flash size (always present)
+				repo: infoData.repo                              // GitHub repository (always present)
+		};
+		// Add optional fields if available
+		if (infoData.tpsram !== undefined) upgradeData.psramSize = Math.round(infoData.tpsram / (1024 * 1024));  // convert bytes to MB - tpsram is MM specific
+		// Note: partitionSizes not currently available in /json/info endpoint
+		//    it is availeable in WLEDMM => infoData.t = total FS size in bytes
+
+		// Make AJAX call to postUpgradeEvent API
+		return fetch('https://usage.wled.me/api/usage/upgrade', {
+			method: 'POST',
+			headers: {
+				'Content-Type': 'application/json'
+			},
+			body: JSON.stringify(upgradeData)
+		});
+	})
+	.then(res => {
+		if (res.ok) {
+			showToast('Thank you for reporting!');
+			updateVersionInfo(newVersion, false);
+		} else {
+			showToast('Report failed. Please try again later.', true);
+			// Do NOT update version info on failure - user will be prompted again
+		}
+	})
+	.catch(e => {
+		console.log('Failed to report upgrade', e);
+		showToast('Report failed. Please try again later.', true);
+		// Do NOT update version info on error - user will be prompted again
+	});
+}
+
+function updateVersionInfo(version, neverAsk) {
+	const versionInfo = {
+		version: version,
+		neverAsk: neverAsk
+	};
+
+	// Create a Blob with JSON content and use /upload endpoint
+	const blob = new Blob([JSON.stringify(versionInfo)], { type: 'application/json' });
+	const formData = new FormData();
+	formData.append('data', blob, 'version-info.json');
+
+	fetch('/upload', {
+		method: 'POST',
+		body: formData
+	})
+	.then(res => res.text())
+	.then(data => {
+		console.log('Version info updated', data);
+	})
+	.catch(e => {
+		console.log('Failed to update version-info.json', e);
+	});
 }
 
 size();

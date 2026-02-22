@@ -8,8 +8,9 @@
 /*
  * color blend function
  */
-IRAM_ATTR_YN __attribute__((hot)) uint32_t color_blend(uint32_t color1, uint32_t color2, uint_fast16_t blend, bool b16) {
-  if ((color1 == color2) || (blend == 0)) return color1; // WLEDMM
+uint32_t WLED_O3_ATTR IRAM_ATTR_YN __attribute__((hot)) color_blend(uint32_t color1, uint32_t color2, uint_fast16_t blend, bool b16) {
+  // min / max blend checking is omitted: calls with 0 or 255 are rare, checking lowers overall performance
+  //if ((color1 == color2) || (blend == 0)) return color1; // WLEDMM
   const uint_fast16_t blendmax = b16 ? 0xFFFF : 0xFF;
   if(blend >= blendmax) return color2;
   const uint_fast8_t shift = b16 ? 16 : 8;
@@ -46,7 +47,7 @@ IRAM_ATTR_YN __attribute__((hot)) uint32_t color_blend(uint32_t color1, uint32_t
  * color add function that preserves ratio
  * idea: https://github.com/Aircoookie/WLED/pull/2465 by https://github.com/Proto-molecule
  */
-IRAM_ATTR_YN uint32_t color_add(uint32_t c1, uint32_t c2, bool fast)   // WLEDMM added IRAM_ATTR_YN
+uint32_t WLED_O2_ATTR IRAM_ATTR_YN color_add(uint32_t c1, uint32_t c2, bool fast)   // WLEDMM added IRAM_ATTR_YN
 {
   if (c2 == 0) return c1;  // WLEDMM shortcut
   if (c1 == 0) return c2;  // WLEDMM shortcut
@@ -80,35 +81,61 @@ IRAM_ATTR_YN uint32_t color_add(uint32_t c1, uint32_t c2, bool fast)   // WLEDMM
  * if using "video" method the resulting color will never become black unless it is already black
  */
 
-IRAM_ATTR_YN __attribute__((hot)) uint32_t color_fade(uint32_t c1, uint8_t amount, bool video)
+uint32_t WLED_O2_ATTR IRAM_ATTR_YN __attribute__((hot)) color_fade(uint32_t c1, uint8_t amount, bool video)
 {
-  if (amount == 255) return c1; // WLEDMM small optimization - plus it avoids over-fading in "video" mode
-  if (amount == 0) return 0; // WLEDMM shortcut
+  if (c1 == 0 || amount == 0) return 0; // black or no change
+  if (amount == 255) return c1;
+  uint32_t addRemains = 0;
 
-  uint32_t scaledcolor = 0; // color order is: W R G B from MSB to LSB
-  uint16_t w = W(c1);    // WLEDMM 16bit to make sure the compiler uses 32bit (not 64bit) for the math
-  uint16_t r = R(c1);
-  uint16_t g = G(c1);
-  uint16_t b = B(c1);
-  if (video)  {
-    uint16_t scale = amount; // 32bit for faster calculation
-    // bugfix: doing "+1" after shifting is obviously wrong
-    // optimization: ((r && scale) ? 1 : 0) can be simplified to "if (r > 0) +1" ; if we arive here, then scale != 0 and scale < 255
-    if (w>0) scaledcolor |= (((w * scale) >> 8) +1) << 24;  // WLEDMM small speedup when no white channel
-    if (r>0) scaledcolor |= (((r * scale) >> 8) +1) << 16;
-    if (g>0) scaledcolor |= (((g * scale) >> 8) +1) << 8;
-    if (b>0) scaledcolor |=  ((b * scale) >> 8) +1;
-    return scaledcolor;
+  if (!video) amount++; // add one for correct scaling using bitshifts
+  else {
+    // video scaling: make sure colors do not dim to zero if they started non-zero unless they distort the hue
+    uint8_t r = byte(c1>>16), g = byte(c1>>8), b = byte(c1), w = byte(c1>>24); // extract r, g, b, w channels
+    uint8_t maxc = (r > g) ? ((r > b) ? r : b) : ((g > b) ? g : b); // determine dominant channel for hue preservation
+    addRemains  = r && (r<<5) > maxc ? 0x00010000 : 0; // note: setting color preservation threshold too high results in flickering and
+    addRemains |= g && (g<<5) > maxc ? 0x00000100 : 0; // jumping colors in low brightness gradients. Multiplying the color preserves
+    addRemains |= b && (b<<5) > maxc ? 0x00000001 : 0; // better accuracy than dividing the maxc. Shifting by 5 is a good compromise 
+    addRemains |= w ? 0x01000000 : 0;                  // i.e. remove color channel if <13% of max
   }
-  else  {
-    uint16_t scale = 1 + amount;
-    if (w>0) scaledcolor |= ((w * scale) >> 8) << 24;                              // WLEDMM small speedup when no white channel
-    scaledcolor |= ((r * scale) >> 8) << 16;
-    scaledcolor |= (g * scale) & 0x0000FF00;                                       // WLEDMM faster than right-left shift "" >>8 ) <<8"
-    scaledcolor |= (b * scale) >> 8;
-    return scaledcolor;
-  }
+  const uint32_t TWO_CHANNEL_MASK = 0x00FF00FF;
+  uint32_t rb = (((c1 & TWO_CHANNEL_MASK) * amount) >> 8) &  TWO_CHANNEL_MASK; // scale red and blue
+  uint32_t wg = (((c1 >> 8) & TWO_CHANNEL_MASK) * amount) & ~TWO_CHANNEL_MASK; // scale white and green
+  return (rb | wg) + addRemains;
 }
+
+//
+// overwrite FastLed colorFromPalette with an optimized version created by dedehai (https://github.com/Aircoookie/WLED/pull/4138)
+// 
+// 1:1 replacement of fastled function optimized for ESP, slightly faster, more accurate and uses less flash (~ -200bytes)
+CRGB IRAM_ATTR_YN __attribute__((hot)) ColorFromPaletteWLED(const CRGBPalette16& pal, unsigned index, uint8_t brightness, TBlendType blendType)
+{
+  if (blendType == LINEARBLEND_NOWRAP) {
+    index = (index*240) >> 8; // Blend range is affected by lo4 blend of values, remap to avoid wrapping
+  }
+  unsigned hi4 = byte(index) >> 4;
+  const CRGB* entry = (CRGB*)((uint8_t*)(&(pal[0])) + (hi4 * sizeof(CRGB)));
+  unsigned red1   = entry->r;
+  unsigned green1 = entry->g;
+  unsigned blue1  = entry->b;
+  if (blendType != NOBLEND) {
+    if (hi4 == 15) entry = &(pal[0]);
+    else ++entry;
+    unsigned f2 = ((index & 0x0F) << 4) + 1; // +1 so we scale by 256 as a max value, then result can just be shifted by 8
+    unsigned f1 = (257 - f2); // f2 is 1 minimum, so this is 256 max
+    red1   = (red1 * f1 + (unsigned)entry->r * f2) >> 8;
+    green1 = (green1 * f1 + (unsigned)entry->g * f2) >> 8;
+    blue1  = (blue1 * f1 + (unsigned)entry->b * f2) >> 8;
+  }
+  if (brightness < 255) { // note: zero checking could be done to return black but that is hardly ever used so it is omitted
+    uint32_t scale = brightness + 1; // adjust for rounding (bitshift)
+    red1   = (red1 * scale) >> 8;
+    green1 = (green1 * scale) >> 8;
+    blue1  = (blue1 * scale) >> 8;
+  }
+  return RGBW32(red1,green1,blue1,0);
+  //return CRGB(red1,green1,blue1);
+}
+
 #endif
 
 void setRandomColor(byte* rgb)
@@ -142,25 +169,37 @@ void colorHStoRGB(uint16_t hue, byte sat, byte* rgb) //hue, sat to rgb
 //get RGB values from color temperature in K (https://tannerhelland.com/2012/09/18/convert-temperature-rgb-algorithm-code.html)
 void colorKtoRGB(uint16_t kelvin, byte* rgb) //white spectrum to rgb, calc
 {
+  // WLEDMM safe exit (do nothing) to avoid logf domain errors. argument to logf must be >= 1.0f to avoid bad result 0 or -inf; 
+  //        kelvin >65k might be a signed/unsigned conversion error
+  if ((kelvin < 1200) || (kelvin > 65000)) {
+    rgb[0] = 255;
+    rgb[1] = 255;
+    rgb[2] = 255;
+    rgb[3] = 0;
+    return;
+  }
+
   int r = 0, g = 0, b = 0;
-  float temp = kelvin / 100.0f;
+  float temp = float(kelvin) / 100.0f;  // WLEDMM "float()" added - to make sure its done in float, not in double or int
   if (temp <= 66.0f) {
     r = 255;
     g = roundf(99.4708025861f * logf(temp) - 161.1195681661f);
     if (temp <= 19.0f) {
       b = 0;
     } else {
-      b = roundf(138.5177312231f * logf((temp - 10.0f)) - 305.0447927307f);
+      b = roundf(138.5177312231f * logf((temp - 10.0f)) - 305.0447927307f); // safe because temp > 19.0f
     }
   } else {
+    // temp-60.0f is always > 0 here (since temp>66)
     r = roundf(329.698727446f * powf((temp - 60.0f), -0.1332047592f));
     g = roundf(288.1221695283f * powf((temp - 60.0f), -0.0755148492f));
     b = 255;
   }
   //g += 12; //mod by Aircoookie, a bit less accurate but visibly less pinkish
-  rgb[0] = (uint8_t) constrain(r, 0, 255);
-  rgb[1] = (uint8_t) constrain(g, 0, 255);
-  rgb[2] = (uint8_t) constrain(b, 0, 255);
+  // WLEDMM min(max()) is faster than constrain()
+  rgb[0] = (uint8_t) min(max(r, 0), 255);
+  rgb[1] = (uint8_t) min(max(g, 0), 255);
+  rgb[2] = (uint8_t) min(max(b, 0), 255);
   rgb[3] = 0;
 }
 
@@ -308,22 +347,9 @@ static float maxf (float v, float w)  // WLEDMM better use standard library fmax
 }
 #endif
 
-// adjust RGB values based on color temperature in K (range [2800-10200]) (https://en.wikipedia.org/wiki/Color_balance)
-// called from bus manager when color correction is enabled!
-uint32_t __attribute__((hot)) IRAM_ATTR_YN colorBalanceFromKelvin(uint16_t kelvin, uint32_t rgb)  // WLEDMM: IRAM_ATTR_YN
-{
-  //remember so that slow colorKtoRGB() doesn't have to run for every setPixelColor()
-  static byte correctionRGB[4] = {0,0,0,0};
-  static uint16_t lastKelvin = 0;
-  if (lastKelvin != kelvin) colorKtoRGB(kelvin, correctionRGB);  // convert Kelvin to RGB
-  lastKelvin = kelvin;
-  byte rgbw[4];
-  rgbw[0] = ((uint16_t) correctionRGB[0] * R(rgb)) /255; // correct R
-  rgbw[1] = ((uint16_t) correctionRGB[1] * G(rgb)) /255; // correct G
-  rgbw[2] = ((uint16_t) correctionRGB[2] * B(rgb)) /255; // correct B
-  rgbw[3] =                                W(rgb);
-  return RGBW32(rgbw[0],rgbw[1],rgbw[2],rgbw[3]);
-}
+
+// WLEDMM colorBalanceFromKelvin moved into bus_manager.cpp for better optimization
+
 
 //approximates a Kelvin color temperature from an RGB color.
 //this does no check for the "whiteness" of the color,
@@ -366,7 +392,7 @@ uint16_t approximateKelvinFromRGB(uint32_t rgb) {
 
 #if !defined(WLED_USE_CIE_BRIGHTNESS_TABLE)
 //gamma 2.8 lookup table used for color correction
-static byte gammaT[256] = {
+byte DRAM_ATTR_YN gammaT[256] = {  // WLEDMM: DRAM_ATTR to ensure that this table is in RAM (faster)
     0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,
     0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  1,  1,  1,  1,
     1,  1,  1,  1,  1,  1,  1,  1,  1,  2,  2,  2,  2,  2,  2,  2,
@@ -389,7 +415,7 @@ static byte gammaT[256] = {
 // https://github.com/Aircoookie/WLED/issues/2767#issuecomment-1310961308
 // unfortunately NeoPixelBus has its own internal table, that kills low brightness values similar to the original WLED table.
 //   see https://github.com/Makuna/NeoPixelBus/blob/master/src/internal/NeoGamma.h
-static const byte gammaT[256] = {
+const DRAM_ATTR_YN byte gammaT[256] = {  // WLEDMM make sure this table is in RAM (faster)
   0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 
   2, 2, 2, 2, 2, 2, 2, 2, 3, 3, 3, 3, 3, 3, 3, 4,
   4, 4, 4, 4, 4, 4, 5, 5, 5, 5, 5, 6, 6, 6, 6, 6, 
@@ -410,24 +436,24 @@ static const byte gammaT[256] = {
 #endif
 
 // WLEDMM begin
-static uint8_t gammaTinv[256] = { 0 };
+uint8_t DRAM_ATTR_YN gammaTinv[256] = { 0 };
 static void calcInvGammaTable(float gamma)
 {
   float gammaInv = 1.0f / 2.4f;    // surprise surprise: WLED palettes use a fixed gamma of 2.4 !!!
   //float gammaInv = 1.0f / gamma; // if we go by the book, 1.0/gamma will revert gamma corrections
-  for (size_t i = 0; i < 256; i++) {
-    gammaTinv[i] = (int)(powf((float)i / 255.0f, gammaInv) * 255.0f + 0.5f);
+  for (size_t i = 1; i < 256; i++) {
+    gammaTinv[i] = (int)(powf(((float)i - 0.5f) / 255.0f, gammaInv) * 255.0f + 0.5f); // improved by @dedehai
   }
+  gammaTinv[0]=0;
+  gammaTinv[255]=255;
 }
-uint8_t __attribute__((hot)) unGamma8(uint8_t value) {
-  //if (!gammaCorrectCol || (value == 0) || (value == 255)) return value;
-  if ((value == 0) || (value == 255)) return value;
-  if ((gammaCorrectVal < 0.999f) || (gammaCorrectVal > 3.0f)) return value;
+IRAM_ATTR_YN uint8_t __attribute__((hot)) unGamma8(uint8_t value) {
   if (gammaTinv[255] == 0) calcInvGammaTable(gammaCorrectVal);
+  //if ((gammaCorrectVal < 0.999f) || (gammaCorrectVal > 3.0f)) return value; // WLEDMM yes, looks stupid
   return gammaTinv[value];
 }
 
-uint32_t __attribute__((hot)) unGamma24(uint32_t c) {
+IRAM_ATTR_YN uint32_t __attribute__((hot)) unGamma24(uint32_t c) {
   if ((gammaCorrectVal < 0.999f) || (gammaCorrectVal > 3.0f)) return c;
   if (gammaTinv[255] == 0) calcInvGammaTable(gammaCorrectVal);
   return RGBW32(gammaTinv[R(c)], gammaTinv[G(c)], gammaTinv[B(c)], W(c));
@@ -436,6 +462,8 @@ uint32_t __attribute__((hot)) unGamma24(uint32_t c) {
 
 uint8_t gamma8_cal(uint8_t b, float gamma)
 {
+  if (b==0) return 0;
+  if (b==255) return 255;
   return (int)(powf((float)b / 255.0f, gamma) * 255.0f + 0.5f);
 }
 
@@ -443,21 +471,26 @@ uint8_t gamma8_cal(uint8_t b, float gamma)
 void calcGammaTable(float gamma)
 {
 #if !defined(WLED_USE_CIE_BRIGHTNESS_TABLE)  // WLEDMM not possible when using the CIE table
-  for (uint16_t i = 0; i < 256; i++) {
+  for (uint16_t i = 1; i < 256; i++) {
     gammaT[i] = gamma8_cal(i, gamma);
   }
+  gammaT[0]=0;
+  gammaT[255]=255;
 #endif
   calcInvGammaTable(gamma); // WLEDMM
 }
 
 // used for individual channel or brightness gamma correction
-IRAM_ATTR_YN __attribute__((hot)) uint8_t gamma8(uint8_t b)   // WLEDMM added IRAM_ATTR_YN
+IRAM_ATTR_YN __attribute__((hot)) uint8_t gamma8_slow(uint8_t b)   // WLEDMM added IRAM_ATTR_YN
 {
   return gammaT[b];
 }
 
+#if defined(ARDUINO_ARCH_ESP32)
+// WLEDMM: gamma32() moved to fcn_declare.h (inlining for speed)
+#else
 // used for color gamma correction
-uint32_t __attribute__((hot)) gamma32(uint32_t color)
+IRAM_ATTR_YN uint32_t __attribute__((hot)) gamma32(uint32_t color)
 {
   if (!gammaCorrectCol) return color;
   uint8_t w = W(color);
@@ -470,3 +503,4 @@ uint32_t __attribute__((hot)) gamma32(uint32_t color)
   b = gammaT[b];
   return RGBW32(r, g, b, w);
 }
+#endif

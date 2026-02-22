@@ -5,9 +5,19 @@
  */
 #ifdef WLED_ENABLE_WEBSOCKETS
 
+#ifdef DYNAMICBUFFER_USE_PSRAM
+#warning "DYNAMICBUFFER_USE_PSRAM is experimental"
+#endif
+
 static volatile uint16_t wsLiveClientId = 0;        // WLEDMM added "static"
 static volatile unsigned long wsLastLiveTime = 0;   // WLEDMM
 //uint8_t* wsFrameBuffer = nullptr;
+
+// define some constants for binary protocols, dont use defines but C++ style constexpr
+constexpr uint8_t BINARY_PROTOCOL_GENERIC = 0xFF; // generic / auto detect NOT IMPLEMENTED
+constexpr uint8_t BINARY_PROTOCOL_E131    = P_E131; // = 0, untested!
+constexpr uint8_t BINARY_PROTOCOL_ARTNET  = P_ARTNET; // = 1, untested!
+constexpr uint8_t BINARY_PROTOCOL_DDP     = P_DDP; // = 2
 
 #if !defined(ARDUINO_ARCH_ESP32) || defined(WLEDMM_FASTPATH)   // WLEDMM
 #define WS_LIVE_INTERVAL_MAX 120
@@ -32,7 +42,7 @@ void wsEvent(AsyncWebSocket * server, AsyncWebSocketClient * client, AwsEventTyp
     // data packet
     AwsFrameInfo * info = (AwsFrameInfo*)arg;
     if(info->final && info->index == 0 && info->len == len){
-      // the whole message is in a single frame and we got all of its data (max. 1450 bytes)
+      // the whole message is in a single frame and we got all of its data (max. 1428 bytes / ESP8266: 528 bytes)
       if(info->opcode == WS_TEXT)
       {
         if (len > 0 && len < 10 && data[0] == 'p') {
@@ -43,7 +53,7 @@ void wsEvent(AsyncWebSocket * server, AsyncWebSocketClient * client, AwsEventTyp
         }
 
         bool verboseResponse = false;
-        if (!requestJSONBufferLock(11)) {
+        if (!requestJSONBufferLock(11, 300)) {
           client->text(F("{\"error\":3}")); // ERR_NOBUF
           return;
         }
@@ -74,8 +84,29 @@ void wsEvent(AsyncWebSocket * server, AsyncWebSocketClient * client, AwsEventTyp
           // force broadcast in 500ms after updating client
           //lastInterfaceUpdate = millis() - (INTERFACE_UPDATE_COOLDOWN -500); // ESP8266 does not like this
         }
+      } else if (info->opcode == WS_BINARY) {
+        // first byte determines protocol. Note: since e131_packet_t is "packed", the compiler handles alignment issues
+        //DEBUG_PRINTF_P(PSTR("WS binary message: len %u, byte0: %u\n"), len, data[0]);
+        int offset = 1; // offset to skip protocol byte
+        switch (data[0]) {
+          case BINARY_PROTOCOL_E131:
+            handleE131Packet((e131_packet_t*)&data[offset], client->remoteIP(), P_E131);
+            break;
+          case BINARY_PROTOCOL_ARTNET:
+            handleE131Packet((e131_packet_t*)&data[offset], client->remoteIP(), P_ARTNET);
+            break;
+          case BINARY_PROTOCOL_DDP:
+            if (len < unsigned(10 + offset)) return; // DDP header is 10 bytes (+1 protocol byte)
+            size_t ddpDataLen = (data[8+offset] << 8) | data[9+offset]; // data length in bytes from DDP header
+            uint8_t flags = data[0+offset];
+            if ((flags & DDP_TIMECODE_FLAG) ) ddpDataLen += 4; // timecode flag adds 4 bytes to data length
+            if (len < (10 + offset + ddpDataLen)) return; // not enough data, prevent out of bounds read
+            // could be a valid DDP packet, forward to handler
+            handleE131Packet((e131_packet_t*)&data[offset], client->remoteIP(), P_DDP);
+        }
       }
     } else {
+      DEBUG_PRINTF("WS multipart message: final %u index %u len %u total %u\n", info->final, uint32_t(info->index), len, (uint32_t)info->len);
       //message is comprised of multiple frames or the frame is split into multiple packets
       //if(info->index == 0){
         //if (!wsFrameBuffer && len < 4096) wsFrameBuffer = new uint8_t[4096];
@@ -111,7 +142,7 @@ void sendDataWs(AsyncWebSocketClient * client)
   DEBUG_PRINTF("sendDataWs\n");
   if (!ws.count()) return;
 
-  if (!requestJSONBufferLock(12)) {
+  if (!requestJSONBufferLock(12, 300)) {
     if (client) {
       client->text(F("{\"error\":3}")); // ERR_NOBUF
     } else {
@@ -195,7 +226,11 @@ static bool sendLiveLedsWs(uint32_t wsClient)  // WLEDMM added "static"
   #ifdef ESP8266
     constexpr size_t MAX_LIVE_LEDS_WS = 256U;
   #else
+  #if !defined(BOARD_HAS_PSRAM) || !defined(DYNAMICBUFFER_USE_PSRAM)
     constexpr size_t MAX_LIVE_LEDS_WS = 4096U;  //WLEDMM use 4096 as max matrix size
+  #else
+    constexpr size_t MAX_LIVE_LEDS_WS = 4096 * 2;  //WLEDMM better preview on PSRAM boards
+  #endif
   #endif
   size_t used;// = strip.getLengthTotal();
   size_t n;// = ((used -1)/MAX_LIVE_LEDS_WS) +1; //only serve every n'th LED if count over MAX_LIVE_LEDS_WS
@@ -253,6 +288,7 @@ static bool sendLiveLedsWs(uint32_t wsClient)  // WLEDMM added "static"
     }
   #endif
 
+  (void) unGamma8(127); // WLEDMM dummy call, just to make sure that gammaTinv is initialized, so we can use fast_unGamma8
   uint8_t stripBrightness = strip.getBrightness();
   for (size_t i = 0; pos < bufSize -2; i += n)
   {
@@ -268,9 +304,9 @@ static bool sendLiveLedsWs(uint32_t wsClient)  // WLEDMM added "static"
     if (gammaCorrectPreview) {
       uint8_t w = W(c);  // not sure why, but it looks better if using "white" without corrections
       if (w>0) c = color_add(c, RGBW32(w, w, w, 0), false); // add white channel to RGB channels - color_add() will prevent over-saturation
-      buffer[pos++] = unGamma8(R(c)); //R
-      buffer[pos++] = unGamma8(G(c)); //G
-      buffer[pos++] = unGamma8(B(c)); //B
+      buffer[pos++] = fast_unGamma8(R(c)); //R
+      buffer[pos++] = fast_unGamma8(G(c)); //G
+      buffer[pos++] = fast_unGamma8(B(c)); //B
     } else {
     // WLEDMM end
       uint8_t w = W(c);  // WLEDMM small optimization

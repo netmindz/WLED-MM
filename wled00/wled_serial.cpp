@@ -76,8 +76,8 @@ void sendBytes(){
 }
 
 bool canUseSerial(void) {   // WLEDMM returns true if Serial can be used for debug output (i.e. not configured for other purpose)
-  #if defined(CONFIG_IDF_TARGET_ESP32C3) && ARDUINO_USB_CDC_ON_BOOT && !defined(WLED_DEBUG_HOST)
-  //  on -C3, USB CDC blocks if disconnected! so check if Serial is active before printing to it.
+  #if ARDUINO_USB_CDC_ON_BOOT && (defined(CONFIG_IDF_TARGET_ESP32S3) || defined(CONFIG_IDF_TARGET_ESP32C3) || defined(CONFIG_IDF_TARGET_ESP32C6) || defined(CONFIG_IDF_TARGET_ESP32P4)) && !defined(WLED_DEBUG_HOST)
+  //  on S3/C3/C6/P4, USB CDC blocks if disconnected! so check if Serial is active before printing to it.
   if (!Serial) return false;
   #endif
   if (pinManager.isPinAllocated(hardwareTX) && (pinManager.getPinOwner(hardwareTX) != PinOwner::DebugOut)) 
@@ -93,9 +93,12 @@ bool canUseSerial(void) {   // WLEDMM returns true if Serial can be used for deb
 
 void handleSerial()
 {
+#if !ARDUINO_USB_CDC_ON_BOOT
+  // some USB-CDC boards.json set RX and TX to the USB+ and USB- pins. These pins cannot be assigned to other purposes, so always availeable 
   if (pinManager.isPinAllocated(hardwareRX)) return;
-  if (!Serial) return;              // arduino docs: `if (Serial)` indicates whether or not the USB CDC serial connection is open. For all non-USB CDC ports, this will always return true
+#endif
   if (((pinManager.isPinAllocated(hardwareTX)) && (pinManager.getPinOwner(hardwareTX) != PinOwner::DebugOut))) return; // WLEDMM serial TX is necessary for adalight / TPM2
+  if (!Serial) return;              // arduino docs: `if (Serial)` indicates whether or not the USB CDC serial connection is open. For all non-USB CDC ports, this will always return true
 
   #ifdef WLED_ENABLE_ADALIGHT
   static auto state = AdaState::Header_A;

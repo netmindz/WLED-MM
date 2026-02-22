@@ -6,28 +6,80 @@
 #endif
 #include "html_settings.h"
 #include "html_other.h"
+
 #ifdef WLED_ENABLE_PIXART
   #include "html_pixart.h"
 #endif
-#ifdef WLED_ENABLE_GIF
-  #ifndef WLED_DISABLE_GIFPLAYER
-    #include "html_gifplayer.h"
+#ifdef WLED_ENABLE_PXMAGIC
+  //#include "html_pxmagic.h"
+  #if !defined(WLED_ENABLE_PIXART)
+  #error "PIXEL MAGIC Tool is not supported in WLED-MM. Please use Pixel Art Converter instead: add -D WLED_ENABLE_PIXART to your build_flags"
+  // PIXEL MAGIC has known problems when creating image presets for larger images.
+  // if you still want to use it, upload pxmagic.htm to your device (<WLED-IP>/edit) and then start <WLED-IP>/pxmagic.htm
   #endif
 #endif
+#if defined(WLED_ENABLE_PIXELFORGE) && !defined(WLED_DISABLE_PIXELFORGE) // WLEDMM uses WLED_ENABLE_PIXELFORGE, upstream has WLED_DISABLE_PIXELFORGE
+  #include "html_pixelforge.h"
+  static const char _pixelforge_htm[] PROGMEM = "/pixelforge.htm";
+  static const char _common_js[]      PROGMEM = "/common.js";
+  #if !defined(WLED_ENABLE_GIF)
+  #error "GIF image support is missing. Please add -D WLED_ENABLE_GIF to your build flags."
+  #endif
+#endif
+
 #include "html_cpal.h"
-
-/*
- * Integrated HTTP web server page declarations
- */
-
-bool handleIfNoneMatchCacheHeader(AsyncWebServerRequest* request);
-void setStaticContentCacheHeaders(AsyncWebServerResponse *response);
 
 // define flash strings once (saves flash memory)
 static const char s_redirecting[] PROGMEM = "Redirecting...";
 static const char s_content_enc[] PROGMEM = "Content-Encoding";
 static const char s_unlock_ota [] PROGMEM = "Please unlock OTA in security settings!";
 static const char s_unlock_cfg [] PROGMEM = "Please unlock settings using PIN code!";
+static const char s_cache_control[]  PROGMEM = "Cache-Control";
+//static const char s_no_store[]       PROGMEM = "no-store";
+//static const char s_expires[]        PROGMEM = "Expires";
+static const char enc_gzip[] PROGMEM = "gzip";
+
+/*
+ * Integrated HTTP web server page declarations
+ */
+
+static void generateEtag(char *etag, uint16_t eTagSuffix) {
+  sprintf_P(etag, PSTR("%u-%02x-%04x"), WEB_BUILD_TIME, cacheInvalidate, eTagSuffix);
+}
+
+static void setStaticContentCacheHeaders(AsyncWebServerResponse *response, int code=200, uint16_t eTagSuffix = 0) {
+  // Only send ETag for 200 (OK) responses
+  if (code != 200) return;
+
+  // https://medium.com/@codebyamir/a-web-developers-guide-to-browser-caching-cc41f3b73e7c
+  #ifndef WLED_DEBUG
+  // this header name is misleading, "no-cache" will not disable cache,
+  // it just revalidates on every load using the "If-None-Match" header with the last ETag value
+  response->addHeader(FPSTR(s_cache_control), F("no-cache"));
+  #else
+  response->addHeader(FPSTR(s_cache_control), F("no-store,max-age=0"));  // prevent caching if debug build
+  #endif
+  char etag[32] = {'\0'};
+  generateEtag(etag, eTagSuffix);
+  response->addHeader(F("ETag"), etag);
+}
+
+static bool handleIfNoneMatchCacheHeader(AsyncWebServerRequest *request, int code=200, uint16_t eTagSuffix = 0) {
+  // Only send 304 (Not Modified) if response code is 200 (OK)
+  if (code != 200) return false;
+
+  AsyncWebHeader *header = request->getHeader(F("If-None-Match"));
+  char etag[32] = {'\0'};
+  generateEtag(etag, eTagSuffix);
+  if (header && header->value() == etag) {
+    AsyncWebServerResponse *response = request->beginResponse(304);
+    setStaticContentCacheHeaders(response, code, eTagSuffix);
+    request->send(response);
+    return true;
+  }
+  return false;
+}
+
 
 //Is this an IP?
 bool isIp(String str) {
@@ -395,13 +447,13 @@ void initServer()
   });
   #endif
   server.on("/", HTTP_GET, [](AsyncWebServerRequest *request){
-    USER_PRINT("Client request"); //WLEDMM: want to see if client connects to wled
+    DEBUG_PRINT("Client request"); //WLEDMM: want to see if client connects to wled
     #ifdef ARDUINO_ARCH_ESP32
     DEBUG_PRINTF("%s min free stack %d\n", pcTaskGetTaskName(NULL), uxTaskGetStackHighWaterMark(NULL)); //WLEDMM
     #endif
     if (captivePortal(request)) return;
     serveIndexOrWelcome(request);
-    USER_PRINTLN(" done"); //WLEDMM: want to see if client connects to wled
+    DEBUG_PRINTLN(" done"); //WLEDMM: want to see if client connects to wled
   });
 
   #ifdef WLED_ENABLE_PIXART
@@ -415,19 +467,23 @@ void initServer()
   });
   #endif
 
-#ifdef WLED_ENABLE_GIF
-  #ifndef WLED_DISABLE_GIFPLAYER
-  static const char _gifplayer_htm[] PROGMEM = "/gifplayer.htm";
-  server.on(_gifplayer_htm, HTTP_GET, [](AsyncWebServerRequest *request) {
-    if (handleFileRead(request, _gifplayer_htm)) return;
+#if defined(WLED_ENABLE_PIXELFORGE) && !defined(WLED_DISABLE_PIXELFORGE)
+  server.on(_pixelforge_htm, HTTP_GET, [](AsyncWebServerRequest *request) {
+    //handleStaticContent(request, FPSTR(_pixelforge_htm), 200, FPSTR(CONTENT_TYPE_HTML), PAGE_pixelforge, PAGE_pixelforge_length);
+    if (handleFileRead(request, FPSTR(_pixelforge_htm))) return;
     if (handleIfNoneMatchCacheHeader(request)) return;
-    AsyncWebServerResponse *response = request->beginResponse_P(200, "text/html", PAGE_gifplayer, PAGE_gifplayer_L);
-    response->addHeader(FPSTR(s_content_enc),"gzip");
+    AsyncWebServerResponse *response = request->beginResponse_P(200, FPSTR(CONTENT_TYPE_HTML), PAGE_pixelforge, PAGE_pixelforge_L);
+    response->addHeader(FPSTR(s_content_enc),FPSTR(enc_gzip));
+    setStaticContentCacheHeaders(response);
+    request->send(response);
+  });
+  server.on(_common_js, HTTP_GET, [](AsyncWebServerRequest *request){
+    AsyncWebServerResponse *response = request->beginResponse_P(200, FPSTR(CONTENT_TYPE_JAVASCRIPT), JS_common, JS_common_length);
+    response->addHeader(FPSTR(s_content_enc),FPSTR(enc_gzip));
     setStaticContentCacheHeaders(response);
     request->send(response);
   });
   #endif
-#endif
 
   server.on("/cpal.htm", HTTP_GET, [](AsyncWebServerRequest *request){
     if (handleFileRead(request, "/cpal.htm")) return;
@@ -462,9 +518,15 @@ void initServer()
     if(espalexa.handleAlexaApiCall(request)) return;
     #endif
     if(handleFileRead(request, request->url())) return;
+#if defined(WLEDMM_SAVE_FLASH) || !defined(ARDUINO_ARCH_ESP32)
+    // small 404 variant
+    AsyncWebServerResponse *response = request->beginResponse_P(404, "text/html", PAGE_404_mini, PAGE_404_mini_length);
+#else
+    // 404 variant with easter egg
     AsyncWebServerResponse *response = request->beginResponse_P(404, "text/html", PAGE_404, PAGE_404_length);
+#endif
     response->addHeader(FPSTR(s_content_enc),"gzip");
-    setStaticContentCacheHeaders(response);
+    setStaticContentCacheHeaders(response, 404);
     request->send(response);
     //request->send_P(404, "text/html", PAGE_404);
   });
@@ -478,31 +540,6 @@ void serveIndexOrWelcome(AsyncWebServerRequest *request)
   } else {
     serveSettings(request);
   }
-}
-
-bool handleIfNoneMatchCacheHeader(AsyncWebServerRequest* request)
-{
-  AsyncWebHeader* header = request->getHeader("If-None-Match");
-  if (header && header->value() == String(VERSION)) {
-    request->send(304);
-    return true;
-  }
-  return false;
-}
-
-void setStaticContentCacheHeaders(AsyncWebServerResponse *response)
-{
-  char tmp[12];
-  // https://medium.com/@codebyamir/a-web-developers-guide-to-browser-caching-cc41f3b73e7c
-  #ifndef WLED_DEBUG
-  //this header name is misleading, "no-cache" will not disable cache,
-  //it just revalidates on every load using the "If-None-Match" header with the last ETag value
-  response->addHeader(F("Cache-Control"),"no-cache");
-  #else
-  response->addHeader(F("Cache-Control"),"no-store,max-age=0"); // prevent caching if debug build
-  #endif
-  sprintf_P(tmp, PSTR("%8d-%02x"), VERSION, cacheInvalidate);
-  response->addHeader(F("ETag"), tmp);
 }
 
 void serveIndex(AsyncWebServerRequest* request)
@@ -596,6 +633,18 @@ void serveSettingsJS(AsyncWebServerRequest* request)
 {
   char buf[SETTINGS_STACK_BUF_SIZE+37] = { '\0' }; // WLEDMM ensure buffer is cleared initially
   buf[0] = 0;
+
+#if defined(WLED_ENABLE_PIXELFORGE) && !defined(WLED_DISABLE_PIXELFORGE)
+   // serve common.js if requested by subPage = 254 (.js)
+  if (request->url().indexOf(FPSTR(_common_js)) > 0) {
+    AsyncWebServerResponse *response = request->beginResponse_P(200, FPSTR(CONTENT_TYPE_JAVASCRIPT), JS_common, JS_common_length);
+    response->addHeader(FPSTR(s_content_enc),FPSTR(enc_gzip));
+    setStaticContentCacheHeaders(response);
+    request->send(response);
+    return;
+  }
+  #endif
+
   byte subPage = request->arg(F("p")).toInt();
   if (subPage > 10) {
     strcpy_P(buf, PSTR("alert('Settings for this request are not implemented.');"));
@@ -619,7 +668,7 @@ void serveSettingsJS(AsyncWebServerRequest* request)
   
   AsyncWebServerResponse *response;
   response = request->beginResponse(200, "application/javascript", buf);
-  response->addHeader(F("Cache-Control"),"no-store");
+  response->addHeader(FPSTR(s_cache_control),F("no-store"));
   response->addHeader(F("Expires"),"0");
   request->send(response);
 }

@@ -7,12 +7,16 @@
  */
 
 // version code in format yymmddb (b = daily build)
-#define VERSION 2505200
+#ifndef WLED_BUILD_VERSION // WLEDMM allow override by nightly build script
+  #define VERSION 2602201
+#else
+  #define VERSION WLED_BUILD_VERSION
+#endif
 
 // WLEDMM  - you can check for this define in usermods, to only enabled WLEDMM specific code in the "right" fork. Its not defined in AC WLED.
 #define _MoonModules_WLED_
 
-//WLEDMM + Moustachauve/Wled-Native 
+//WLEDMM + Moustachauve/Wled-Native
 // You can define custom product info from build flags.
 // This is useful to allow API consumer to identify what type of WLED version
 // they are interacting with. Be aware that changing this might cause some third
@@ -50,8 +54,8 @@
 #ifndef WLED_DISABLE_MQTT
   #define WLED_ENABLE_MQTT         // saves 12kb
 #endif
-#ifndef WLED_DISABLE_ADALIGHT      // can be used to disable reading commands from serial RX pin (see issue #3128). 
-  #define WLED_ENABLE_ADALIGHT     // disable saves 5Kb (uses GPIO3 (RX) for serial). Related serial protocols: Adalight/TPM2, Improv, Serial JSON, Continuous Serial Streaming 
+#ifndef WLED_DISABLE_ADALIGHT      // can be used to disable reading commands from serial RX pin (see issue #3128).
+  #define WLED_ENABLE_ADALIGHT     // disable saves 5Kb (uses GPIO3 (RX) for serial). Related serial protocols: Adalight/TPM2, Improv, Serial JSON, Continuous Serial Streaming
 #else
   #undef WLED_ENABLE_ADALIGHT      // disable has priority over enable
 #endif
@@ -65,7 +69,7 @@
   #define WLED_ENABLE_WEBSOCKETS
 #endif
 
-//#define WLED_DISABLE_ESPNOW      // Removes dependence on esp now 
+//#define WLED_DISABLE_ESPNOW      // Removes dependence on esp now
 
 #define WLED_ENABLE_FS_EDITOR      // enable /edit page for editing FS content. Will also be disabled with OTA lock
 
@@ -87,6 +91,9 @@
 
 // WLEDMM MANDATORY flags
 #define WLEDMM_PROTECT_SERVICE // prevents crashes when effects are drawing while asyncWebServer tries to modify segments at the same time
+#if !defined(WLEDMM_FASTPATH) && !defined(ESP8266)
+#define WLEDMM_FASTPATH        // all WLED-MM build are FASTPATH
+#endif
 
 // Library inclusions.
 #include <Arduino.h>
@@ -157,9 +164,9 @@
 #endif
 
 #ifdef WLED_ENABLE_DMX
- #ifdef ESP8266
+  #if defined(ESP8266) || defined(CONFIG_IDF_TARGET_ESP32C3) || defined(CONFIG_IDF_TARGET_ESP32S2)
   #include "src/dependencies/dmx/ESPDMX.h"
- #else //ESP32
+ #else //ESP32 or ESP32-S3
   #include "src/dependencies/dmx/SparkFunDMX.h"
  #endif
 #endif
@@ -173,9 +180,17 @@
 #include "src/dependencies/async-mqtt-client/AsyncMqttClient.h"
 #endif
 
-#define ARDUINOJSON_DECODE_UNICODE 0
+#define ARDUINOJSON_DECODE_UNICODE 0   // WLEDMM enables support for unicode HEX strings - deserializeJson(doc, "{'firstname':'Beno\\u00EEt'}"); --> not needed - disable saves 1.2KB flash
 #include "src/dependencies/json/AsyncJson-v6.h"
 #include "src/dependencies/json/ArduinoJson-v6.h"
+
+
+// WLEDMM: Do we have the flicker-free RMTHI driver?
+#if !defined(ARDUINO_ARCH_ESP32) || defined(WLED_USE_SHARED_RMT) || defined(__riscv) || (ESP_IDF_VERSION_MAJOR < 4)
+#ifndef WLEDMM_FILEWAIT
+#define WLEDMM_FILEWAIT 1 // wait for LEDs output completion before file reading/writing
+#endif
+#endif
 
 // ESP32-WROVER features SPI RAM (aka PSRAM) which can be allocated using ps_malloc()
 // we can create custom PSRAMDynamicJsonDocument to use such feature (replacing DynamicJsonDocument)
@@ -189,17 +204,18 @@
 #undef  ALL_JSON_TO_PSRAM
 #define ALL_JSON_TO_PSRAM
 
+// global WLED memory functions (util.cpp)
+#include "util.h"
+
 struct PSRAM_Allocator {
   void* allocate(size_t size) {
-    if (psramFound()) return ps_malloc(size); // use PSRAM if it exists
-    else              return malloc(size);    // fallback
+    return p_malloc(size); // use PSRAM if it exists
   }
   void* reallocate(void* ptr, size_t new_size) {
-    if (psramFound()) return ps_realloc(ptr, new_size); // use PSRAM if it exists
-    else              return realloc(ptr, new_size);    // fallback
+    return p_realloc_malloc_nofree(ptr, new_size); // use PSRAM if it exists
   }
   void deallocate(void* pointer) {
-    free(pointer);
+    p_free(pointer);
   }
 };
 using PSRAMDynamicJsonDocument = BasicJsonDocument<PSRAM_Allocator>;
@@ -293,10 +309,14 @@ using PSRAMDynamicJsonDocument = BasicJsonDocument<PSRAM_Allocator>;
 #ifndef WLED_RELEASE_NAME
   #define WLED_RELEASE_NAME mdev_release
 #endif
+#ifndef WLED_REPO
+  #define WLED_REPO "unknown"
+#endif
 
 // Global Variable definitions
 WLED_GLOBAL char versionString[] _INIT(TOSTRING(WLED_VERSION));
 WLED_GLOBAL char releaseString[] _INIT_PROGMEM(TOSTRING(WLED_RELEASE_NAME)); //WLEDMM: to show on update page // somehow this will not work if using "const char releaseString[]
+WLED_GLOBAL char repoString[] _INIT(WLED_REPO);
 #define WLED_CODENAME "Hoshi"
 
 // AP and OTA default passwords (for maximum security change them!)
@@ -345,7 +365,7 @@ WLED_GLOBAL char clientSSID[33] _INIT(CLIENT_SSID);
 WLED_GLOBAL char clientPass[65] _INIT(CLIENT_PASS);
 WLED_GLOBAL char cmDNS[33] _INIT(MDNS_NAME);                       // mDNS address (*.local, replaced by wledXXXXXX if default is used)
 WLED_GLOBAL char apSSID[33] _INIT("");                             // AP off by default (unless setup)
-WLED_GLOBAL byte apChannel _INIT(1);                               // 2.4GHz WiFi AP channel (1-13)
+WLED_GLOBAL byte apChannel _INIT(6);                               // 2.4GHz WiFi AP channel (1-13)
 WLED_GLOBAL byte apHide    _INIT(0);                               // hidden AP SSID
 WLED_GLOBAL byte apBehavior _INIT(AP_BEHAVIOR_BOOT_NO_CONN);       // access point opens when no connection after boot by default
 WLED_GLOBAL IPAddress staticIP      _INIT_N(((  0,   0,  0,  0))); // static IP of ESP
@@ -379,7 +399,7 @@ WLED_GLOBAL bool cctFromRgb      _INIT(false); // CCT is calculated from RGB ins
 WLED_GLOBAL bool gammaCorrectCol _INIT(true ); // use gamma correction on colors // WLEDMM that's what you would think, but the code tells a different story.
 WLED_GLOBAL bool gammaCorrectPreview _INIT(true); // WLEDMM: revert gamma correction for LiveLeds (screens have their own gamma correction)
 WLED_GLOBAL bool gammaCorrectBri _INIT(false); // use gamma correction on brightness
-WLED_GLOBAL float gammaCorrectVal _INIT(2.8f); // gamma correction value
+WLED_GLOBAL float gammaCorrectVal _INIT(2.6f); // gamma correction value // WLEDMM reduced from 2.8 to 2.6
 
 WLED_GLOBAL byte col[]    _INIT_N(({ 255, 160, 0, 0 }));  // current RGB(W) primary color. col[] should be updated if you want to change the color.
 WLED_GLOBAL byte colSec[] _INIT_N(({ 0, 0, 0, 0 }));      // current RGB(W) secondary color
@@ -449,9 +469,9 @@ WLED_GLOBAL bool arlsDisableGammaCorrection _INIT(true);          // activate if
 WLED_GLOBAL bool arlsForceMaxBri _INIT(false);                    // enable to force max brightness if source has very dark colors that would be black
 
 #ifdef WLED_ENABLE_DMX
- #ifdef ESP8266
+ #if defined(ESP8266) || defined(CONFIG_IDF_TARGET_ESP32C3) || defined(CONFIG_IDF_TARGET_ESP32S2)
   WLED_GLOBAL DMXESPSerial dmx;
- #else //ESP32
+ #else //ESP32 or ESP32-S3
   WLED_GLOBAL SparkFunDMX dmx;
  #endif
 WLED_GLOBAL uint16_t e131ProxyUniverse _INIT(0);                  // output this E1.31 (sACN) / ArtNet universe via MAX485 (0 = disabled)
@@ -652,7 +672,7 @@ WLED_GLOBAL byte timerHours[]     _INIT_N(({ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 }));
 WLED_GLOBAL int8_t timerMinutes[] _INIT_N(({ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 }));
 WLED_GLOBAL byte timerMacro[]     _INIT_N(({ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 }));
 //weekdays to activate on, bit pattern of arr elem: 0b11111111: sun,sat,fri,thu,wed,tue,mon,validity
-WLED_GLOBAL byte timerWeekday[]   _INIT_N(({ 255, 255, 255, 255, 255, 255, 255, 255, 255, 255 }));
+WLED_GLOBAL byte timerWeekday[]   _INIT_N(({ 254, 254, 254, 254, 254, 254, 254, 254, 254, 254 }));
 //upper 4 bits start, lower 4 bits end month (default 28: start month 1 and end month 12)
 WLED_GLOBAL byte timerMonth[]     _INIT_N(({28,28,28,28,28,28,28,28}));
 WLED_GLOBAL byte timerDay[]       _INIT_N(({1,1,1,1,1,1,1,1}));
@@ -714,9 +734,9 @@ WLED_GLOBAL uint16_t olen _INIT(0);
 // General filesystem
 WLED_GLOBAL size_t fsBytesUsed _INIT(0);
 WLED_GLOBAL size_t fsBytesTotal _INIT(0);
-WLED_GLOBAL unsigned long presetsModifiedTime _INIT(0L);
+WLED_GLOBAL volatile unsigned long presetsModifiedTime _INIT(0L);
 WLED_GLOBAL JsonDocument* fileDoc;
-WLED_GLOBAL bool doCloseFile _INIT(false);
+WLED_GLOBAL volatile bool doCloseFile _INIT(false);
 
 // presets
 WLED_GLOBAL byte currentPreset _INIT(0);
@@ -742,7 +762,7 @@ WLED_GLOBAL AsyncWebServer server _INIT_N(((80)));
 #ifdef WLED_ENABLE_WEBSOCKETS
 WLED_GLOBAL AsyncWebSocket ws _INIT_N((("/ws")));
 #endif
-WLED_GLOBAL AsyncClient     *hueClient _INIT(NULL);
+//WLED_GLOBAL AsyncClient     *hueClient _INIT(NULL); // WLEDMM moved into hue.cpp
 WLED_GLOBAL AsyncWebHandler *editHandler _INIT(nullptr);
 
 // udp interface objects
@@ -762,6 +782,32 @@ WLED_GLOBAL volatile bool loadLedmap _INIT(false);          // WLEDMM use as boo
 WLED_GLOBAL volatile uint8_t loadedLedmap _INIT(0);         // WLEDMM default 0
 WLED_GLOBAL volatile bool suspendStripService _INIT(false); // WLEDMM temporarily prevent running strip.service, when strip or segments are "under update" and inconsistent
 WLED_GLOBAL volatile bool OTAisRunning _INIT(false);        // WLEDMM temporarily stop led updates during OTA
+
+// WLEDMM prevent concurrent strip.show() and strip.service() -> for DDP over ws, and other background tasks
+#ifdef ARDUINO_ARCH_ESP32
+WLED_GLOBAL SemaphoreHandle_t busDrawMux _INIT(nullptr);
+WLED_GLOBAL SemaphoreHandle_t segmentMux _INIT(nullptr);
+WLED_GLOBAL SemaphoreHandle_t jsonBufferLockMutex _INIT(nullptr);
+WLED_GLOBAL SemaphoreHandle_t presetFileMux _INIT(nullptr); // Protects presets.json file writes
+#define esp32SemTake(mux,timeout) xSemaphoreTakeRecursive(mux, pdMS_TO_TICKS(timeout)) // convenience macro that expands to xSemaphoreTakeRecursive - timeout is in milliseconds
+#define esp32SemGive(mux)  xSemaphoreGiveRecursive(mux)                 // convenience macro that expands to xSemaphoreGiveRecursive
+#define WLED_create_spinlock(theSname) static portMUX_TYPE theSname = portMUX_INITIALIZER_UNLOCKED
+#else
+// dummy semaphores for 8266
+#ifndef pdTRUE
+#define pdTRUE 1
+#endif
+#ifndef portMAX_DELAY
+#define portMAX_DELAY UINT32_MAX
+#endif
+#define esp32SemTake(mux,timeout) (pdTRUE)
+#define esp32SemGive(mux)
+// dummy critical section for 8266
+#define WLED_create_spinlock(sname)
+#define portENTER_CRITICAL(sname)
+#define portEXIT_CRITICAL(sname)
+#endif
+
 #ifndef ESP8266
 WLED_GLOBAL char  *ledmapNames[WLED_MAX_LEDMAPS-1] _INIT_N(({nullptr}));
 #endif
@@ -880,7 +926,7 @@ WLED_GLOBAL volatile uint8_t jsonBufferLock _INIT(0);
 #endif
 
 // debug macro variable definitions
-#ifdef WLED_DEBUG
+#if defined(WLED_DEBUG) || defined(WLED_DEBUG_HEAP)
   WLED_GLOBAL unsigned long debugTime _INIT(0);
   WLED_GLOBAL int lastWifiState _INIT(3);
   WLED_GLOBAL unsigned long wifiStateChangedTime _INIT(0);
