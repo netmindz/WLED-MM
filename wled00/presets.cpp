@@ -253,7 +253,7 @@ void handlePresets()
   unsigned long waitstart = millis();
   while (strip.isServicing() && millis() - waitstart < FRAMETIME_FIXED) delay(1); // wait for effects to finish updating
 
-  strip.fill(BLACK); strip.show(); // experimental: set LEDs to black while new preset loads (instead of freezing effects)
+  strip.fill(BLACK); strip.trigger(); // experimental: set LEDs to black while new preset loads (shortly freezing effects, but starts clean. Still better than a short black-out.)
 
   unsigned long start = millis();
   while (strip.isUpdating() && millis() - start < FRAMETIME_FIXED) delay(1); // wait for strip to finish updating, accessing FS during sendout causes glitches // WLEDMM delay instead of yield

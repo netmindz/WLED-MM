@@ -475,14 +475,16 @@ bool deserializeState(JsonObject root, byte callMode, byte presetId)
   }
   #endif
 
-  bool onBefore = bri;
-  getVal(root["bri"], &bri);
+  bool onBefore = bri > 0;
+  //if (onBefore && briLast == 0) briLast = bri;
+  (void) getVal(root["bri"], &bri);
 
   bool on = root["on"] | (bri > 0);
   if (!on != !bri) toggleOnOff();
 
   if (root["on"].is<const char*>() && root["on"].as<const char*>()[0] == 't') {
-    if (onBefore || !bri) toggleOnOff(); // do not toggle off again if just turned on by bri (makes e.g. "{"on":"t","bri":32}" work)
+    // WLEDMM bugfix: do not toggle twice when bri > 0
+    if (onBefore && !bri) toggleOnOff(); // do not toggle off again if just turned on by bri (makes e.g. "{"on":"t","bri":32}" work)
   }
 
   if (bri && !onBefore) { // unfreeze all segments when turning on
@@ -666,6 +668,7 @@ bool deserializeState(JsonObject root, byte callMode, byte presetId)
     //do not notify here, because the first playlist entry will do
     if (root["on"].isNull()) callMode = CALL_MODE_NO_NOTIFY;
     else callMode = CALL_MODE_DIRECT_CHANGE;  // possible bugfix for playlist only containing HTTP API preset FX=~
+    stateChanged = false; // WLEDMM: prevent premature LED update, let first preset handle it
   }
 
   if (root.containsKey(F("rmcpal")) && root[F("rmcpal")].as<bool>()) {
