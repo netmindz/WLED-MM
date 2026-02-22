@@ -301,8 +301,8 @@ class I2SSource : public AudioSource {
       #if defined(ARDUINO_ARCH_ESP32) && !defined(CONFIG_IDF_TARGET_ESP32S3) && !defined(CONFIG_IDF_TARGET_ESP32S2) && !defined(CONFIG_IDF_TARGET_ESP32C3)
       if (ESP.getChipRevision() == 0) _config.use_apll = false; // APLL is broken on ESP32 revision 0
       #endif
-      #if defined(WLED_ENABLE_HUB75MATRIX)
-        _config.use_apll = false; // APLL needed for HUB75 DMA driver ?
+      #if defined(WLED_USE_ETHERNET) || defined(WLED_ENABLE_HUB75MATRIX)
+        _config.use_apll = false; // APLL is needed for Ethernet, and possibly for HUB75, too
       #endif
 #endif
 
