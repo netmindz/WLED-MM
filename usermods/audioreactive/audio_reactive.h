@@ -2065,7 +2065,7 @@ class AudioReactive : public Usermod {
           break;
         #if  !defined(CONFIG_IDF_TARGET_ESP32S2) && !defined(CONFIG_IDF_TARGET_ESP32C3)
         case 5:
-          DEBUGSR_PRINT(F("AR: I2S PDM Microphone - ")); DEBUGSR_PRINTLN(F(I2S_PDM_MIC_CHANNEL_TEXT));
+          DEBUGSR_PRINT(F("AR: Generic PDM Microphone - ")); DEBUGSR_PRINTLN(F(I2S_PDM_MIC_CHANNEL_TEXT));
           audioSource = new I2SSource(SAMPLE_RATE, BLOCK_SIZE, 1.0f/4.0f);
           useInputFilter = 1;  // PDM bandpass filter - this reduces the noise floor on SPM1423 from 5% Vpp (~380) down to 0.05% Vpp (~5)
           delay(100);
@@ -2697,10 +2697,12 @@ class AudioReactive : public Usermod {
             if (audioSource->getType() == AudioSource::Type_I2SAdc) {
               infoArr.add(F("ADC analog"));
             } else {
-              if (dmType != 51)
-                infoArr.add(F("I2S digital"));
+              if (dmType != 51) {
+                if (dmType == 5) infoArr.add(F("PDM digital"));
+                else infoArr.add(F("I2S digital"));
+              }
               else
-                infoArr.add(F("legacy I2S PDM"));
+                infoArr.add(F("legacy PDM"));
             }
             // input level or "silence"
             if (maxSample5sec > 1.0) {
@@ -3075,14 +3077,14 @@ class AudioReactive : public Usermod {
       #endif
       #if !defined(CONFIG_IDF_TARGET_ESP32S2) && !defined(CONFIG_IDF_TARGET_ESP32C3)
         #if SR_DMTYPE==5
-          oappend(SET_F("addOption(dd,'Generic I2S PDM (⎌)',5);"));
+          oappend(SET_F("addOption(dd,'Generic PDM (⎌)',5);"));
         #else
-          oappend(SET_F("addOption(dd,'Generic I2S PDM',5);"));
+          oappend(SET_F("addOption(dd,'Generic PDM',5);"));
         #endif
         #if SR_DMTYPE==51
-          oappend(SET_F("addOption(dd,'.Legacy I2S PDM ☾ (⎌)',51);"));
+          oappend(SET_F("addOption(dd,'.Legacy PDM ☾ (⎌)',51);"));
         #else
-          oappend(SET_F("addOption(dd,'.Legacy I2S PDM ☾',51);"));
+          oappend(SET_F("addOption(dd,'.Legacy PDM ☾',51);"));
         #endif
       #endif
       #if SR_DMTYPE==6

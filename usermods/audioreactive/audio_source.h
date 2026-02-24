@@ -298,7 +298,7 @@ class I2SSource : public AudioSource {
         // S3: not supported; S2: supported; C3: not supported
         _config.use_apll = false; // APLL not supported on this MCU
       #endif
-      #if defined(ARDUINO_ARCH_ESP32) && !defined(CONFIG_IDF_TARGET_ESP32S3) && !defined(CONFIG_IDF_TARGET_ESP32S2) && !defined(CONFIG_IDF_TARGET_ESP32C3)
+      #if defined(CONFIG_IDF_TARGET_ESP32)
       if (ESP.getChipRevision() == 0) _config.use_apll = false; // APLL is broken on ESP32 revision 0
       #endif
       #if defined(WLED_USE_ETHERNET) || defined(WLED_ENABLE_HUB75MATRIX)
