@@ -4474,29 +4474,29 @@ static const char _data_FX_MODE_SINEWAVE[] PROGMEM = "Sine";
  */
 uint16_t mode_flow(void)
 {
-  uint16_t counter = 0;
+  unsigned counter = 0;
   if (SEGMENT.speed != 0)
   {
     counter = strip.now * ((SEGMENT.speed >> 2) +1);
     counter = counter >> 8;
   }
 
-  uint16_t maxZones = SEGLEN / 6; //only looks good if each zone has at least 6 LEDs
-  uint16_t zones = (SEGMENT.intensity * maxZones) >> 8;
+  unsigned maxZones = SEGLEN / 6; //only looks good if each zone has at least 6 LEDs
+  int zones = (SEGMENT.intensity * maxZones) >> 8;
   if (zones & 0x01) zones++; //zones must be even
   if (zones < 2) zones = 2;
-  uint16_t zoneLen = SEGLEN / zones;
-  uint16_t offset = (SEGLEN - zones * zoneLen) >> 1;
-
-  SEGMENT.fill(SEGMENT.color_from_palette(-counter, false, true, 255));
+  int zoneLen = SEGLEN / zones;
+  zones += 2; //add two extra zones to cover beginning and end of segment (compensate integer truncation)
+  int offset = ((int)SEGLEN - (zones * zoneLen)) / 2; // center the zones on the segment (can not use bit shift on negative number)
+  //SEGMENT.fill(SEGMENT.color_from_palette(-counter, false, true, 255));
 
   for (int z = 0; z < zones; z++)
   {
-    uint16_t pos = offset + z * zoneLen;
+    int pos = offset + z * zoneLen;
     for (int i = 0; i < zoneLen; i++)
     {
-      uint8_t colorIndex = (i * 255 / zoneLen) - counter;
-      uint16_t led = (z & 0x01) ? i : (zoneLen -1) -i;
+      unsigned colorIndex = (i * 255 / zoneLen) - counter;
+      int led = (z & 0x01) ? i : (zoneLen -1) -i;
       if (SEGMENT.reverse) led = (zoneLen -1) -led;
       SEGMENT.setPixelColor(pos + led, SEGMENT.color_from_palette(colorIndex, false, true, 255));
     }
