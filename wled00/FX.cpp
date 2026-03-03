@@ -4488,14 +4488,14 @@ uint16_t mode_flow(void)
   int zoneLen = SEGLEN / zones;
   zones += 2; //add two extra zones to cover beginning and end of segment (compensate integer truncation)
   int offset = ((int)SEGLEN - (zones * zoneLen)) / 2; // center the zones on the segment (can not use bit shift on negative number)
-  //SEGMENT.fill(SEGMENT.color_from_palette(-counter, false, true, 255));
+  SEGMENT.fill(SEGMENT.color_from_palette(-counter, false, true, 255));
 
   for (int z = 0; z < zones; z++)
   {
     int pos = offset + z * zoneLen;
     for (int i = 0; i < zoneLen; i++)
     {
-      unsigned colorIndex = (i * 255 / zoneLen) - counter;
+      uint8_t colorIndex = (i * 255 / zoneLen) - counter;
       int led = (z & 0x01) ? i : (zoneLen -1) -i;
       if (SEGMENT.reverse) led = (zoneLen -1) -led;
       SEGMENT.setPixelColor(pos + led, SEGMENT.color_from_palette(colorIndex, false, true, 255));
