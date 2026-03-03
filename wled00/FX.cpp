@@ -3015,20 +3015,15 @@ uint16_t spots_base(uint16_t threshold)
   if (SEGLEN <= 1) return mode_oops();
   if (!SEGMENT.check2) SEGMENT.fill(SEGCOLOR(1));
 
-  // constants for fixed point scaling
-  constexpr uint8_t  ZONELEN_FP_SHIFT = 3;
-  constexpr uint32_t ZONELEN_FP_SCALE = 1U << ZONELEN_FP_SHIFT;
-
-  unsigned maxZones = max(1, SEGLEN >> 2); // prevents "0 zones"
-  unsigned zones    = 1U + ((uint32_t(SEGMENT.intensity) * maxZones) >> 8);
-  unsigned zoneLen  =  uint32_t(SEGLEN) / zones;
-  unsigned zoneLen8 = (uint32_t(SEGLEN) * ZONELEN_FP_SCALE) / zones; // zoneLength * 8 (fixed‑point) -> avoids gaps at right/left sides
-  unsigned offset   = (uint32_t(SEGLEN) - ((zones * zoneLen8) >> ZONELEN_FP_SHIFT)) >> 1;
+  unsigned maxZones = max(1, SEGLEN / 4); // prevents "0 zones"
+  int zones         = 1U + ((uint32_t(SEGMENT.intensity) * maxZones + 127) >> 8); // with rounding
+  unsigned zoneLen  = (uint32_t(SEGLEN) + zones-1) / zones;  // round up (ceil)
+  int offset = ((int)SEGLEN - (zones * zoneLen)) / 2; // center the zones on the segment (can not use bit shift on negative number)
 
   for (unsigned z = 0; z < zones; z++)
   {
-    unsigned pos = offset + ((z * zoneLen8) >> ZONELEN_FP_SHIFT);
-    for (unsigned i = 0; i < zoneLen; i++)
+    int pos = offset + (z * zoneLen);
+    for (int i = 0; i < zoneLen; i++)
     {
       unsigned wave = triwave16((i * 0xFFFF) / zoneLen);
       if (wave > threshold) {
