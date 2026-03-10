@@ -247,8 +247,8 @@ const float agcSampleSmooth[AGC_NUM_PRESETS]  = {  1/12.f,   1/6.f,  1/16.f}; //
 static AudioSource *audioSource = nullptr;
 static uint8_t useInputFilter = 0;                        // enables low-cut filtering. Applies before FFT.
 
-//WLEDMM add experimental settings
-static uint8_t micLevelMethod = 0;                        // 0=old "floating" miclev, 1=new  "freeze" mode, 2=fast freeze mode (mode 2 may not work for you)
+//WLEDMM experimental settings
+static uint8_t micLevelMethod = 1;                        // 0=old "floating" miclev, 1=new  "freeze" mode, 2=fast freeze mode (mode 2 may not work for you)
 #if defined(CONFIG_IDF_TARGET_ESP32S2) || defined(CONFIG_IDF_TARGET_ESP32C3)
 static constexpr uint8_t averageByRMS = false;                      // false: use mean value, true: use RMS (root mean squared). use simpler method on slower MCUs.
 #else
@@ -3123,8 +3123,8 @@ class AudioReactive : public Usermod {
       //WLEDMM: experimental settings
       oappend(SET_F("xx='experiments';")); // shortcut
       oappend(SET_F("dd=addDropdown(ux,xx+':micLev');"));
-      oappend(SET_F("addOption(dd,'Floating  (⎌)',0);"));
-      oappend(SET_F("addOption(dd,'Freeze',1);"));
+      oappend(SET_F("addOption(dd,'Floating',0);"));
+      oappend(SET_F("addOption(dd,'Freeze  (⎌)',1);"));
       oappend(SET_F("addOption(dd,'Fast Freeze',2);"));
       oappend(SET_F("addInfo(ux+':'+xx+':micLev',1,'☾');"));
 
