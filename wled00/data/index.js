@@ -3853,7 +3853,7 @@ function reportUpgradeEvent(info, oldVersion, alwaysReport) {
 			};
 
 			// Add optional fields if available
-			if (infoData.psrSz !== undefined) upgradeData.psramSize = infoData.psrSz;  // Total PSRAM size in MB; can be 0
+			if (infoData.tpsram !== undefined) upgradeData.psramSize = Math.round(infoData.tpsram / (1024 * 1024));  // convert bytes to MB - tpsram is MM specific
 
 			// Note: partitionSizes not currently available in /json/info endpoint
 
