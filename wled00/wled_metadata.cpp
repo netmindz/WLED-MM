@@ -19,7 +19,7 @@ constexpr uint32_t WLED_CUSTOM_DESC_MAGIC = 0x57535453;  // "WSTS" (WLED System 
 constexpr uint32_t WLED_CUSTOM_DESC_VERSION = 2;    // v1 - original PR; v2 - "safe to update from" version
 
 // Compile-time validation that release name doesn't exceed maximum length
-static_assert(sizeof(WLED_RELEASE_NAME) <= WLED_RELEASE_NAME_MAX_LEN, 
+static_assert(sizeof(TOSTRING(WLED_RELEASE_NAME)) <= WLED_RELEASE_NAME_MAX_LEN, 
               "WLED_RELEASE_NAME exceeds maximum length of WLED_RELEASE_NAME_MAX_LEN characters");
 
 
@@ -57,8 +57,8 @@ const wled_metadata_t __attribute__((section(BUILD_METADATA_SECTION))) WLED_BUIL
     WLED_CUSTOM_DESC_MAGIC,                   // magic
     WLED_CUSTOM_DESC_VERSION,                 // version 
     TOSTRING(WLED_VERSION),
-    WLED_RELEASE_NAME,                        // release_name
-    std::integral_constant<uint32_t, djb2_hash_constexpr(WLED_RELEASE_NAME)>::value, // hash - computed at compile time; integral_constant enforces this
+    TOSTRING(WLED_RELEASE_NAME),                        // release_name
+    std::integral_constant<uint32_t, djb2_hash_constexpr(TOSTRING(WLED_RELEASE_NAME))>::value, // hash - computed at compile time; integral_constant enforces this
     { 0, 0, 0 },  // All other platforms can update safely
 };
 

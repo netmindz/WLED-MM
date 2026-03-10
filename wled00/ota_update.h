@@ -9,8 +9,6 @@
 
 #pragma once
 
-#if 0 // WLEDMM not needed - we only want getBootloaderSHA256Hex();
-
 // Platform-specific metadata locations
 #ifdef ESP32
 #define BUILD_METADATA_SECTION ".rodata_custom_desc"
@@ -18,6 +16,7 @@
 #define BUILD_METADATA_SECTION ".ver_number"
 #endif
 
+#if 0 // WLEDMM not needed - we only want getBootloaderSHA256Hex();
 
 class AsyncWebServerRequest;
 
