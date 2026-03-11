@@ -25,6 +25,8 @@ void endImagePlayback(Segment *seg);            // implemented in image_loader.c
 #define USE_GET_MILLISECOND_TIMER
 #include "FastLED.h"
 
+#include "colors.h" // include CHSV32 class by @dedehai
+
  // WLEDMM strip.sPC() needs to know "busses", so we pull in the declarition
 #include "pin_manager.h"  // BusManager needs to know pinManager
 #include "bus_manager.h"
