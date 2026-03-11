@@ -399,7 +399,8 @@ static uint8_t strip_getPaletteBlend();  // forward declaration: little helper t
 #define FX_MODE_PS1DSPRINGY            227
 #define FX_MODE_PARTICLEGALAXY         228
 
-#define MODE_COUNT                     229
+#define FX_MODE_COLORCLOUDS            229
+#define MODE_COUNT                     230
 
 typedef enum mapping1D2D {
   M12_Pixels = 0,
