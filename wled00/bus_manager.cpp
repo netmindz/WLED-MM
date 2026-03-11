@@ -360,8 +360,10 @@ void BusPwm::setPixelColor(uint16_t pix, uint32_t c) {
     case TYPE_ANALOG_5CH: //RGB + warm white + cold white
       _data[4] = cw;
       w = ww;
+      // falls through
     case TYPE_ANALOG_4CH: //RGBW
       _data[3] = w;
+      // falls through
     case TYPE_ANALOG_3CH: //standard dumb RGB
       _data[0] = r; _data[1] = g; _data[2] = b;
       break;
