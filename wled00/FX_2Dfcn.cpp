@@ -247,7 +247,7 @@ void Segment::startFrame(void) {
 void IRAM_ATTR __attribute__((hot)) Segment::setPixelColorXY_fast(int x, int y, uint32_t col, uint32_t scaled_col, int cols, int rows) const //WLEDMM
 {
   unsigned i = UINT_MAX;
-  bool sameColor = false;
+  [[maybe_unused]] bool sameColor = false;
   if (ledsrgb) { // WLEDMM small optimization
     i = x + y*cols; // avoid error checking done by XY() - be optimistic about ranges of x and y
     CRGB fastled_col = CRGB(col);
@@ -304,7 +304,7 @@ void IRAM_ATTR_YN Segment::setPixelColorXY(int x, int y, uint32_t col) //WLEDMM:
   if (x<0 || y<0 || x >= cols || y >= rows) return;  // if pixel would fall out of virtual segment just exit
 
   unsigned i = UINT_MAX;
-  bool sameColor = false;
+  [[maybe_unused]] bool sameColor = false;
   if (ledsrgb) { // WLEDMM small optimization
     i = XY(x,y);
     CRGB fastled_col = CRGB(col);
@@ -914,7 +914,7 @@ void Segment::drawText(const unsigned char* text, size_t maxLen, int16_t x, int1
   size_t textLength = min(strnlen((char*)text, maxLen), numberOfChars);
 #endif
   // pass characters to drawCharacter()
-  for (int i = 0; i < textLength; i++) {
+  for (size_t i = 0; i < textLength; i++) {
     SEGMENT.drawCharacter((unsigned char) decoded_text[i], x + w*i, y, w, h, color, col2, drawShadow);
   }
 }

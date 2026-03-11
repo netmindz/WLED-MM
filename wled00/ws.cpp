@@ -290,7 +290,7 @@ static bool sendLiveLedsWs(uint32_t wsClient)  // WLEDMM added "static"
   #endif
 
   (void) unGamma8(127); // WLEDMM dummy call, just to make sure that gammaTinv is initialized, so we can use fast_unGamma8
-  uint8_t stripBrightness = strip.getBrightness();
+  // [[maybe_unused]] uint8_t stripBrightness = strip.getBrightness();
   for (size_t i = 0; pos < bufSize -2; i += n)
   {
   //WLEDMM skipping lines done right 

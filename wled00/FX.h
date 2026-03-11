@@ -693,7 +693,7 @@ typedef struct Segment {
 
     uint8_t  currentMode(uint8_t modeNew);
     inline uint32_t currentColor(uint8_t slot, uint32_t colorNew) const {  // WLEDMM moved here from FX_fcn.cpp
-      return transitional && _t ? color_blend(_t->_colorT[slot], colorNew, progress(), true) : colorNew;
+      return transitional && _t ? color_blend(_t->_colorT[min(slot, uint8_t(2))], colorNew, progress(), true) : colorNew;  // WLEDMM prevent array bounds violation - only 3 color slots allowed
     }
 
     CRGBPalette16 &loadPalette(CRGBPalette16 &tgt, uint8_t pal) const;
@@ -728,25 +728,26 @@ typedef struct Segment {
 
     // WLEDMM function moved here (from FX_fcn.cpp) for better optimization by the compiler
     inline uint32_t __attribute__((hot)) color_from_palette(uint_fast16_t i, bool mapping, bool wrap, uint8_t mcol=0, uint8_t pbri = 255) const {
-      uint32_t color = gamma32(currentColor(mcol, colors[mcol]));
+      uint32_t color = currentColor(mcol, colors[min(mcol, uint8_t(2))]);     // WLEDMM prevent array bounds violation - only 3 color slots allowed
       // default palette or no RGB support on segment
       if ((palette == 0 && mcol < NUM_COLORS) || !_isRGB) {
+        color = gamma32(color);
         if (pbri == 255) return color;
-        return RGBW32(scale8_video(R(color),pbri), scale8_video(G(color),pbri), scale8_video(B(color),pbri), scale8_video(W(color),pbri));
+        else return RGBW32(scale8_video(R(color),pbri), scale8_video(G(color),pbri), scale8_video(B(color),pbri), scale8_video(W(color),pbri));
       }
       uint8_t paletteIndex = i;
       uint_fast16_t vLen = mapping ? virtualLength() : 1;
       if (mapping && vLen > 1) paletteIndex = (i*255)/(vLen -1);
       if (!wrap) paletteIndex = scale8(paletteIndex, 240); //cut off blend at palette "end"
       CRGB fastled_col = ColorFromPaletteWLED(_currentPalette, paletteIndex, pbri, (strip_getPaletteBlend() == 3)? NOBLEND:LINEARBLEND); // NOTE: paletteBlend should be global
-      uint8_t w = W(color); // extract white channel
+      uint8_t w = gamma8(W(color)); // extract white channel
       return RGBW32(fastled_col.r, fastled_col.g, fastled_col.b, w);
     }
 
     // WLEDMM function moved here (from FX_fcn.cpp) for better optimization by the compiler
     inline uint32_t color_wheel(uint8_t pos) const {
       if (palette) return color_from_palette(pos, false, true, 0);
-      uint8_t w = W(currentColor(0, colors[0])); // extract white channel
+      uint8_t w = gamma8(W(currentColor(0, colors[0]))); // extract white channel
       pos = 255 - pos;
       if (pos < 85) {
         return RGBW32((255 - pos * 3), 0, (pos * 3), w);

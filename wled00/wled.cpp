@@ -1351,8 +1351,8 @@ void WLED::handleConnection()
     return;
   }
 
-  static unsigned retryCount1 = 0;  // WLEDMM
   static unsigned retryCount = 0;  // WLEDMM
+  [[maybe_unused]] static unsigned retryCount1 = 0;  // WLEDMM
   #ifdef ARDUINO_ARCH_ESP32
   // reconnect WiFi to clear stale allocations if heap gets too low
   if ((now - heapTime > 5000) && !strip.isUpdating()) { // WLEDMM: updated with better logic for small heap available by block, not total. // WLEDMM trying to use a moment when the strip is idle
@@ -1510,7 +1510,7 @@ void WLED::handleConnection()
 void WLED::handleStatusLED()
 {
   #if defined(STATUSLED)
-  uint32_t c = 0;
+  [[maybe_unused]] uint32_t c = 0;
 
   #if STATUSLED>=0
   if (pinManager.isPinAllocated(STATUSLED)) {

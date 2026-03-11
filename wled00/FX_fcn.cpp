@@ -173,8 +173,8 @@ Segment& Segment::operator= (const Segment &orig) {
     transitional = false; // copied segment cannot be in transition
     if (name) delete[] name;
     if (_t)   delete _t;
-    CRGB* oldLeds = ledsrgb;
-    size_t oldLedsSize = ledsrgbSize;
+    // [[maybe_unused]] CRGB* oldLeds = ledsrgb;
+    // [[maybe_unused]] size_t oldLedsSize = ledsrgbSize;
     if (ledsrgb && !Segment::_globalLeds) d_free(ledsrgb);
     deallocateData();
     // copy source

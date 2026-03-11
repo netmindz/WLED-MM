@@ -13,7 +13,7 @@ static byte e131LastSequenceNumber[E131_MAX_UNIVERSE_COUNT] = {0}; // to detect 
 //handles RGB data only
 void handleDDPPacket(e131_packet_t* p) {
   static bool ddpSeenPush = false;  // have we seen a push yet?
-  int lastPushSeq = e131LastSequenceNumber[0];
+  [[maybe_unused]] int lastPushSeq = e131LastSequenceNumber[0];
 
   //reject late packets belonging to previous frame (assuming 4 packets max. before push)
 #if 0  // WLEDMM fixme - we definitely have more than 5-10 packets per frame !!!
@@ -32,7 +32,7 @@ void handleDDPPacket(e131_packet_t* p) {
   uint8_t ddpChannelsPerLed = ((p->dataType & 0b00111000)>>3 == 0b011) ? 4 : 3; // data type 0x1B (formerly 0x1A) is RGBW (type 3, 8 bit/channel)
 
   // WLEDMM for debugging
-  static unsigned lastPush = millis();
+  [[maybe_unused]] static unsigned lastPush = millis();
   static unsigned packets = 0;
   static unsigned pixels = 0;
 

@@ -316,11 +316,12 @@ uint8_t extractModeName(uint8_t mode, const char *src, char *dest, uint8_t maxLe
       case '"':
         insideQuotes = !insideQuotes;
         break;
-      case '[':
+      case '[': // falls through
       case ']':
         break;
       case ',':
         if (!insideQuotes) qComma++;
+         // falls through
       default:
         if (!insideQuotes || (qComma != mode)) break;
         dest[printedChars++] = singleJsonSymbol;

@@ -395,6 +395,7 @@ const char **RotaryEncoderUIUsermod::re_findModeStrings(const char json[], int n
         break;
       case ',':
         if (!insideQuotes) modeIndex++;
+         // falls through
       default:
         if (!insideQuotes) break;
     }

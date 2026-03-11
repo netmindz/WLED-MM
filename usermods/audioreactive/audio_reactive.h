@@ -176,7 +176,7 @@ static bool limiterOn = false;                 // bool: enable / disable dynamic
 #else
 static bool limiterOn = true;
 #endif
-static uint8_t micQuality = 0;   // affects input filtering; 0 normal, 1 minimal filtering, 2 no filtering
+[[maybe_unused]] static uint8_t micQuality = 0;   // input filtering; 0 normal, 1 minimal filtering, 2 no filtering - unused on 8266
 #ifdef FFT_USE_SLIDING_WINDOW
 static uint16_t attackTime = 24;              // int: attack time in milliseconds. Default 0.024sec
 static uint16_t decayTime = 250;              // int: decay time in milliseconds.  New default 250ms.
