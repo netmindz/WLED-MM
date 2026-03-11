@@ -5087,8 +5087,8 @@ uint16_t mode_ColorClouds()
   for (int i = 0; i < SEGLEN; i++) {
     const uint32_t volX = i * volSqueeze * 64;
     int32_t vol = perlin16(volX0 + volX, volT);
-    vol = map(vol, volCutoff, volSaturate, 0, 255);
-    vol = constrain(vol, 0, 255);
+    vol = map2(vol, volCutoff, volSaturate, 0, 255);
+    vol = min(max(vol, int32_t(0)), int32_t(255));
 
     const uint32_t hueX = i * hueSqueeze * 8;
     uint8_t hue = perlin16(hueX0 + hueX, hueT) >> 7;
