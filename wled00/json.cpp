@@ -1227,6 +1227,9 @@ void serializeInfo(JsonObject root)
   // end WLEDMM
 
   root[F("uptime")] = millis()/1000 + rolloverMillis*4294967;
+  char time[48];
+  getTimeString(time);
+  root[F("time")] = time;
 
   usermods.addToJsonInfo(root);
 
