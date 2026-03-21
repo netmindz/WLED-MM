@@ -50,13 +50,21 @@ void closeFile() {
   if (!f) {doCloseFile = false; return;} // WLEDMM only do all this hick-hack when f is an open file
 
   bool oldLock = suspendStripService;
-  #if defined(WLEDMM_FILEWAIT) // only wait if we don't have the flicker-free RMTHI driver
+  #if defined(WLEDMM_FILEWAIT) || !defined(ARDUINO_ARCH_ESP32) // only wait if we don't have the flicker-free RMTHI driver
   unsigned long t_wait = millis();
   if (strip.isUpdating()) suspendStripService = true;             // WLEDMM schedule short pause to prevent LEDs glitching during flash write
-  while(strip.isUpdating() && (millis() - t_wait < 72)) delay(1); // WLEDMM try to catch a moment when strip is idle
-  while(strip.isUpdating() && (millis() - t_wait < 96)) delay(0); //        try harder
-  //if (strip.isUpdating()) USER_PRINTLN("closeFile: strip still updating.");
-  delay(2); // might help
+  #if defined(ARDUINO_ARCH_ESP32)
+    while(strip.isUpdating() && (millis() - t_wait < 72)) delay(1); // WLEDMM try to catch a moment when strip is idle
+    while(strip.isUpdating() && (millis() - t_wait < 96)) delay(0); //        try harder
+    //if (strip.isUpdating()) USER_PRINTLN("closeFile: strip still updating.");
+    delay(2); // might help
+  #else // 8266: only wait in case that can_yield() tells us we can yield and delay
+    if (can_yield()) {
+      yield();
+      while(strip.isUpdating() && (millis() - t_wait < 96)) delay(1);
+      yield(); // might help
+    }
+  #endif 
   #endif
   #else
     bool oldLock = suspendStripService; // fix build f***u* on 8266
