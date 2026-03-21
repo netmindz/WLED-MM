@@ -47,7 +47,8 @@ void closeFile() {
   //    --> file reads rarely cause refill stalls compared to writes, but large/fragmented reads can still exceed the ~0.08–0.12 ms budget.
   //        esp32 recommendations: use f.setBufferSize() (512–1024 for reads is reasonable); use delay(0) after file reads, to reduce task contention
 
-  if (!f) {doCloseFile = false; return;} // WLEDMM only do all this hick-hack when f is an open file
+  if (!doCloseFile || !f) { doCloseFile = false; return; }  // file not open, or no request to close -> nothing to do, nothing to wait
+  doCloseFile = false; // consume flag early, to reduce the time window for concurrent closing attempts from several tasks.
 
   bool oldLock = suspendStripService;
   #if defined(WLEDMM_FILEWAIT) || !defined(ARDUINO_ARCH_ESP32) // only wait if we don't have the flicker-free RMTHI driver
@@ -80,7 +81,6 @@ void closeFile() {
   #endif
   suspendStripService = oldLock; // restore previous lock
   DEBUGFS_PRINTF("took %d ms\n", millis() - s);
-  doCloseFile = false;
 }
 
 //find() that reads and buffers data from file stream in 256-byte blocks.
