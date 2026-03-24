@@ -1937,9 +1937,10 @@ void WS2812FX::service() {
   unsigned speedLimit = (_targetFps != FPS_UNLIMITED) && (_targetFps != FPS_UNLIMITED_AC) ? (0.85f * FRAMETIME) : 1;      // WLEDMM minimum for effect frametime
 
   _isServicing = true;
-  _segment_index = 0;
   if (esp32SemTake(segmentMux, 250) == pdTRUE) {      // WLEDMM prevent changes to segments while servicing
-  for (segment &seg : _segments) {
+  for (size_t i = 0; i < _segments.size(); i++) {
+    Segment &seg = _segments[i];
+    _segment_index = i;
 #ifdef WLEDMM_FASTPATH
     _currentSeg = &seg;
 #endif
@@ -1990,10 +1991,11 @@ void WS2812FX::service() {
 
       seg.next_time = nowUp + frameDelay;
     }
-    _segment_index++;
   }
   esp32SemGive(segmentMux);
   } // end of critical section
+  _segment_index = 0;     // segment index is only valid while effects are serviced
+
 
   #ifdef WLEDMM_FASTPATH
   _currentSeg = & strip.getMainSegment(); // WLEDMM safe default
