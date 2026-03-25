@@ -1035,6 +1035,7 @@ BusHub75Matrix::BusHub75Matrix(BusConfig &bc) : Bus(bc.type, bc.start, bc.autoWh
     
     USER_PRINT(F("heap usage: ")); USER_PRINTLN(int(lastHeap - ESP.getFreeHeap()));
     delay(18);   // experiment - give the driver a moment (~ one full frame @ 60hz) to settle
+    _colorOrder = bc.colorOrder;
     _valid = true;
     display->setBrightness8(_bri);    // range is 0-255, 0 - 0%, 255 - 100% //  [setBrightness()] Tried to set output brightness before begin()
     display->clearScreen();   // initially clear the screen buffer
@@ -1196,8 +1197,19 @@ void __attribute__((hot)) IRAM_ATTR BusHub75Matrix::show(void) {
         uint8_t g = c.g;
         uint8_t b = c.b;
         #endif
-        if (isFourScan) fourScanPanel->drawPixelRGB888(int16_t(x), int16_t(y), r, g, b);
-        else display->drawPixelRGB888(int16_t(x), int16_t(y), r, g, b);
+        // apply color order mapping (COL_ORDER_* values from const.h)
+        uint8_t r2=r, g2=g, b2=b;
+        switch (_colorOrder & 0x0F) {
+          case COL_ORDER_RGB: /* 1 */                           break; // no swap (HUB75 default)
+          case COL_ORDER_GRB: /* 0 */ r2=g; g2=r;              break; // swap R and G
+          case COL_ORDER_BRG: /* 2 */ r2=b; g2=r; b2=g;        break;
+          case COL_ORDER_RBG: /* 3 */       g2=b; b2=g;        break; // swap G and B
+          case COL_ORDER_BGR: /* 4 */ r2=b;       b2=r;        break; // swap R and B
+          case COL_ORDER_GBR: /* 5 */ r2=g; g2=b; b2=r;        break;
+          default:                                              break;
+        }
+        if (isFourScan) fourScanPanel->drawPixelRGB888(int16_t(x), int16_t(y), r2, g2, b2);
+        else display->drawPixelRGB888(int16_t(x), int16_t(y), r2, g2, b2);
       }
       pix ++;
     }
