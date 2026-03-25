@@ -426,12 +426,15 @@ class BusHub75Matrix : public Bus {
 
     void cleanup(void) override;
 
+    uint8_t getColorOrder() const override { return _colorOrder; }
+
     ~BusHub75Matrix() {
       cleanup();
     }
 
   private:
     unsigned _panelWidth = 0;
+    uint8_t  _colorOrder = COL_ORDER_RGB;
     CRGB *_ledBuffer = nullptr;
     byte *_ledsDirty = nullptr;
     // C++ dirty trick: private static variables are actually _not_ part of the class (however only visibile to class instances). 
