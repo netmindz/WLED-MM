@@ -1142,7 +1142,7 @@ void __attribute__((hot)) IRAM_ATTR BusHub75Matrix::setPixelColor(uint16_t pix, 
 uint32_t IRAM_ATTR BusHub75Matrix::getPixelColor(uint16_t pix) const {
 // if (pix >= _len || !_ledBuffer) return BLACK; // not necessary - this was already checked at busses.getPixelColor()
 #if defined(WLEDMM_FASTPATH) && !defined(WLEDMM_SAVE_FLASH) 
-  return color_fade(uint32_t(_ledBuffer[pix]) & 0x00FFFFFF, _bri);   // this is slightly faster if we have inline color_fade()
+  return color_fade_fast(uint32_t(_ledBuffer[pix]) & 0x00FFFFFF, _bri);   // this is slightly faster if we have inline color_fade()
 #else
   return uint32_t(_ledBuffer[pix].scale8(_bri)) & 0x00FFFFFF;        // do it the FastLED way
 #endif
