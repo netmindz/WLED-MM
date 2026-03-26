@@ -1155,8 +1155,8 @@ void serializeInfo(JsonObject root)
     #else
       root[F("psrmode")]  = F("dio");
     #endif
-    #endif
   }
+  #endif
   #endif
 
   // begin WLEDMM
