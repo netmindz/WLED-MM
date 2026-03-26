@@ -759,6 +759,16 @@ void WLED::setup()
     #elif CONFIG_SPIRAM_OCCUPY_NO_HOST
       DEBUG_PRINTLN(F("PSRAM host: none"));
     #endif
+    #if ESP_IDF_VERSION_MAJOR > 4
+    #ifdef CONFIG_SOC_PSRAM_DMA_CAPABLE
+      USER_PRINTLN(F("PSRAM is DMA capable."));
+    #else
+      USER_PRINTLN(F("PSRAM does not support DMA."));
+    #endif
+    #ifdef CONFIG_SOC_MEMSPI_FLASH_PSRAM_INDEPENDENT
+      DEBUG_PRINTLN(F("PSRAM speed is independant from flash."));
+    #endif
+    #endif
     USER_PRINTLN();
   }
   #else
