@@ -1078,6 +1078,9 @@ void serializeInfo(JsonObject root)
   wifi_info[F("channel")] = WiFi.channel();
   wifi_info[F("ap")] = apActive;
 
+#if defined(ARDUINO_ARCH_ESP32) && !defined(WLEDMM_FILEWAIT)
+  updateFSInfo(); // refresh flash usage info - may cause flicker unless we have the RMTHI driver
+#endif
   JsonObject fs_info = root.createNestedObject("fs");
   fs_info["u"] = fsBytesUsed / 1000;
   fs_info["t"] = fsBytesTotal / 1000;
