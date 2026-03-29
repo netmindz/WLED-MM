@@ -15,6 +15,14 @@ void handleDDPPacket(e131_packet_t* p) {
   static bool ddpSeenPush = false;  // have we seen a push yet?
   [[maybe_unused]] int lastPushSeq = e131LastSequenceNumber[0];
 
+  // reject unsupported color data types (only RGB and RGBW are supported)
+  // WLEDMM allow legacy "undefined" datatype, and legacy (but wrong) datatype=0x01
+  if ( p->dataType != 0 && p->dataType != 0x01 &&
+       p->dataType != DDP_TYPE_RGB24 && p->dataType != DDP_TYPE_RGBW32) return;
+
+  // reject status and config packets (not implemented)
+  if (p->destination == DDP_ID_STATUS || p->destination == DDP_ID_CONFIG) return;
+
   //reject late packets belonging to previous frame (assuming 4 packets max. before push)
 #if 0  // WLEDMM fixme - we definitely have more than 5-10 packets per frame !!!
   if (e131SkipOutOfSequence && lastPushSeq) {
@@ -41,8 +49,8 @@ void handleDDPPacket(e131_packet_t* p) {
   uint16_t dataLen = htons(p->dataLen);
   unsigned stop = start + dataLen / ddpChannelsPerLed;
   uint8_t* data = p->data;
-  uint16_t c = 0;
-  if (p->flags & DDP_TIMECODE_FLAG) c = 4; //packet has timecode flag, we do not support it, but data starts 4 bytes later
+  unsigned c = 0;
+  if (p->flags & DDP_FLAGS_TIME) c = 4; //packet has timecode flag, we do not support it, but data starts 4 bytes later
 
   unsigned numLeds = stop - start; // stop >= start is guaranteed
   unsigned maxDataIndex = c + numLeds * ddpChannelsPerLed; // validate bounds before accessing data array
@@ -67,7 +75,7 @@ void handleDDPPacket(e131_packet_t* p) {
     }
   }
 
-  bool push = p->flags & DDP_PUSH_FLAG;
+  bool push = p->flags & DDP_FLAGS_PUSH;
   ddpSeenPush |= push;
   if (!ddpSeenPush || push) { // if we've never seen a push, or this is one, render display
     #ifdef WLED_DEBUG
