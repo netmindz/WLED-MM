@@ -2,6 +2,14 @@
 
 Here are a few suggestions to make it easier for you to contribute!
 
+## Important Developer Infos
+
+* [Project Structure, Files and Directories](https://github.com/MoonModules/WLED-MM/blob/mdev/.github/copilot-instructions.md#project-branch--release-structure) (in our AI instructions)
+* KB: [Compiling WLED](https://kno.wled.ge/advanced/compiling-wled/) - slightly outdated but still helpful 😊
+* Arduino IDE is not supported any more. Use VSCode with the PlatformIO extension. 
+* [Compiling in VSCode/Platformio](https://github.com/wled/WLED-Docs/issues/161) - modern way.
+* If you add a new feature, consider making a PR to [``wled-docs``](https://github.com/MoonModules/WLED-Docs) for updating our official documentation.
+
 ## Describe your PR
 
 Please add a description of your proposed code changes. It does not need to be an exhaustive essay, however a PR with no description or just a few words might not get accepted, simply because very basic information is missing.
@@ -97,7 +105,7 @@ if (a == b)
 
 
 There should always be a space between a keyword and its condition and between the condition and brace.  
-Within the condition, no space should be between the paranthesis and variables.  
+Within the condition, no space should be between the parenthesis and variables.  
 Spaces between variables and operators are up to the authors discretion.
 There should be no space between function names and their argument parenthesis.
 

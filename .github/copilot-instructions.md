@@ -74,20 +74,34 @@ After making changes to web UI, always test:
 
 ## Common Tasks
 
+### Project Branch / Release Structure
+```
+mdev                # Main development trunk (daily/nightly) 17.7.2-mdev
+```
+
 ### Repository Structure
 ```
-wled00/                 # Main firmware source (C++)
-  ├── data/            # Web interface files 
-  │   ├── index.htm    # Main UI
+wled00/                 # Main firmware source (C++) "WLED core"
+  ├── data/             # Web interface files 
+  │   ├── index.htm     # Main UI
   │   ├── settings*.htm # Settings pages
-  │   └── *.js/*.css   # Frontend resources
-  ├── *.cpp/*.h        # Firmware source files
-  └── html_*.h         # Auto-generated embedded web files (DO NOT EDIT, DO NOT COMMIT)
-tools/                 # Build tools (Node.js)
+  │   └── *.js/*.css    # Frontend resources
+  ├── *.cpp/*.h         # Firmware source files
+  ├── html_*.h          # Auto-generated embedded web files (DO NOT EDIT, DO NOT COMMIT)
+  ├── src/              # Modules used by the WLED core (C++)
+  │   ├── fonts/        # Font libraries for scrolling text effect
+  └   └── dependencies/ # Utility functions - some of them have their own licensing terms
+lib/                    # Project specific custom libraries. PlatformIO will compile them to separate static libraries and link them
+platformio.ini          # Hardware build configuration
+
+platformio_override.sample.ini # examples for custom build configurations - entries must be copied into platformio_override.ini to use them.
+                               # platformio_override.ini is _not_ stored in the WLED repository!
+usermods/              # User-contributed addons to the WLED core, maintained by individual contributors  (C++, with individual library.json)
+package.json           # Node.js dependencies and scripts, release identification
+pio-scripts/           # Build tools (platformio)
+tools/                 # Build tools (Node.js), partition files, and generic utilities
   ├── cdata.js         # Web UI build script
   └── cdata-test.js    # Test suite
-platformio.ini         # Hardware build configuration
-package.json           # Node.js dependencies and scripts
 .github/workflows/     # CI/CD pipelines
 ```
 
