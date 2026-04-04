@@ -73,7 +73,7 @@ You can find a collection of very useful tips and tricks here: https://github.co
 Don't stress too much about coding style.
 When in doubt, it is easiest to replicate the code style you find in the files you want to edit :)
 
-Our review bot (coderabbit) has learned lots of detailed guides and hits - it will suggest them automatically when you submit a PR for review.
+Our review bot (coderabbit) has learned lots of detailed guides and hints - it will suggest them automatically when you submit a PR for review.
 
 If you are curious, these are the detailed guides:
 * [C++ Coding](https://github.com/MoonModules/WLED-MM/blob/mdev/.github/cpp.instructions.md)
