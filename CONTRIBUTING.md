@@ -4,7 +4,7 @@ Here are a few suggestions to make it easier for you to contribute!
 
 ## Important Developer Infos
 
-* [Project Structure, Files and Directories](https://github.com/MoonModules/WLED-MM/blob/mdev/.github/copilot-instructions.md#project-branch--release-structure) (in our AI instructions)
+* [Project Structure, Files and Directories](https://github.com/MoonModules/WLED-MM/blob/mdev/.github/copilot-instructions.md#repository-structure) (in our AI instructions)
 * KB: [Compiling WLED](https://kno.wled.ge/advanced/compiling-wled/) - slightly outdated but still helpful 😊
 * Arduino IDE is not supported any more. Use VSCode with the PlatformIO extension. 
 * [Compiling in VSCode/Platformio](https://github.com/wled/WLED-Docs/issues/161) - modern way.
@@ -70,8 +70,17 @@ You can find a collection of very useful tips and tricks here: https://github.co
 
 ## Code style
 
+Don't stress too much about coding style.
 When in doubt, it is easiest to replicate the code style you find in the files you want to edit :)
-Below are the guidelines we use in the WLED repository.
+
+Our review bot (coderabbit) has learned lots of detailed guides and hits - it will suggest them automatically when you submit a PR for review.
+
+If you are curious, these are the detailed guides:
+* [C++ Coding](https://github.com/MoonModules/WLED-MM/blob/mdev/.github/cpp.instructions.md)
+* [WebUi: HTML, JS, CSS](https://github.com/MoonModules/WLED-MM/blob/mdev/.github/web.instructions.md)
+* [Using ESP-IDF directly](https://github.com/MoonModules/WLED-MM/blob/mdev/.github/esp-idf.instructions.md)
+
+Below are the main rules used the WLED-MM repository.
 
 ### Indentation
 
