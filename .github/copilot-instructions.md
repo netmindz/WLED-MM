@@ -66,7 +66,7 @@ Main development branch: `mdev`
 - **Repository language is English.** Suggest translations for non-English content.
 - **Use VS Code with PlatformIO extension** for best development experience.
 - **When unsure, say so.** Gather more information rather than guessing.
-- **Acknowledge good patterns** when you see them.
+- **Acknowledge good patterns** when you see them. Summarize good practices as part of your review - positive feedback always helps.
 - **Provide references** when making analyses or recommendations. Base them on the correct branch or PR.
 - **Look for user-visible "breaking" changes**. Ask for confirmation that these were made intentionally.
 - **C++ formatting available**: `clang-format` is installed but not in CI
