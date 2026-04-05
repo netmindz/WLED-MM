@@ -52,6 +52,7 @@ tl;dr:
 * Build targets: `platformio.ini`.
 * Web UI source: `wled00/data/`.
 * Auto-generated headers: `wled00/html_*.h` — **never edit or commit**.
+* ArduinoJSON + AsyncJSON: `wled00/dependencies/json`
 * Usermods: `usermods/` (`.h` files, included via `usermods_list.cpp`).
 * CI/CD: `.github/workflows/`.
 
@@ -61,23 +62,23 @@ Main development trunk: `mdev` branch. Make PRs against this branch.
 Detailed overview:
 
 ```text
-wled00/                 # Firmware source (C++)
-  ├── data/             # Web UI source (HTML, CSS, JS)
-  ├── src/              # Core modules, fonts, dependencies
-  ├── html_*.h          # Auto-generated (DO NOT EDIT OR COMMIT)
-  └── wled.h            # Main firmware configuration, and global variables
-usermods/               # Community addons (.h files, included via usermods_list.cpp)
-lib/                    # Project specific custom libraries. PlatformIO will compile them to separate static libraries and link them
-platformio.ini          # Build targets and configuration
+wled00/                     # Firmware source (C++)
+  ├── data/                 # Web UI source (HTML, CSS, JS)
+  ├── src/                  # Core modules, fonts, dependencies
+       └─ dependencies/json # Project-specific ArduinoJSON (v6.18.1) and AsyncJSON (v6)
+  ├── html_*.h              # Auto-generated (DO NOT EDIT OR COMMIT)
+  └── wled.h                # Main firmware configuration, and global variables
+usermods/                   # Community addons (.h files, included via usermods_list.cpp)
+lib/                           # Project specific custom libraries. PlatformIO will compile them to separate static libraries and link them
+platformio.ini                 # Build targets and configuration
 platformio_override.sample.ini # examples for custom build configurations - entries must be copied into platformio_override.ini to use them.
                                # platformio_override.ini is _not_ stored in the WLED repository!
-
-pio-scripts/            # Build tools (platformio)
-tools/                  # Build tools (Node.js), partition files, and generic utilities
-tools/cdata.js          # Web UI → header build script
-tools/cdata-test.js     # Test suite
-package.json            # Node.js scripts and release ID
-.github/workflows/      # CI/CD pipelines
+pio-scripts/                # Build tools (platformio)
+tools/                      # Build tools (Node.js), partition files, and generic utilities
+tools/cdata.js              # Web UI → header build script
+tools/cdata-test.js         # Test suite
+package.json                # Node.js scripts and release ID
+.github/workflows/          # CI/CD pipelines
 ```
 <!-- HUMAN_ONLY_END -->
 
