@@ -44,7 +44,7 @@ Always reference these instructions first and fallback to search or bash command
 **Build firmware to validate code changes**: `pio run -e esp32_4MB_V4_M` — must succeed, never skip this step.
 Common firmware environments: `esp32_4MB_V4_M`, `esp32_16MB_V4_S_HUB75`, `esp32S3_8MB_PSRAM_M_qspi`, `esp32_16MB_V4_M_eth`, `esp32dev_compat`, `esp8266_4MB_S` (deprecated)
 
-For detailed build timeouts, development workflows, troubleshooting, and validation steps, see [agent-build-instructions.md](agent-build-instructions.md).
+For detailed build timeouts, development workflows, troubleshooting, and validation steps, see [agent-build.instructions.md](agent-build.instructions.md).
 
 ## Repository Structure
 
