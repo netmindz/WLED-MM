@@ -1,3 +1,6 @@
+---
+applyTo: "**"
+---
 # Agent-Mode Build & Test Instructions
 
 Detailed build workflow, timeouts, and troubleshooting for making code changes in agent mode. Always reference these instructions first when running builds or validating changes.

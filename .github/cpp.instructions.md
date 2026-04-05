@@ -1,5 +1,5 @@
 ---
-applyTo: "**/*.cpp,**/*.h,**/*.hpp, **/*.ino"
+applyTo: "**/*.cpp,**/*.h,**/*.hpp,**/*.ino"
 ---
 # C++ Coding Conventions
 
