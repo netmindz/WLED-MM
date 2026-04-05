@@ -28,8 +28,8 @@ Always reference these instructions first and fallback to search or bash command
 | ESP32-P4/-C5/-C6 | Will be supported in the future |
 | ESP8266 | Deprecated — should still compile, but not actively maintained |
 
-<!-- HUMAN_ONLY_START -->
 ## Build and Test
+<!-- HUMAN_ONLY_START -->
 
 | Command | Purpose | Typical Time |
 |---|---|---|
@@ -38,13 +38,14 @@ Always reference these instructions first and fallback to search or bash command
 | `npm run dev` | Watch mode — auto-rebuilds web UI on file changes | — |
 | `pio run -e <env>` | Build firmware for a hardware target | 15–20 min |
 
-**Always run `npm ci; npm run build` before `pio run`.** The web UI build generates `wled00/html_*.h` header files required by firmware compilation.
+<!-- HUMAN_ONLY_END -->
 
+**Always run `npm ci; npm run build` before `pio run`.** The web UI build generates `wled00/html_*.h` header files required by firmware compilation.
+**Build firmware to validate code changes**: `pio run -e esp32_4MB_V4_M` — must succeed, never skip this step.
 Common firmware environments: `esp32_4MB_V4_M`, `esp32_16MB_V4_S_HUB75`, `esp32S3_8MB_PSRAM_M_qspi`, `esp32_16MB_V4_M_eth`, `esp32dev_compat`, `esp8266_4MB_S` (deprecated)
 
 For detailed build timeouts, development workflows, troubleshooting, and validation steps, see [agent-build-instructions.md](agent-build-instructions.md).
 
-<!-- HUMAN_ONLY_END -->
 ## Repository Structure
 
 tl;dr: 
