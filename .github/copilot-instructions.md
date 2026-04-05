@@ -53,7 +53,7 @@ tl;dr:
 * Build targets: `platformio.ini`.
 * Web UI source: `wled00/data/`.
 * Auto-generated headers: `wled00/html_*.h` — **never edit or commit**.
-* ArduinoJSON + AsyncJSON: `wled00/dependencies/json`
+* ArduinoJSON + AsyncJSON: `wled00/src/dependencies/json`
 * Usermods: `usermods/` (`.h` files, included via `usermods_list.cpp`).
 * CI/CD: `.github/workflows/`.
 
