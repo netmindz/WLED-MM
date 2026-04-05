@@ -47,8 +47,15 @@ For detailed build timeouts, development workflows, troubleshooting, and validat
 <!-- HUMAN_ONLY_END -->
 ## Repository Structure
 
-tl;dr: Firmware source: `wled00/` (C++). Web UI source: `wled00/data/`. Auto-generated headers: `wled00/html_*.h` — **never edit or commit**.
-Usermods: `usermods/` (`.h` files, included via `usermods_list.cpp`). Build targets: `platformio.ini`. CI/CD: `.github/workflows/`.
+tl;dr: 
+* Firmware source: `wled00/` (C++).
+* Build targets: `platformio.ini`.
+* Web UI source: `wled00/data/`.
+* Auto-generated headers: `wled00/html_*.h` — **never edit or commit**.
+* Usermods: `usermods/` (`.h` files, included via `usermods_list.cpp`).
+* CI/CD: `.github/workflows/`.
+
+Main development trunk: `mdev` branch. Make PRs against this branch.
 
 <!-- HUMAN_ONLY_START -->
 Detailed overview:
@@ -73,7 +80,6 @@ package.json            # Node.js scripts and release ID
 .github/workflows/      # CI/CD pipelines
 ```
 <!-- HUMAN_ONLY_END -->
-Main development branch: `mdev`
 
 ## General Guidelines
 
