@@ -562,6 +562,7 @@ Prefer blocking FreeRTOS primitives (`xQueueReceive`, `ulTaskNotifyTake`, `vTask
 - If possible, use `static` for local (C-style) variables and functions (keeps the global namespace clean)
 - Avoid unexplained "magic numbers". Prefer named constants (`constexpr`) or C-style `#define` constants for repeated numbers that have the same meaning
 - Include `"wled.h"` as the primary project header where needed
+
 - **Float-to-unsigned conversion is undefined behavior when the value is out of range.** Converting a negative `float` directly to an unsigned integer type (`uint8_t`, `uint16_t`, …) is UB per the C++ standard — the Xtensa (ESP32) toolchain may silently wrap, but RISC-V (ESP32-C3/C5/C6/P4) can produce different results due to clamping. Cast through a signed integer first:
   ```cpp
   // Undefined behavior — avoid:

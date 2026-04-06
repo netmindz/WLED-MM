@@ -40,7 +40,8 @@ Always reference these instructions first and fallback to search or bash command
 
 <!-- HUMAN_ONLY_END -->
 
-- **Always run `npm ci; npm run build` before `pio run`.** The web UI build generates `wled00/html_*.h` header files required by firmware compilation.
+- **Always run `npm run build` before any `pio run`** (and run `npm ci` first on fresh clones or when lockfile/dependencies change).
+- The web UI build generates required `wled00/html_*.h` and `wled00/js_*.h` headers for firmware compilation.
 - **Build firmware to validate code changes**: `pio run -e esp32_4MB_V4_M` — must succeed, never skip this step.
 - Common firmware environments: `esp32_4MB_V4_M`, `esp32_16MB_V4_S_HUB75`, `esp32S3_8MB_PSRAM_M_qspi`, `esp32_16MB_V4_M_eth`, `esp32dev_compat`, `esp8266_4MB_S` (deprecated)
 
@@ -51,7 +52,7 @@ For detailed build timeouts, development workflows, troubleshooting, and validat
 tl;dr: 
 * Firmware source: `wled00/` (C++). Web UI source: `wled00/data/`. Build targets: `platformio.ini`.
 * Auto-generated headers: `wled00/html_*.h` and `wled00/js_*.h` — **never edit or commit**.
-* ArduinoJSON + AsyncJSON: `wled00/src/dependencies/json`. CI/CD: `.github/workflows/`.
+* ArduinoJSON + AsyncJSON: `wled00/src/dependencies/json` (included via `wled.h`). CI/CD: `.github/workflows/`.
 * Usermods: `usermods/` (`.h` files, included via `usermods_list.cpp`).
 
 Main development trunk: `mdev` branch. Make PRs against this branch.
