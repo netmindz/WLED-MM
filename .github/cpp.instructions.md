@@ -518,22 +518,28 @@ Always pair every `esp32SemTake` with a matching `esp32SemGive`. Choose a timeou
 **Important**: Not every shared resource needs a mutex. Some synchronization is guaranteed by the overall control flow. For example, `volatile bool` flags like `suspendStripService`, `doInitBusses`, `loadLedmap`, and `OTAisRunning` (declared in `wled.h`) are checked sequentially in the main loop (`wled.cpp`), so they serialize access without requiring a semaphore. Use mutexes when true concurrent access from multiple FreeRTOS tasks is possible and race-conditions can lead to unexpected behaviour. Rely on control-flow ordering when operations are sequenced within the same loop iteration.
 
 ### `delay()` vs `yield()` in FreeRTOS Tasks
+<!-- HUMAN_ONLY_START -->
+* On ESP32, `delay(ms)` calls `vTaskDelay(ms / portTICK_PERIOD_MS)`, which **suspends only the calling task**. The FreeRTOS scheduler immediately runs all other ready tasks. 
+* The Arduino `loop()` function runs inside `loopTask`. Calling `delay()` there does *not* block the network stack, audio FFT, LED DMA, nor any other FreeRTOS task.
+* This differs from ESP8266, where `delay()` stalled the entire system unless `yield()` was called inside.
+<!-- HUMAN_ONLY_END -->
 
-On ESP32, `delay(ms)` calls `vTaskDelay(ms / portTICK_PERIOD_MS)`, which **suspends only the calling task**. The FreeRTOS scheduler immediately runs all other ready tasks. This differs from ESP8266, where `delay()` stalled the entire system unless `yield()` was called inside.
+- On ESP32, `delay()` is generally allowed, as it helps to efficiently manage CPU usage of all tasks.
+- On ESP8266, only use `delay()` and `yield()` in the main `loop()` context. If not sure, protect with `if (can_yield()) ...`.
+- Do *not* use `delay()` in effects (FX.cpp) or in the hot pixel path.
+- `delay()` on ``busses`` level is allowed, it might be needed to achieve exact timing in LED drivers.
+- **`yield()` is a no-op in WLED-MM on ESP32.** `WLEDMM_FASTPATH` redefines `yield()` to an empty macro.
+  ```cpp
+     #define yield() {}  // WLEDMM: yield() is completely unnecessary on ESP32
+  ```
 
-**`delay()` in `loopTask` is allowed.** The Arduino `loop()` function runs inside `loopTask`. Calling `delay()` there does not block the network stack, audio FFT, LED DMA, or any other FreeRTOS task.
+### IDLE Watchdog and Custom Tasks on ESP32
 
-**`yield()` is a no-op in WLED-MM on ESP32.** `WLEDMM_FASTPATH` redefines `yield()` to an empty macro:
+- **Do NOT use `yield()` to pace ESP32 tasks or assume it feeds any watchdog**.
 
-```cpp
-#define yield() {}  // WLEDMM: yield() is completely unnecessary on ESP32
-```
+- Even in stock arduino-esp32, `yield()` calls `vTaskDelay(0)`, which only switches to tasks at equal or higher priority — the IDLE task (priority 0) is never reached. 
 
-Even in stock arduino-esp32, `yield()` calls `vTaskDelay(0)`, which only switches to tasks at equal or higher priority — the IDLE task (priority 0) is never reached. 
-**Do not use `yield()` to pace ESP32 tasks or assume it feeds any watchdog**.
-
-**Custom `xTaskCreate()` tasks must call `delay(1)` in their loop, not `yield()`.** Without a real blocking call, the IDLE task is starved. The IDLE watchdog panic is the first visible symptom — but the damage starts earlier: deleted task memory leaks, software timers stop firing, light sleep is disabled, and Wi-Fi/BT idle hooks don't run. See `esp-idf.instructions.md` for a full explanation of what IDLE does. Structure custom tasks like this:
-
+- **Custom `xTaskCreate()` tasks must call `delay(1)` in their loop, not `yield()`.** Without a real blocking call, the IDLE task is starved. The IDLE watchdog panic is the first visible symptom — but the damage starts earlier: deleted task memory leaks, software timers stop firing, light sleep is disabled, and Wi-Fi/BT idle hooks don't run. See `esp-idf.instructions.md` for a full explanation of what IDLE does. Structure custom tasks like this:
 ```cpp
 // WRONG — IDLE task is never scheduled; yield() does not feed the idle task watchdog.
 void myTask(void*) {
@@ -552,9 +558,8 @@ void myTask(void*) {
 }
 ```
 
-Prefer blocking FreeRTOS primitives (`xQueueReceive`, `ulTaskNotifyTake`, `vTaskDelayUntil`) over `delay(1)` polling where precise timing or event-driven behaviour is needed.
-
-**Watchdog note.** WLED-MM disables the Task Watchdog by default (`WLED_WATCHDOG_TIMEOUT 0` in `wled.h`). When enabled, `esp_task_wdt_reset()` is called at the end of each `loop()` iteration. Long blocking operations inside `loop()` — such as OTA downloads or slow file I/O — must call `esp_task_wdt_reset()` periodically, or be restructured so the main loop is not blocked for longer than the configured timeout.
+- Prefer blocking FreeRTOS primitives (`xQueueReceive`, `ulTaskNotifyTake`, `vTaskDelayUntil`) over `delay(1)` polling where precise timing or event-driven behaviour is needed.
+- **Watchdog note.** WLED-MM disables the Task Watchdog by default (`WLED_WATCHDOG_TIMEOUT 0` in `wled.h`). When enabled, `esp_task_wdt_reset()` is called at the end of each `loop()` iteration. Long blocking operations inside `loop()` — such as OTA downloads or slow file I/O — must call `esp_task_wdt_reset()` periodically, or be restructured so the main loop is not blocked for longer than the configured timeout.
 
 ## General
 
