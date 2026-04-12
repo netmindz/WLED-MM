@@ -16,9 +16,10 @@ void handleDDPPacket(e131_packet_t* p) {
   [[maybe_unused]] int lastPushSeq = e131LastSequenceNumber[0];
 
   // reject unsupported color data types (only RGB and RGBW are supported)
+  uint8_t maskedType = p->dataType & 0x3F; // mask out custom and reserved flags, only type bits are relevant
   // WLEDMM allow legacy "undefined" datatype, and legacy (but wrong) datatype=0x01
-  if ( p->dataType != 0 && p->dataType != 0x01 &&
-       p->dataType != DDP_TYPE_RGB24 && p->dataType != DDP_TYPE_RGBW32) {
+  if ( maskedType != 0 && maskedType != 0x01 &&
+       maskedType != DDP_TYPE_RGB24 && maskedType != DDP_TYPE_RGBW32) {
     DEBUG_PRINTF("handleDDPPacket(); unsupported datatype 0x%02x\n", p->dataType);
     return;
   }
