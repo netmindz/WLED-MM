@@ -88,7 +88,6 @@ docs/                       # Contributor docs: coding guidelines and design doc
 - **Repository language is English.** Suggest translations for non-English content.
 - **Use VS Code with PlatformIO extension** for best development experience.
 - **Never edit or commit** `wled00/html_*.h` and `wled00/js_*.h` — auto-generated from `wled00/data/`.
-- If updating Web UI files in `wled00/data/`, **make use of common functions in `wled00/data/common.js` whenever possible**.
 - **When unsure, say so.** Gather more information rather than guessing.
 - **Acknowledge good patterns** when you see them. Positive feedback always helps.
 - **Provide references** when making analyses or recommendations. Base them on the correct branch or PR.
