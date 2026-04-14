@@ -171,7 +171,7 @@ This pattern enables optimizations and makes intent clear to reviewers.
 
 ### `const` references to avoid copies
 - Pass objects by `const &` (or `&`) instead of copying them implicitly.
-- Use `const &` (or `&`)  inside loops - This avoids constructing temporary objects on every access.
+- Use `const &` (or `&`) inside loops - This avoids constructing temporary objects on every access.
 
 <!-- HUMAN_ONLY_START -->
 ```cpp
@@ -454,7 +454,7 @@ uint32_t wg = (((c1 >> 8) & TWO_CHANNEL_MASK) * amount) & ~TWO_CHANNEL_MASK;
 return rb | wg;
 ```
 
-### Bit Shifts Over Division (mainly for RISC-V boards)
+### Bit Shifts Over Division (mainly for RISC-V and ESP8266 boards)
 
 ESP32 and ESP32-S3 (Xtensa core) have a fast "integer divide" instruction, so manual shifts rarely help. 
 On RISC-V targets (ESP32-C3/C6/P4) and ESP8266, prefer explicit bit-shifts for power-of-two arithmetic — the compiler does **not** always convert divisions to shifts. 
