@@ -461,7 +461,7 @@ On RISC-V targets (ESP32-C3/C6/P4) and ESP8266, prefer explicit bit-shifts for p
 Always use unsigned operands for right shifts; signed right-shift is implementation-defined.
 
 <!-- HUMAN_ONLY_START -->
-On RISC-V-based boards (ESP32-C3, ESP32-C6, ESP32-C5) explicit shifts can be beneficial.
+Explicit shifts can be beneficial on RISC-V-based boards (ESP32-C3, ESP32-C6, ESP32-C5) and on ESP8266 boards.
 ```cpp
 position >> 3     // instead of position / 8
 (255U - rate) >> 1 // instead of (255 - rate) / 2
