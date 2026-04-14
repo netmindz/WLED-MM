@@ -94,13 +94,30 @@ docs/                       # Contributor docs: coding guidelines and design doc
 - **Provide references** when making analyses or recommendations. Base them on the correct branch or PR.
 - **Highlight user-visible breaking changes and ripple effects**. Ask for confirmation that these were introduced intentionally.
 - **Unused / dead code must be justified or removed**. This helps to keep the codebase clean, maintainable and readable.
-- **Verify feature-flag names.** Every `WLED_ENABLE_*` / `WLED_DISABLE_*` flag must exactly match one of the names below — misspellings are silently ignored by the preprocessor (e.g. `WLED_IR_DISABLE` instead of `WLED_DISABLE_INFRARED`), causing silent build variations. Flag unrecognised names as likely typos and suggest the correct spelling.
-  <br>**`WLED_DISABLE_*`**: `2D`, `ADALIGHT`, `ALEXA`, `BROWNOUT_DET`, `ESPNOW`, `FILESYSTEM`, `HUESYNC`, `IMPROV_WIFISCAN`, `INFRARED`, `LOXONE`, `MQTT`, `OTA`, `PARTICLESYSTEM1D`, `PARTICLESYSTEM2D`, `PIXELFORGE`, `WEBSOCKETS`
-  <br>**`WLED_ENABLE_*`**: `ADALIGHT`, `AOTA`, `DMX`, `DMX_INPUT`, `DMX_OUTPUT`, `FS_EDITOR`, `GIF`, `HUB75MATRIX`, `JSONLIVE`, `LOXONE`, `MQTT`, `PIXART`, `PXMAGIC`, `USERMOD_PAGE`, `WEBSOCKETS`, `WPA_ENTERPRISE`
 - **C++ formatting available**: `clang-format` is installed but not in CI
 - No automated linting is configured — match existing code style in files you edit. 
 
 Refer to `docs/cpp.instructions.md`, `docs/esp-idf.instructions.md` and `docs/web.instructions.md` for language-specific conventions, and `docs/cicd.instructions.md` for GitHub Actions workflows.
+
+### Feature Flags
+- **Verify feature-flag names.** Every `WLED_ENABLE_*` / `WLED_DISABLE_*` flag must exactly match one of the names below — misspellings are silently ignored by the preprocessor (e.g. `WLED_IR_DISABLE` instead of `WLED_DISABLE_INFRARED`), causing silent build variations. Flag unrecognised names as likely typos and suggest the correct spelling.
+
+**`WLED_DISABLE_*`**: `2D`, `ADALIGHT`, `ALEXA`, `BROWNOUT_DET`, `ESPNOW`, `FILESYSTEM`, `HUESYNC`, `IMPROV_WIFISCAN`, `INFRARED`, `LOXONE`, `MQTT`, `OTA`, `PARTICLESYSTEM1D`, `PARTICLESYSTEM2D`, `PIXELFORGE`, `WEBSOCKETS`
+
+**`WLED_ENABLE_*`**: `ADALIGHT`, `AOTA`, `DMX`, `DMX_INPUT`, `DMX_OUTPUT`, `FS_EDITOR`, `GIF`, `HUB75MATRIX`, `JSONLIVE`, `LOXONE`, `MQTT`, `PIXART`, `PXMAGIC`, `USERMOD_PAGE`, `WEBSOCKETS`, `WPA_ENTERPRISE`
+
+<!-- HUMAN_ONLY_START -->
+```cpp
+#ifdef WLED_DMX_ENABLED // wrong flag - initialization silently skipped
+  initDMX();
+#endif
+
+#ifdef WLED_ENABLE_DMX // correct flag - initialization performed only when the build supports DMX
+  initDMX();  
+#endif
+```
+<!-- HUMAN_ONLY_END -->
+
 
 ### Attribution for AI-generated code
 Using AI-generated code can hide the source of the inspiration / knowledge / sources it used. 
