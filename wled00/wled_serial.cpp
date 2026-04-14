@@ -1,8 +1,8 @@
 #include "wled.h"
 #ifdef ARDUINO_ARCH_ESP32
 #include "esp_ota_ops.h"
-#endif
 #include "sdkconfig.h"
+#endif
 
 /*
  * Adalight and TPM2 handler
