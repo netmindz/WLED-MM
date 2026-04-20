@@ -3,8 +3,8 @@
 WLED is C++ firmware for ESP32/ESP8266 microcontrollers controlling addressable LEDs,
 with a web UI (HTML/JS/CSS). Built with PlatformIO (Arduino framework) and Node.js tooling.
 
-See also: `.github/copilot-instructions.md`, `.github/agent-build.instructions.md`,
-`docs/cpp.instructions.md`, `docs/web.instructions.md`, `docs/cicd.instructions.md`.
+Refer to `.github/copilot-instructions.md`, `.github/agent-build.instructions.md`,
+`docs/cpp.instructions.md`, `docs/esp-idf.instructions.md`, `docs/web.instructions.md`, `docs/cicd.instructions.md` fo additional conventions and reference material.
 
 ## Build Commands
 
@@ -53,7 +53,7 @@ wled00/              # Main firmware source (C++)
   data/              # Web UI source (HTML/JS/CSS) — tabs for indentation
   html_*.h, js_*.h   # Auto-generated (NEVER edit or commit)
   src/               # Sub-modules: fonts, bundled dependencies (ArduinoJSON)
-usermods/            # Community usermods (each has library.json + .cpp/.h)
+usermods/            # Community addons (.h files, included via usermods_list.cpp)
 platformio.ini       # Build configuration and environments
 pio-scripts/         # PlatformIO build scripts (Python)
 tools/               # Node.js build tools (cdata.js) and tests
