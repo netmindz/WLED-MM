@@ -174,7 +174,7 @@ class MyUsermod : public Usermod {
 #endif
 ```
 
-- Add usermod IDs to `wled00/const.h`, integrate new usermods via `wled00/usermod_list.cpp`
+- Add usermod IDs to `wled00/const.h`, integrate new usermods via `wled00/usermods_list.cpp`
 - Base new usermods on `usermods/EXAMPLE_v2/` (never edit the example directly)
 - Store repeated strings as `static const char[] PROGMEM`
 
