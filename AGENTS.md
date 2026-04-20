@@ -140,28 +140,40 @@ docs/                # Coding convention docs
 
 ## Usermod Pattern
 
-Usermods live in `usermods/<name>/` with a `.cpp`, optional `.h`, `library.json`, and `readme.md`.
+Usermods live in `usermods/<name>/` with a `.h` and `readme.md`.
 
 ```cpp
+#pragma once
+#include "wled.h"
+
 class MyUsermod : public Usermod {
   private:
-    bool enabled = false;
-    static const char _name[];
+    #if !defined(_MoonModules_WLED_)
+      // WLEDMM: don't overload global attributes
+      bool enabled = false;
+      static const char _name[];
+    #endif
   public:
+    #if defined(_MoonModules_WLED_)
+      MyUsermod(const char *name, bool enabled):Usermod(name, enabled) {} // WLEDMM: passthrough of constructor - Usermod is an abstract class
+    #endif
+
     void setup() override { /* ... */ }
     void loop() override { /* ... */ }
     void addToConfig(JsonObject& root) override { /* ... */ }
     bool readFromConfig(JsonObject& root) override { /* ... */ }
     uint16_t getId() override { return USERMOD_ID_MYMOD; }
 };
-const char MyUsermod::_name[] PROGMEM = "MyUsermod";
-static MyUsermod myUsermod;
-REGISTER_USERMOD(myUsermod);
+#if !defined(_MoonModules_WLED_)
+  const char MyUsermod::_name[] PROGMEM = "MyUsermod"; // WLEDMM: don't double initialize _name[] and _enabled[] 
+  // WLEDMM: for compatibility with upstream WLED
+  static MyUsermod myUsermod;
+  REGISTER_USERMOD(myUsermod);
+#endif
 ```
 
-- Add usermod IDs to `wled00/const.h`
-- Activate via `custom_usermods` in platformio build config
-- Base new usermods on `usermods/EXAMPLE/` (never edit the example directly)
+- Add usermod IDs to `wled00/const.h`, integrate new usermods via `wled00/usermod_list.cpp`
+- Base new usermods on `usermods/EXAMPLE_v2/` (never edit the example directly)
 - Store repeated strings as `static const char[] PROGMEM`
 
 ## CI/CD
@@ -177,6 +189,7 @@ No automated linting is configured. Match existing code style in files you edit.
 
 - Repository language is English
 - Never edit or commit auto-generated `wled00/html_*.h` / `wled00/js_*.h`
+- When updating an existing PR, retain the original description. Only modify it to ensure technical accuracy. Add change logs after the existing description.
 - No force-push on open PRs
 - Changes to `platformio.ini` require maintainer approval
 - Remove dead/unused code — justify or delete it
