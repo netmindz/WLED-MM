@@ -1,6 +1,6 @@
-# AGENTS.md — WLED Coding Agent Reference
+# AGENTS.md — WLED-MM Coding Agent Reference
 
-WLED is C++ firmware for ESP32/ESP8266 microcontrollers controlling addressable LEDs,
+WLED-MM is C++ firmware for ESP32/ESP8266 microcontrollers controlling addressable LEDs,
 with a web UI (HTML/JS/CSS). Built with PlatformIO (Arduino framework) and Node.js tooling.
 
 Refer to `.github/copilot-instructions.md`, `.github/agent-build.instructions.md`,
@@ -14,8 +14,9 @@ Refer to `.github/copilot-instructions.md`, `.github/agent-build.instructions.md
 | `npm run build` | Build web UI into `wled00/html_*.h` / `wled00/js_*.h` | 30s |
 | `npm test` | Run test suite (Node.js built-in `node --test`) | 2 min |
 | `npm run dev` | Watch mode — auto-rebuilds web UI on changes | continuous |
-| `pio run -e esp32dev` | Build firmware (ESP32, most common target) | 30 min |
-| `pio run -e nodemcuv2` | Build firmware (ESP8266) | 30 min |
+| `pio run -e esp32_4MB_V4_M` | Build firmware (ESP32, most common target) | 30 min |
+| `pio run -e esp32dev_compat` | Build firmware (ESP32 legacy target) | 30 min |
+| `pio run -e esp8266_4MB_S` | Build firmware (ESP8266, deprecated) | 30 min |
 
 **Always run `npm ci && npm run build` before `pio run`.** The web UI build generates
 required C headers for firmware compilation.
@@ -31,11 +32,11 @@ node --test tools/cdata-test.js  # run just that file directly
 ```
 
 There are no C++ unit tests. Firmware is validated by successful compilation across
-target environments. Always build after code changes: `pio run -e esp32dev`.
+target environments. Always build after code changes: `pio run -e esp32_4MB_V4_M`.
 
 ### Common Firmware Environments
 
-`esp32dev`, `nodemcuv2`, `esp8266_2m`, `esp32c3dev`, `esp32s3dev_8MB_opi`, `lolin_s2_mini`
+`esp32_4MB_V4_M`, `esp32_16MB_V4_S_HUB75`, `esp32S3_8MB_PSRAM_M_qspi`, `esp32S3_16MB_PSRAM_M_HUB75`, `esp32_16MB_V4_M_eth` (ethernet support), `esp32_16MB_V4_M_debug` (debug), `esp8266_4MB_S` (deprecated), `esp32dev_compat` (V3 legacy framework)
 
 ### Recovery / Troubleshooting
 
@@ -83,6 +84,7 @@ docs/                # Coding convention docs
 - Include `"wled.h"` as the primary project header
 - Project headers first, then platform/Arduino, then third-party
 - Platform-conditional includes wrapped in `#ifdef ARDUINO_ARCH_ESP32` / `#ifdef ESP8266`
+- WLED-MM fork detection: `#ifdef _MoonModules_WLED_` (defined in `wled.h`)
 
 ### Types and Const
 - Prefer `const &` for read-only function parameters
