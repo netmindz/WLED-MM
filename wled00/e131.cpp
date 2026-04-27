@@ -15,6 +15,17 @@ void handleDDPPacket(e131_packet_t* p) {
   static bool ddpSeenPush = false;  // have we seen a push yet?
   [[maybe_unused]] int lastPushSeq = e131LastSequenceNumber[0];
 
+  // WLEDMM: reject query/response protocol packets (not implemented)
+  if ((p->flags & DDP_FLAGS_QUERY) || (p->flags & DDP_FLAGS_REPLY)) {
+    USER_PRINTF("handleDDPPacket(): unsupported query/response flag in header 0x%02x\n", p->flags);
+    return;
+  }
+  // WLEDMM: reject "display form local storage" requests (but accept "push")
+  if ((p->flags & DDP_FLAGS_STORAGE) && ((p->flags & DDP_FLAGS_PUSH) == 0)) {
+    USER_PRINTF("handleDDPPacket(): unsupported 'Display from local storage' flag in header 0x%02x\n", p->flags);
+    return;
+  }
+
   // reject unsupported color data types (only RGB and RGBW are supported)
   uint8_t maskedType = p->dataType & 0x3F; // mask out custom and reserved flags, only type bits are relevant
   uint8_t maskedColorType = p->dataType & DDP_MASK_TYPE; // WLEDMM mask out everything except for color type
