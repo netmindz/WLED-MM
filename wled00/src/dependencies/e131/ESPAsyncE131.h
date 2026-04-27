@@ -50,7 +50,8 @@ typedef struct ip_addr ip4_addr_t;
 #define ARTNET_DEFAULT_PORT 6454
 #define DDP_DEFAULT_PORT    4048
 #define DDP_HEADER_LEN 10
-#define DDP_SYNCPACKET_LEN 10
+#define DDP_SYNCPACKET_LEN 10     // sync = push with no data (supported)
+#define DDP_DISCOVERPACKET_LEN 10 // auto-discovery packet (unsupported)
 
 #define DDP_FLAGS_VER     0xc0    // version mask
 #define DDP_FLAGS_VER1    0x40    // version=1
@@ -81,6 +82,7 @@ typedef struct ip_addr ip4_addr_t;
 #define DDP_ID_CONTROL  246  // JSON control (not implemented)
 #define DDP_ID_CONFIG   250  // JSON config (not implemented)
 #define DDP_ID_STATUS   251  // JSON status (not implemented)
+#define DDP_ID_DMXTRANSIT 254 // DMX Legacy Mode - treated like "display"
 #define DDP_ID_ALL      255  // all devices
 
 #define ARTNET_OPCODE_OPDMX 0x5000
