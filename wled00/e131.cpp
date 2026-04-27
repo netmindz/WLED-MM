@@ -17,10 +17,11 @@ void handleDDPPacket(e131_packet_t* p) {
 
   // reject unsupported color data types (only RGB and RGBW are supported)
   uint8_t maskedType = p->dataType & 0x3F; // mask out custom and reserved flags, only type bits are relevant
-  // WLEDMM allow legacy "undefined" datatype, and legacy (but wrong) datatype=0x01
-  if ( maskedType != 0 && maskedType != 0x01 &&
+  uint8_t maskedColorType = p->dataType & DDP_MASK_TYPE; // WLEDMM mask out everything except for color type
+  if ( maskedType != DDP_TYPE_UNDEF && maskedType != DDP_TYPE_LEGACY &&       // WLEDMM allow legacy "undefined" datatype, and legacy (but wrong) datatype=0x01
+       maskedColorType != DDP_TYPE_RGB && maskedColorType != DDP_TYPE_RGBW && // WLEDMM allow common misinterpretations of the DDP specs
        maskedType != DDP_TYPE_RGB24 && maskedType != DDP_TYPE_RGBW32) {
-    DEBUG_PRINTF("handleDDPPacket(); unsupported datatype 0x%02x\n", p->dataType);
+    USER_PRINTF("handleDDPPacket(); unsupported datatype 0x%02x\n", p->dataType);
     return;
   }
 

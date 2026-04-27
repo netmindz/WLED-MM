@@ -62,12 +62,26 @@ typedef struct ip_addr ip4_addr_t;
 
 #define DDP_CHANNELS_PER_PACKET 1440 // 480 leds
 
+#define DDP_MASK_TYPE  0x38 // 00 111 000
+#define DDP_MASK_DEPTH 0x07 // 00 000 111
+// types with "bitdepth" masked out
+#define DDP_TYPE_RGB    0x08 // 00 001 000 (RGB,  3 channels)
+#define DDP_TYPE_RGBW   0x18 // 00 011 000 (RGBW, 4 channels)
+
 #define DDP_TYPE_RGB24  0x0B // 00 001 011 (RGB , 8 bits per channel, 3 channels)
 #define DDP_TYPE_RGBW32 0x1B // 00 011 011 (RGBW, 8 bits per channel, 4 channels)
+#define DDP_TYPE_LEGACY 0x01 // 00 000 001 legacy RGB 8bit definition
+#define DDP_TYPE_UNDEF  0x00 // 00 000 000 undefined type
+// some commonly used but totally wrong intepretations of the DDP specs:
+#define DDP_TYPE_RGB24_LEGACY  0x0D // 00 001 101 (RGB , 24 bits)
+#define DDP_TYPE_RGBW32_LEGACY 0x1E // 00 011 110 (RGBW, 32 bits)
 
-#define DDP_ID_DISPLAY  1
-#define DDP_ID_CONFIG   250
-#define DDP_ID_STATUS   251
+// DDP Source or Destination ID (header byte 3)
+#define DDP_ID_DISPLAY  1    // default output device
+#define DDP_ID_CONTROL  246  // JSON control (not implemented)
+#define DDP_ID_CONFIG   250  // JSON config (not implemented)
+#define DDP_ID_STATUS   251  // JSON status (not implemented)
+#define DDP_ID_ALL      255  // all devices
 
 #define ARTNET_OPCODE_OPDMX 0x5000
 #define ARTNET_OPCODE_OPPOLL 0x2000
