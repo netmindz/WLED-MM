@@ -25,8 +25,8 @@ void handleDDPPacket(e131_packet_t* p) {
     return;
   }
 
-  // reject status and config packets (not implemented)
-  if (p->destination == DDP_ID_STATUS || p->destination == DDP_ID_CONFIG) {
+  // reject control, status and config packets (not implemented)
+  if (p->destination == DDP_ID_CONTROL || p->destination == DDP_ID_STATUS || p->destination == DDP_ID_CONFIG) {
     DEBUG_PRINTF("handleDDPPacket(): unsupported destination 0x%02x\n", p->destination);
     return;
   }
