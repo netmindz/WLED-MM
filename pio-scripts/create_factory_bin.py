@@ -194,7 +194,7 @@ def create_factory_bin(source, target, env):
         "--flash_mode", flash_mode,
         "--flash_freq", flash_freq,
         "--flash_size", flash_size,
-        "0x0000", bootloader_bin,
+         "0x1000", bootloader_bin,
         "0x8000", partitions_bin,
         "0xe000", os.path.join(framework_dir, "tools", "partitions", "boot_app0.bin"),
         "0x10000", firmware_bin,
