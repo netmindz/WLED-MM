@@ -139,13 +139,14 @@ ${encryptionTypeField}
 Network password:<br><input type="password" name="PW${i}" maxlength="64" value="${pass}"><br>
 BSSID (optional):<br><input type="text" id="BS${i}" name="BS${i}" maxlength="12" value="${bssid}"><br>
 Static IP (leave at 0.0.0.0 for DHCP)${i==0?"<br>Also used by Ethernet":""}:<br>
-<input name="IP${i}0" type="number" class="s" min="0" max="255" value="${ip&0xFF}" required>.<input name="IP${i}1" type="number" class="s" min="0" max="255" value="${(ip>>8)&0xFF}" required>.<input name="IP${i}2" type="number" class="s" min="0" max="255" value="${(ip>>16)&0xFF}" required>.<input name="IP${i}3" type="number" class="s" min="0" max="255" value="${(ip>>24)&0xFF}" required><br>
+<input name="IP${i}0" type="number" class="s" min="0" max="255" value="${ip&0xFF}" oninput="uDns()" required>.<input name="IP${i}1" type="number" class="s" min="0" max="255" value="${(ip>>8)&0xFF}" required>.<input name="IP${i}2" type="number" class="s" min="0" max="255" value="${(ip>>16)&0xFF}" required>.<input name="IP${i}3" type="number" class="s" min="0" max="255" value="${(ip>>24)&0xFF}" required><br>
 Static gateway:<br>
 <input name="GW${i}0" type="number" class="s" min="0" max="255" value="${gw&0xFF}" required>.<input name="GW${i}1" type="number" class="s" min="0" max="255" value="${(gw>>8)&0xFF}" required>.<input name="GW${i}2" type="number" class="s" min="0" max="255" value="${(gw>>16)&0xFF}" required>.<input name="GW${i}3" type="number" class="s" min="0" max="255" value="${(gw>>24)&0xFF}" required><br>
 Static subnet mask:<br>
 <input name="SN${i}0" type="number" class="s" min="0" max="255" value="${sn&0xFF}" required>.<input name="SN${i}1" type="number" class="s" min="0" max="255" value="${(sn>>8)&0xFF}" required>.<input name="SN${i}2" type="number" class="s" min="0" max="255" value="${(sn>>16)&0xFF}" required>.<input name="SN${i}3" type="number" class="s" min="0" max="255" value="${(sn>>24)&0xFF}" required></div>`;
 			gId("wifi_entries").insertAdjacentHTML("beforeend", b);
 			btnWiFi(i+1);
+			uDns();
 		}
 		function remWiFi() {
 			const entries = gId("wifi_entries").children;
@@ -206,6 +207,15 @@ Static subnet mask:<br>
 				gId("IDS"+i).style.display = "";
 			}
 		}
+		function uDns() {
+			var hasStatic = false;
+			var entries = gId("wifi_entries").children;
+			for (var i = 0; i < entries.length; i++) {
+				var ip0 = d.querySelector("[name='IP"+i+"0']");
+				if (ip0 && parseInt(ip0.value||0) !== 0) { hasStatic = true; break; }
+			}
+			gId("dnsrow").style.display = hasStatic ? "" : "none";
+		}
 
 	</script>
 </head>
@@ -250,7 +260,10 @@ Static subnet mask:<br>
 	<div class="sec">
 		<h3>DNS & mDNS</h3>
 		DNS server address:<br>
+		<div id="dnsrow" style="display:none">
 		<input name="D0" type="number" class="s" min="0" max="255" required>.<input name="D1" type="number" class="s" min="0" max="255" required>.<input name="D2" type="number" class="s" min="0" max="255" required>.<input name="D3" type="number" class="s" min="0" max="255" required><br>
+		<i>Only used when a static IP address is set above.</i><br>
+		</div>
 		<br>
 		mDNS address (leave empty for no mDNS):<br>
 		http:// <input type="text" name="CM" maxlength="32"> .local<br>
