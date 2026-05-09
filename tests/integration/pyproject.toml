@@ -1,0 +1,15 @@
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.backends.legacy:build"
+
+[tool.pytest.ini_options]
+testpaths = ["tests/integration"]
+addopts = "-v --tb=short"
+markers = [
+    "destructive: tests that reboot or flash the device (skipped by default)",
+    "pin_required: tests that require a settings PIN",
+    "slow: tests that take more than a few seconds",
+]
+
+[tool.schemathesis]
+base-url = "http://4.3.2.1"  # override with --base-url or WLED_HOST

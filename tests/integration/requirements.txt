@@ -1,0 +1,4 @@
+pytest>=8.0
+httpx>=0.27
+schemathesis>=3.35
+jsonschema>=4.22

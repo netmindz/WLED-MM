@@ -1,0 +1,1953 @@
+openapi: 3.1.0
+info:
+  title: WLED HTTP API
+  description: |
+    OpenAPI specification for WLED, an open-source LED controller firmware.
+    Reverse engineered from source code (`wled00/wled_server.cpp`, `wled00/json.cpp`,
+    `wled00/set.cpp`, `wled00/ws.cpp`, `wled00/xml.cpp`) and validated against the
+    official WLED documentation.
+
+    ## Notes
+    - All origins are allowed via CORS (`Access-Control-Allow-Origin: *`)
+    - Settings PIN is required for certain write operations
+    - OTA endpoints require same-subnet access and OTA password
+    - WebSocket API (`/ws`) is described separately in comments; it is not representable in OpenAPI 3.1 REST schema
+  version: "0.15.0"
+  license:
+    name: MIT
+    url: https://github.com/Aircoookie/WLED/blob/main/LICENSE
+
+servers:
+  - url: http://{host}
+    variables:
+      host:
+        default: "4.3.2.1"
+        description: IP address or hostname of the WLED device
+
+tags:
+  - name: json-api
+    description: Primary JSON REST API
+  - name: legacy-api
+    description: Legacy HTTP API (returns XML)
+  - name: system
+    description: System utility endpoints
+  - name: ota
+    description: Over-the-air firmware update
+  - name: filesystem
+    description: LittleFS file management (PIN required)
+  - name: ui
+    description: Web UI HTML pages
+
+paths:
+
+  # ─── JSON API ──────────────────────────────────────────────────────────────
+
+  /json:
+    get:
+      tags: [json-api]
+      summary: Get full state
+      description: Returns state, info, effects, and palettes as a single object.
+      operationId: getJson
+      responses:
+        "200":
+          description: Full WLED state
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FullState"
+    post:
+      tags: [json-api]
+      summary: Apply state
+      description: |
+        Applies a partial or full state update. Only provided fields are changed.
+        Returns `{"success":true}` unless `v:true` is set, in which case the full
+        state is returned.
+      operationId: postJson
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/StateRequest"
+      responses:
+        "200":
+          description: Success or verbose state
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: "#/components/schemas/SuccessResponse"
+                  - $ref: "#/components/schemas/State"
+        "400":
+          description: JSON parse error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /json/state:
+    get:
+      tags: [json-api]
+      summary: Get state
+      operationId: getState
+      responses:
+        "200":
+          description: Current light state
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/State"
+    post:
+      tags: [json-api]
+      summary: Apply state (alias)
+      description: Identical to POST /json.
+      operationId: postState
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/StateRequest"
+      responses:
+        "200":
+          description: Success or verbose state
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: "#/components/schemas/SuccessResponse"
+                  - $ref: "#/components/schemas/State"
+
+  /json/info:
+    get:
+      tags: [json-api]
+      summary: Get device info
+      description: Returns read-only device information. No values may be modified via this endpoint.
+      operationId: getInfo
+      responses:
+        "200":
+          description: Device info
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Info"
+
+  /json/si:
+    get:
+      tags: [json-api]
+      summary: Get state + info
+      description: Returns both state and info objects combined.
+      operationId: getStateInfo
+      responses:
+        "200":
+          description: State and info
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  state:
+                    $ref: "#/components/schemas/State"
+                  info:
+                    $ref: "#/components/schemas/Info"
+
+  /json/effects:
+    get:
+      tags: [json-api]
+      summary: Get effect names
+      description: |
+        Returns an array of effect name strings. The index of each name corresponds
+        to the effect ID used in segment `fx`. Effects with name `RSVD` or `-` are
+        unsupported on this build and should be hidden in UIs.
+      operationId: getEffects
+      responses:
+        "200":
+          description: Array of effect names
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: string
+                example: ["Solid", "Blink", "Breathe", "Wipe"]
+
+  /json/palettes:
+    get:
+      tags: [json-api]
+      summary: Get palette names
+      description: Returns an array of palette name strings. Index corresponds to palette ID.
+      operationId: getPalettes
+      responses:
+        "200":
+          description: Array of palette names
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: string
+                example: ["Default", "Random Cycle", "Primary Color", "Party"]
+
+  /json/palx:
+    get:
+      tags: [json-api]
+      summary: Get palette colors (paginated)
+      description: Returns color stop data for palettes, paginated. Each page contains up to 8 palettes.
+      operationId: getPaletteColors
+      parameters:
+        - name: page
+          in: query
+          description: Page index (0-based)
+          required: false
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+      responses:
+        "200":
+          description: Palette color data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaletteData"
+
+  /json/fxdata:
+    get:
+      tags: [json-api]
+      summary: Get effect metadata
+      description: |
+        Returns an array of effect metadata strings, one per effect.
+        Format: `<Effect parameters>;<Colors>;<Palette>;<Flags>;<Defaults>`
+        Available since WLED 0.14.
+      operationId: getFxData
+      responses:
+        "200":
+          description: Effect metadata strings
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: string
+                example: ["!,!;;!;1;sx=24,pal=50", "!,!;;!;1"]
+
+  /json/nodes:
+    get:
+      tags: [json-api]
+      summary: Get discovered WLED nodes
+      description: Returns other WLED devices discovered on the local network.
+      operationId: getNodes
+      responses:
+        "200":
+          description: Node list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NodeList"
+
+  /json/networks:
+    get:
+      tags: [json-api]
+      summary: Get WiFi scan results
+      description: Returns nearby WiFi networks discovered by a scan.
+      operationId: getNetworks
+      responses:
+        "200":
+          description: WiFi network list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NetworkList"
+
+  /json/live:
+    get:
+      tags: [json-api]
+      summary: Get live LED colors
+      description: |
+        Returns current raw LED color data. Only available in builds compiled with
+        `WLED_ENABLE_JSONLIVE`.
+      operationId: getLive
+      responses:
+        "200":
+          description: Live LED data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LiveData"
+
+  /json/cfg:
+    get:
+      tags: [json-api]
+      summary: Get full configuration
+      description: Returns complete device configuration (equivalent of cfg.json).
+      operationId: getConfig
+      responses:
+        "200":
+          description: Full configuration object
+          content:
+            application/json:
+              schema:
+                type: object
+                description: Full device configuration. Structure mirrors cfg.json.
+    post:
+      tags: [json-api]
+      summary: Apply configuration
+      description: |
+        Applies a partial or full configuration update. Requires settings PIN.
+        Triggers a save and may reboot.
+      operationId: postConfig
+      security:
+        - pinAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              description: Partial or full configuration object.
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+        "401":
+          description: Incorrect PIN or not local subnet
+
+  /json/pins:
+    get:
+      tags: [json-api]
+      summary: Get GPIO pin info
+      description: Returns information about all GPIO pins and their current allocation.
+      operationId: getPins
+      responses:
+        "200":
+          description: Pin info
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PinInfo"
+
+  # ─── LEGACY HTTP API ────────────────────────────────────────────────────────
+
+  /win:
+    get:
+      tags: [legacy-api]
+      summary: Legacy HTTP API
+      description: |
+        HTTP query-string API for controlling WLED. Returns an XML response.
+        All parameters are passed as query string key=value pairs.
+        Also accessible at any URL matching `*win*` that is not otherwise handled.
+      operationId: winApi
+      parameters:
+        - name: T
+          in: query
+          description: "Master power toggle. 0=off, 1=on, other=toggle"
+          schema:
+            type: integer
+            enum: [0, 1, 2]
+        - name: A
+          in: query
+          description: Master brightness (0–255)
+          schema:
+            type: integer
+            minimum: 0
+            maximum: 255
+        - name: R
+          in: query
+          description: Primary color Red (0–255)
+          schema:
+            type: integer
+            minimum: 0
+            maximum: 255
+        - name: G
+          in: query
+          description: Primary color Green (0–255)
+          schema:
+            type: integer
+            minimum: 0
+            maximum: 255
+        - name: B
+          in: query
+          description: Primary color Blue (0–255)
+          schema:
+            type: integer
+            minimum: 0
+            maximum: 255
+        - name: W
+          in: query
+          description: Primary color White (0–255)
+          schema:
+            type: integer
+            minimum: 0
+            maximum: 255
+        - name: R2
+          in: query
+          description: Secondary color Red (0–255)
+          schema:
+            type: integer
+            minimum: 0
+            maximum: 255
+        - name: G2
+          in: query
+          description: Secondary color Green (0–255)
+          schema:
+            type: integer
+            minimum: 0
+            maximum: 255
+        - name: B2
+          in: query
+          description: Secondary color Blue (0–255)
+          schema:
+            type: integer
+            minimum: 0
+            maximum: 255
+        - name: W2
+          in: query
+          description: Secondary color White (0–255)
+          schema:
+            type: integer
+            minimum: 0
+            maximum: 255
+        - name: HU
+          in: query
+          description: Set hue for primary color (0–65535)
+          schema:
+            type: integer
+            minimum: 0
+            maximum: 65535
+        - name: SA
+          in: query
+          description: Set saturation (used with HU, 0–255)
+          schema:
+            type: integer
+            minimum: 0
+            maximum: 255
+        - name: K
+          in: query
+          description: Primary color temperature in Kelvin
+          schema:
+            type: integer
+        - name: K2
+          in: query
+          description: Secondary color temperature in Kelvin
+          schema:
+            type: integer
+        - name: CL
+          in: query
+          description: Primary color as hex string (e.g. FF0000) or decimal
+          schema:
+            type: string
+        - name: C2
+          in: query
+          description: Secondary color as hex string or decimal
+          schema:
+            type: string
+        - name: C3
+          in: query
+          description: Tertiary color as hex string or decimal
+          schema:
+            type: string
+        - name: SR
+          in: query
+          description: "Random color. 0=primary, 1=secondary"
+          schema:
+            type: integer
+            enum: [0, 1]
+        - name: SC
+          in: query
+          description: Swap primary/secondary colors (presence triggers swap)
+          schema:
+            type: string
+        - name: FX
+          in: query
+          description: Effect index
+          schema:
+            type: integer
+            minimum: 0
+        - name: FXD
+          in: query
+          description: Apply effect defaults when changing FX (presence triggers)
+          schema:
+            type: string
+        - name: SX
+          in: query
+          description: Effect speed (0–255)
+          schema:
+            type: integer
+            minimum: 0
+            maximum: 255
+        - name: IX
+          in: query
+          description: Effect intensity (0–255)
+          schema:
+            type: integer
+            minimum: 0
+            maximum: 255
+        - name: FP
+          in: query
+          description: Palette index
+          schema:
+            type: integer
+            minimum: 0
+        - name: X1
+          in: query
+          description: Custom slider 1 (0–255)
+          schema:
+            type: integer
+            minimum: 0
+            maximum: 255
+        - name: X2
+          in: query
+          description: Custom slider 2 (0–255)
+          schema:
+            type: integer
+            minimum: 0
+            maximum: 255
+        - name: X3
+          in: query
+          description: Custom slider 3 (0–255)
+          schema:
+            type: integer
+            minimum: 0
+            maximum: 255
+        - name: M1
+          in: query
+          description: Custom checkbox 1 (0/1)
+          schema:
+            type: integer
+            enum: [0, 1]
+        - name: M2
+          in: query
+          description: Custom checkbox 2 (0/1)
+          schema:
+            type: integer
+            enum: [0, 1]
+        - name: M3
+          in: query
+          description: Custom checkbox 3 (0/1)
+          schema:
+            type: integer
+            enum: [0, 1]
+        - name: SS
+          in: query
+          description: Select segment by ID
+          schema:
+            type: integer
+            minimum: 0
+        - name: SV
+          in: query
+          description: "Set segment selected state. 2=deselect others"
+          schema:
+            type: integer
+            enum: [0, 1, 2]
+        - name: SM
+          in: query
+          description: Set main segment ID
+          schema:
+            type: integer
+            minimum: 0
+        - name: S
+          in: query
+          description: Segment start LED index
+          schema:
+            type: integer
+            minimum: 0
+        - name: S2
+          in: query
+          description: Segment stop LED index
+          schema:
+            type: integer
+            minimum: 0
+        - name: GP
+          in: query
+          description: Segment grouping (>=1)
+          schema:
+            type: integer
+            minimum: 1
+        - name: SP
+          in: query
+          description: Segment spacing (>=0)
+          schema:
+            type: integer
+            minimum: 0
+        - name: RV
+          in: query
+          description: Segment reverse (0/1)
+          schema:
+            type: integer
+            enum: [0, 1]
+        - name: MI
+          in: query
+          description: Segment mirror (0/1)
+          schema:
+            type: integer
+            enum: [0, 1]
+        - name: SB
+          in: query
+          description: Segment brightness (0–255)
+          schema:
+            type: integer
+            minimum: 0
+            maximum: 255
+        - name: SW
+          in: query
+          description: "Segment power. 0=off, 1=on, other=toggle"
+          schema:
+            type: integer
+        - name: NL
+          in: query
+          description: "Nightlight. 0=off, otherwise duration in minutes"
+          schema:
+            type: integer
+            minimum: 0
+        - name: ND
+          in: query
+          description: Nightlight default duration (presence triggers)
+          schema:
+            type: string
+        - name: NT
+          in: query
+          description: Nightlight target brightness (0–255)
+          schema:
+            type: integer
+            minimum: 0
+            maximum: 255
+        - name: NF
+          in: query
+          description: "Nightlight mode. 0=instant, 1=fade, 2=color fade, 3=sunrise"
+          schema:
+            type: integer
+            minimum: 0
+            maximum: 3
+        - name: PS
+          in: query
+          description: Save current state to preset ID (1–250)
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 250
+        - name: PL
+          in: query
+          description: Apply preset or cycle between P1 and P2
+          schema:
+            type: integer
+        - name: P1
+          in: query
+          description: Preset cycle minimum
+          schema:
+            type: integer
+        - name: P2
+          in: query
+          description: Preset cycle maximum
+          schema:
+            type: integer
+        - name: NP
+          in: query
+          description: Advance to next playlist item (presence triggers)
+          schema:
+            type: string
+        - name: TT
+          in: query
+          description: Transition time in milliseconds
+          schema:
+            type: integer
+            minimum: 0
+        - name: ST
+          in: query
+          description: Set time (Unix timestamp)
+          schema:
+            type: integer
+        - name: CT
+          in: query
+          description: Countdown target (Unix timestamp)
+          schema:
+            type: integer
+        - name: NM
+          in: query
+          description: "Clock mode. 0=normal, 1=countdown"
+          schema:
+            type: integer
+            enum: [0, 1]
+        - name: OL
+          in: query
+          description: Overlay type
+          schema:
+            type: integer
+        - name: LO
+          in: query
+          description: "Live override mode. 0=off, 1=override until live ends, 2=override until reboot"
+          schema:
+            type: integer
+            minimum: 0
+            maximum: 2
+        - name: SN
+          in: query
+          description: Send UDP notifications (0/1)
+          schema:
+            type: integer
+            enum: [0, 1]
+        - name: RN
+          in: query
+          description: Receive UDP notifications (0/1)
+          schema:
+            type: integer
+            enum: [0, 1]
+        - name: RD
+          in: query
+          description: Receive live UDP/Hyperion (0/1)
+          schema:
+            type: integer
+            enum: [0, 1]
+        - name: M
+          in: query
+          description: Apply macro (deprecated; applies preset ID+16)
+          schema:
+            type: integer
+        - name: RB
+          in: query
+          description: Reboot device (presence triggers)
+          schema:
+            type: string
+        - name: NN
+          in: query
+          description: No UDP notification for this request (presence triggers)
+          schema:
+            type: string
+        - name: U0
+          in: query
+          description: User variable 0
+          schema:
+            type: integer
+        - name: U1
+          in: query
+          description: User variable 1
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: XML state response
+          content:
+            text/xml:
+              schema:
+                type: string
+                example: |
+                  <?xml version="1.0" ?><vs><ac>128</ac><cl>255</cl><cl>160</cl>
+                  <cl>0</cl><cs>0</cs><cs>0</cs><cs>0</cs><ns>1</ns><nr>0</nr>
+                  <nl>0</nl><nf>1</nf><nd>60</nd><nt>0</nt><fx>0</fx><sx>128</sx>
+                  <ix>128</ix><fp>0</fp><wv>-1</wv><ws>0</ws><ps>-1</ps>
+                  <cy>0</cy><ds>WLED</ds><ss>0</ss></vs>
+
+  # ─── SYSTEM ENDPOINTS ──────────────────────────────────────────────────────
+
+  /version:
+    get:
+      tags: [system]
+      summary: Get firmware version
+      description: Returns the firmware build ID as plain text (format YYMMDDB).
+      operationId: getVersion
+      responses:
+        "200":
+          description: Build ID
+          content:
+            text/plain:
+              schema:
+                type: string
+                example: "2308230"
+
+  /uptime:
+    get:
+      tags: [system]
+      summary: Get uptime
+      description: Returns milliseconds since last boot as plain text.
+      operationId: getUptime
+      responses:
+        "200":
+          description: Uptime in ms
+          content:
+            text/plain:
+              schema:
+                type: string
+                example: "123456"
+
+  /freeheap:
+    get:
+      tags: [system]
+      summary: Get free heap
+      description: Returns free heap memory in bytes as plain text.
+      operationId: getFreeHeap
+      responses:
+        "200":
+          description: Free heap bytes
+          content:
+            text/plain:
+              schema:
+                type: string
+                example: "120000"
+
+  /reset:
+    get:
+      tags: [system]
+      summary: Reboot device
+      description: Schedules a device reboot. Returns an HTML confirmation page.
+      operationId: reset
+      responses:
+        "200":
+          description: Reboot scheduled
+          content:
+            text/html:
+              schema:
+                type: string
+
+  # ─── OTA UPDATE ────────────────────────────────────────────────────────────
+
+  /update:
+    get:
+      tags: [ota]
+      summary: OTA update page
+      description: Serves the OTA firmware update page. Returns 401 if OTA is locked.
+      operationId: getUpdatePage
+      responses:
+        "200":
+          description: OTA update HTML page
+          content:
+            text/html:
+              schema:
+                type: string
+        "401":
+          description: OTA locked
+    post:
+      tags: [ota]
+      summary: Upload firmware
+      description: |
+        Uploads a firmware binary for OTA update. Requires OTA password and
+        must originate from a local subnet. Returns 200 on success, 500 on failure.
+      operationId: uploadFirmware
+      security:
+        - otaAuth: []
+      requestBody:
+        required: true
+        content:
+          application/octet-stream:
+            schema:
+              type: string
+              format: binary
+      responses:
+        "200":
+          description: Update successful
+        "401":
+          description: Unauthorized (wrong password or non-local subnet)
+        "500":
+          description: Update failed
+
+  /updatebootloader:
+    post:
+      tags: [ota]
+      summary: Upload bootloader (ESP32 only)
+      description: |
+        Uploads a bootloader binary. ESP32 only. Same authentication requirements as /update.
+      operationId: uploadBootloader
+      security:
+        - otaAuth: []
+      requestBody:
+        required: true
+        content:
+          application/octet-stream:
+            schema:
+              type: string
+              format: binary
+      responses:
+        "200":
+          description: Bootloader update successful
+        "401":
+          description: Unauthorized
+        "500":
+          description: Update failed
+
+  # ─── FILESYSTEM ────────────────────────────────────────────────────────────
+
+  /upload:
+    post:
+      tags: [filesystem]
+      summary: Upload file to LittleFS
+      description: |
+        Uploads a file to the device filesystem via multipart form. PIN required.
+        If `cfg.json` is uploaded, a reboot is triggered.
+        Note: `wsec.json` cannot be accessed via this endpoint.
+      operationId: uploadFile
+      security:
+        - pinAuth: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                data:
+                  type: string
+                  format: binary
+      responses:
+        "200":
+          description: File uploaded
+        "401":
+          description: PIN required
+
+  /edit:
+    get:
+      tags: [filesystem]
+      summary: Filesystem editor / file operations
+      description: |
+        Performs filesystem operations based on query parameters. PIN required.
+        Access to `wsec.json` is denied (403).
+      operationId: editFile
+      security:
+        - pinAuth: []
+      parameters:
+        - name: func
+          in: query
+          required: true
+          description: Operation to perform
+          schema:
+            type: string
+            enum: [list, edit, download, delete]
+        - name: path
+          in: query
+          description: File path (required for edit, download, delete)
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Operation result
+        "401":
+          description: PIN required
+        "403":
+          description: Access denied (wsec.json)
+
+  # ─── UI PAGES (brief — not normally consumed by API clients) ───────────────
+
+  /:
+    get:
+      tags: [ui]
+      summary: Main UI
+      description: Serves the WLED main web interface (index.htm) or welcome page.
+      operationId: getRoot
+      responses:
+        "200":
+          description: HTML page
+          content:
+            text/html:
+              schema:
+                type: string
+
+  /liveview:
+    get:
+      tags: [ui]
+      summary: Live LED view
+      operationId: getLiveView
+      responses:
+        "200":
+          description: HTML page
+          content:
+            text/html:
+              schema:
+                type: string
+
+  /settings:
+    get:
+      tags: [ui]
+      summary: Settings pages
+      description: Serves settings HTML sub-pages based on URL suffix.
+      operationId: getSettings
+      responses:
+        "200":
+          description: HTML page
+          content:
+            text/html:
+              schema:
+                type: string
+    post:
+      tags: [ui]
+      summary: Save settings
+      description: |
+        Saves settings submitted from HTML forms. Most sub-pages require a valid
+        settings PIN. Must originate from a local subnet.
+      operationId: postSettings
+      security:
+        - pinAuth: []
+      requestBody:
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              additionalProperties:
+                type: string
+      responses:
+        "200":
+          description: Settings saved
+        "401":
+          description: Unauthorized
+
+  /teapot:
+    get:
+      tags: [ui]
+      summary: Easter egg
+      operationId: getTeapot
+      responses:
+        "418":
+          description: I'm a teapot
+
+# ─── COMPONENTS ──────────────────────────────────────────────────────────────
+
+components:
+  securitySchemes:
+    pinAuth:
+      type: apiKey
+      in: query
+      name: PIN
+      description: 4-digit settings PIN. Can also be sent as `{"pin":"XXXX"}` in JSON body.
+    otaAuth:
+      type: http
+      scheme: basic
+      description: OTA password configured in security settings.
+
+  schemas:
+
+    FullState:
+      type: object
+      properties:
+        state:
+          $ref: "#/components/schemas/State"
+        info:
+          $ref: "#/components/schemas/Info"
+        effects:
+          type: array
+          items:
+            type: string
+          description: Array of effect names indexed by effect ID
+        palettes:
+          type: array
+          items:
+            type: string
+          description: Array of palette names indexed by palette ID
+
+    State:
+      type: object
+      description: Current light state. All fields are optional on write; only provided fields are applied.
+      properties:
+        on:
+          type: boolean
+          description: Power on/off. Send `"t"` to toggle.
+        bri:
+          type: integer
+          minimum: 0
+          maximum: 255
+          description: Master brightness. If off, holds last brightness before off.
+        transition:
+          type: integer
+          minimum: 0
+          maximum: 65535
+          description: Crossfade duration in 100ms units (e.g. 4 = 400ms).
+        ps:
+          description: "Current preset ID, or -1 if none. Write: preset ID, `\"r\"` for random, range string like `\"1~6~\"`."
+          oneOf:
+            - type: integer
+              minimum: -1
+              maximum: 250
+            - type: string
+        pl:
+          type: integer
+          minimum: -1
+          maximum: 250
+          description: Current playlist ID (-1 = none). Read-only.
+        ledmap:
+          type: integer
+          minimum: 0
+          maximum: 9
+          description: Active LED map index. Write to load a new map. Not in state response.
+        lor:
+          type: integer
+          minimum: 0
+          maximum: 2
+          description: "Live data override. 0=off, 1=until live ends, 2=until reboot."
+        mainseg:
+          type: integer
+          minimum: 0
+          description: Main segment ID.
+        error:
+          type: integer
+          description: Last error flag. Read-only.
+        bs:
+          type: integer
+          minimum: 0
+          maximum: 31
+          description: Blending style index.
+        nl:
+          $ref: "#/components/schemas/Nightlight"
+        udpn:
+          $ref: "#/components/schemas/UdpSync"
+        seg:
+          description: Segment(s). May be a single object or array of objects.
+          oneOf:
+            - $ref: "#/components/schemas/Segment"
+            - type: array
+              items:
+                $ref: "#/components/schemas/Segment"
+
+    StateRequest:
+      type: object
+      description: Partial state update body. All fields optional.
+      properties:
+        on:
+          description: "Power. `true`/`false` or `\"t\"` to toggle."
+          oneOf:
+            - type: boolean
+            - type: string
+              enum: ["t"]
+        bri:
+          description: "Brightness 0–255. Also supports `\"w~40\"` increment with wrap."
+          oneOf:
+            - type: integer
+              minimum: 0
+              maximum: 255
+            - type: string
+        transition:
+          type: integer
+          minimum: 0
+          maximum: 65535
+          description: Crossfade duration in 100ms units.
+        tt:
+          type: integer
+          minimum: 0
+          maximum: 65535
+          description: One-time transition override for this request only. Not in state response.
+        tb:
+          type: integer
+          description: Effect timebase offset (unix-ms). Not reported in state.
+        bs:
+          type: integer
+          minimum: 0
+          maximum: 31
+          description: Blending style.
+        ps:
+          description: "Preset: ID, `\"r\"` random, `\"1~5~\"` iterate, `\"4~10r\"` random in range."
+          oneOf:
+            - type: integer
+              minimum: -1
+              maximum: 250
+            - type: string
+        pd:
+          type: integer
+          minimum: 1
+          maximum: 250
+          description: Apply preset directly (also reads remaining body fields).
+        psave:
+          type: integer
+          minimum: 1
+          maximum: 250
+          description: Save current state to this preset slot. Not in state response.
+        pdel:
+          type: integer
+          minimum: 1
+          maximum: 250
+          description: Delete preset by ID. Not in state response.
+        sb:
+          type: boolean
+          description: Save segment bounds with psave.
+        ib:
+          type: boolean
+          description: Save brightness with psave.
+        sc:
+          type: boolean
+          description: Save selected segments with psave.
+        pl:
+          type: integer
+          minimum: -1
+          maximum: 250
+          description: Set playlist ID (-1 = stop).
+        v:
+          type: boolean
+          description: If true, response includes full state object. Not in state response.
+        time:
+          type: integer
+          description: Set device UNIX timestamp. Not in state response.
+        rb:
+          type: boolean
+          description: Reboot device immediately. Not in state response.
+        lor:
+          type: integer
+          minimum: 0
+          maximum: 2
+          description: "Live override. 0=off, 1=until live ends, 2=until reboot."
+        live:
+          type: boolean
+          description: Enter/exit realtime (blanked) mode. Not in state response.
+        mainseg:
+          type: integer
+          minimum: 0
+          description: Set main segment ID.
+        ledmap:
+          type: integer
+          minimum: 0
+          maximum: 9
+          description: Load LED map by index. Not in state response.
+        np:
+          type: boolean
+          description: Advance to next playlist entry. Not in state response.
+        rmcpal:
+          type: integer
+          description: Remove custom palette by index. Not in state response.
+        pin:
+          type: string
+          description: Settings PIN (4-digit string) for PIN-protected operations.
+        win:
+          type: string
+          description: Embedded legacy HTTP API command string (e.g. `"A=128&FX=1"`).
+        nl:
+          $ref: "#/components/schemas/Nightlight"
+        udpn:
+          $ref: "#/components/schemas/UdpSyncRequest"
+        seg:
+          description: Segment(s) to update. Single object or array.
+          oneOf:
+            - $ref: "#/components/schemas/SegmentRequest"
+            - type: array
+              items:
+                $ref: "#/components/schemas/SegmentRequest"
+        playlist:
+          $ref: "#/components/schemas/Playlist"
+
+    Nightlight:
+      type: object
+      properties:
+        on:
+          type: boolean
+          description: Nightlight active.
+        dur:
+          type: integer
+          minimum: 1
+          maximum: 255
+          description: Duration in minutes.
+        mode:
+          type: integer
+          minimum: 0
+          maximum: 3
+          description: "Mode. 0=instant, 1=fade, 2=color fade, 3=sunrise."
+        tbri:
+          type: integer
+          minimum: 0
+          maximum: 255
+          description: Target brightness at end of nightlight.
+        rem:
+          type: integer
+          minimum: -1
+          description: Remaining seconds (-1 if inactive). Read-only.
+
+    UdpSync:
+      type: object
+      properties:
+        send:
+          type: boolean
+          description: Send UDP sync on state change.
+        recv:
+          type: boolean
+          description: Receive UDP sync packets.
+        sgrp:
+          type: integer
+          minimum: 0
+          maximum: 255
+          description: Send groups bitmask (groups 1–8).
+        rgrp:
+          type: integer
+          minimum: 0
+          maximum: 255
+          description: Receive groups bitmask (groups 1–8).
+
+    UdpSyncRequest:
+      allOf:
+        - $ref: "#/components/schemas/UdpSync"
+        - type: object
+          properties:
+            nn:
+              type: boolean
+              description: No-notify flag for this request only. Not in state response.
+
+    Segment:
+      type: object
+      description: A segment of the LED strip. Read response format.
+      properties:
+        id:
+          type: integer
+          minimum: 0
+          description: Segment index.
+        start:
+          type: integer
+          minimum: 0
+          description: First LED index of segment.
+        stop:
+          type: integer
+          minimum: 0
+          description: Last LED index of segment (exclusive).
+        len:
+          type: integer
+          minimum: 0
+          description: Length (stop - start).
+        startY:
+          type: integer
+          minimum: 0
+          description: Start row for 2D matrix.
+        stopY:
+          type: integer
+          minimum: 1
+          description: Stop row for 2D matrix.
+        grp:
+          type: integer
+          minimum: 0
+          maximum: 255
+          description: Grouping (consecutive LEDs per color).
+        spc:
+          type: integer
+          minimum: 0
+          maximum: 255
+          description: Spacing (skipped LEDs between groups).
+        of:
+          type: integer
+          description: Offset (virtual start rotation).
+        on:
+          type: boolean
+          description: Segment power on/off.
+        frz:
+          type: boolean
+          description: Freeze current effect frame.
+        bri:
+          type: integer
+          minimum: 0
+          maximum: 255
+          description: Segment brightness/opacity.
+        cct:
+          description: Color temperature. 0–255 relative or 1900–10091 Kelvin.
+          oneOf:
+            - type: integer
+              minimum: 0
+              maximum: 255
+            - type: integer
+              minimum: 1900
+              maximum: 10091
+        set:
+          type: integer
+          minimum: 0
+          maximum: 3
+          description: Segment set/group ID (visual grouping in UI).
+        lc:
+          type: integer
+          description: Light capabilities bitmask. Bit0=RGB, Bit1=White, Bit2=CCT.
+        n:
+          type: string
+          description: Segment name.
+        col:
+          type: array
+          maxItems: 3
+          description: "Colors array: [primary, secondary, tertiary]. Each color is [R,G,B] or [R,G,B,W]."
+          items:
+            type: array
+            items:
+              type: integer
+              minimum: 0
+              maximum: 255
+        fx:
+          type: integer
+          minimum: 0
+          description: Effect ID.
+        sx:
+          type: integer
+          minimum: 0
+          maximum: 255
+          description: Effect speed.
+        ix:
+          type: integer
+          minimum: 0
+          maximum: 255
+          description: Effect intensity.
+        pal:
+          type: integer
+          minimum: 0
+          description: Palette ID.
+        c1:
+          type: integer
+          minimum: 0
+          maximum: 255
+          description: Custom slider 1.
+        c2:
+          type: integer
+          minimum: 0
+          maximum: 255
+          description: Custom slider 2.
+        c3:
+          type: integer
+          minimum: 0
+          maximum: 31
+          description: Custom slider 3.
+        o1:
+          type: boolean
+          description: Custom checkbox 1.
+        o2:
+          type: boolean
+          description: Custom checkbox 2.
+        o3:
+          type: boolean
+          description: Custom checkbox 3.
+        sel:
+          type: boolean
+          description: Segment selected (receives state from APIs without segment support).
+        rev:
+          type: boolean
+          description: Reverse segment (horizontal for 2D).
+        rY:
+          type: boolean
+          description: Reverse segment vertically (2D only).
+        mi:
+          type: boolean
+          description: Mirror segment (horizontal for 2D).
+        mY:
+          type: boolean
+          description: Mirror segment vertically (2D only).
+        tp:
+          type: boolean
+          description: Transpose segment (swap X/Y, 2D only).
+        si:
+          type: integer
+          minimum: 0
+          maximum: 3
+          description: "Sound simulation type. 0=BeatSin, 1=WeWillRockYou, 2=10_3, 3=14_3."
+        m12:
+          type: integer
+          minimum: 0
+          maximum: 4
+          description: "1D→2D expansion mode. 0=Pixels, 1=Bar, 2=Arc, 3=Corner."
+        bm:
+          type: integer
+          minimum: 0
+          maximum: 15
+          description: Blend mode.
+
+    SegmentRequest:
+      type: object
+      description: Segment fields for write requests. All fields optional.
+      properties:
+        id:
+          type: integer
+          minimum: 0
+          description: Target segment ID. Inferred from array position if omitted.
+        start:
+          type: integer
+          minimum: 0
+        stop:
+          type: integer
+          minimum: 0
+          description: Setting stop <= start deletes the segment.
+        len:
+          type: integer
+          minimum: 0
+          description: Length. Ignored if stop is set.
+        startY:
+          type: integer
+          minimum: 0
+        stopY:
+          type: integer
+          minimum: 1
+        grp:
+          type: integer
+          minimum: 0
+          maximum: 255
+        spc:
+          type: integer
+          minimum: 0
+          maximum: 255
+        of:
+          type: integer
+        on:
+          type: boolean
+        frz:
+          type: boolean
+        bri:
+          type: integer
+          minimum: 0
+          maximum: 255
+        cct:
+          description: Color temperature (0–255 relative or Kelvin integer).
+          oneOf:
+            - type: integer
+        set:
+          type: integer
+          minimum: 0
+          maximum: 3
+        n:
+          type: string
+          maxLength: 32
+        col:
+          type: array
+          maxItems: 3
+          description: |
+            Up to 3 colors. Each color can be:
+            - Array `[R,G,B]` or `[R,G,B,W]`
+            - Hex string `"RRGGBB"`
+            - Kelvin integer
+            - Object `{r,g,b,w}`
+            - `"r"` for random
+          items:
+            oneOf:
+              - type: array
+                items:
+                  type: integer
+                  minimum: 0
+                  maximum: 255
+              - type: string
+              - type: integer
+        fx:
+          description: Effect ID. `"~"` increment, `"~-"` decrement, `"r"` random.
+          oneOf:
+            - type: integer
+              minimum: 0
+            - type: string
+        fxdef:
+          type: boolean
+          description: Force load effect defaults.
+        sx:
+          description: Effect speed. `"~"` increment, `"~-"` decrement, `"~10"` increment by 10.
+          oneOf:
+            - type: integer
+              minimum: 0
+              maximum: 255
+            - type: string
+        ix:
+          description: Effect intensity. `"~"` increment, `"~-"` decrement.
+          oneOf:
+            - type: integer
+              minimum: 0
+              maximum: 255
+            - type: string
+        pal:
+          description: Palette ID. `"~"` increment, `"~-"` decrement, `"r"` random.
+          oneOf:
+            - type: integer
+              minimum: 0
+            - type: string
+        c1:
+          type: integer
+          minimum: 0
+          maximum: 255
+        c2:
+          type: integer
+          minimum: 0
+          maximum: 255
+        c3:
+          type: integer
+          minimum: 0
+          maximum: 31
+        o1:
+          type: boolean
+        o2:
+          type: boolean
+        o3:
+          type: boolean
+        sel:
+          type: boolean
+        rev:
+          type: boolean
+        rY:
+          type: boolean
+        mi:
+          type: boolean
+        mY:
+          type: boolean
+        tp:
+          type: boolean
+        si:
+          type: integer
+          minimum: 0
+          maximum: 3
+        m12:
+          type: integer
+          minimum: 0
+          maximum: 4
+        bm:
+          type: integer
+          minimum: 0
+          maximum: 15
+        rpt:
+          type: boolean
+          description: Repeat segment to fill remaining LEDs, toggling reverse on even segments.
+        i:
+          type: array
+          description: |
+            Individual LED control. Alternating index/color entries, or consecutive colors from
+            index 0. Colors as `[R,G,B]` arrays or hex strings. Ranges use `[start, stop, color]`.
+          items:
+            oneOf:
+              - type: integer
+              - type: string
+              - type: array
+                items:
+                  type: integer
+        lx:
+          type: integer
+          description: Loxone primary color (compile-time option only).
+        ly:
+          type: integer
+          description: Loxone secondary color (compile-time option only).
+
+    Playlist:
+      type: object
+      description: Custom playlist definition.
+      properties:
+        ps:
+          type: array
+          description: Ordered list of preset IDs.
+          items:
+            type: integer
+            minimum: 1
+            maximum: 250
+        dur:
+          description: Duration per preset in tenths of seconds. Single value applies to all.
+          oneOf:
+            - type: array
+              items:
+                type: integer
+            - type: integer
+          default: 100
+        transition:
+          description: Transition time per preset in tenths of seconds. Single value applies to all.
+          oneOf:
+            - type: array
+              items:
+                type: integer
+            - type: integer
+        repeat:
+          type: integer
+          minimum: 0
+          description: Repeat count. 0 = indefinite.
+          default: 0
+        end:
+          type: integer
+          minimum: 1
+          maximum: 250
+          description: Preset to apply after playlist ends (ignored for indefinite repeat).
+        r:
+          type: boolean
+          description: Shuffle playlist order.
+
+    Info:
+      type: object
+      description: Read-only device information.
+      properties:
+        ver:
+          type: string
+          description: Firmware version string (e.g. "0.15.0").
+        vid:
+          type: integer
+          description: Build ID (YYMMDDB format).
+        cn:
+          type: string
+          description: Codename of the release.
+        leds:
+          type: object
+          properties:
+            count:
+              type: integer
+              minimum: 1
+              description: Total LED count.
+            pwr:
+              type: integer
+              description: Current power draw in mA (0 if ABL disabled).
+            fps:
+              type: integer
+              description: Current frames per second.
+            maxpwr:
+              type: integer
+              description: ABL power budget in mA (0 if disabled).
+            maxseg:
+              type: integer
+              description: Maximum number of segments.
+            lc:
+              type: integer
+              description: Logical AND of all active segment light capabilities.
+            seglc:
+              type: array
+              items:
+                type: integer
+              description: Per-segment light capabilities array.
+            rgbw:
+              type: boolean
+              deprecated: true
+              description: True if 4-channel LEDs. Deprecated, use lc.
+            wv:
+              type: integer
+              deprecated: true
+              description: White value slider flag. Deprecated, use lc.
+            cct:
+              type: boolean
+              deprecated: true
+              description: CCT supported. Deprecated, use lc.
+            matrix:
+              type: object
+              description: Matrix dimensions (2D builds only).
+              properties:
+                w:
+                  type: integer
+                h:
+                  type: integer
+        str:
+          type: boolean
+          description: If true, sync toggle should control both send+recv; otherwise send only.
+        name:
+          type: string
+          description: Friendly device name.
+        udpport:
+          type: integer
+          description: UDP port for realtime and sync packets.
+        simplifiedui:
+          type: boolean
+          description: True if simplified UI mode is active.
+        live:
+          type: boolean
+          description: True if receiving realtime data (UDP, E1.31, etc.).
+        liveseg:
+          type: integer
+          description: Segment receiving live data (-1 if none).
+        lm:
+          type: string
+          description: Live data source description.
+        lip:
+          type: string
+          description: Live data source IP address.
+        ws:
+          type: integer
+          minimum: -1
+          description: Connected WebSocket clients (-1 if WebSocket disabled).
+        fxcount:
+          type: integer
+          description: Total number of effects.
+        palcount:
+          type: integer
+          description: Total number of palettes.
+        cpalcount:
+          type: integer
+          description: Number of custom palettes.
+        cpalmax:
+          type: integer
+          description: Maximum number of custom palettes allowed.
+        maps:
+          type: array
+          description: Available LED maps.
+          items:
+            type: object
+            properties:
+              id:
+                type: integer
+        wifi:
+          type: object
+          properties:
+            bssid:
+              type: string
+            rssi:
+              type: integer
+            signal:
+              type: integer
+              minimum: 0
+              maximum: 100
+              description: Signal quality percentage.
+            channel:
+              type: integer
+              minimum: 1
+              maximum: 14
+            ap:
+              type: boolean
+              description: True if currently in AP mode.
+        fs:
+          type: object
+          properties:
+            u:
+              type: integer
+              description: Used filesystem space in kB.
+            t:
+              type: integer
+              description: Total filesystem space in kB.
+            pmt:
+              type: integer
+              description: Unix timestamp of last presets.json modification.
+        ndc:
+          type: integer
+          minimum: -1
+          description: Discovered WLED nodes (-1 if discovery disabled).
+        arch:
+          type: string
+          description: Platform name (e.g. "esp32", "esp8266").
+        core:
+          type: string
+          description: SDK/Arduino core version.
+        clock:
+          type: integer
+          description: CPU clock speed in MHz.
+        flash:
+          type: integer
+          description: Flash size in MB.
+        freeheap:
+          type: integer
+          description: Free heap RAM in bytes.
+        psram:
+          type: integer
+          description: PSRAM size in bytes (ESP32 with PSRAM only).
+        uptime:
+          type: integer
+          description: Seconds since last boot.
+        time:
+          type: string
+          description: Current time string (if NTP synced).
+        opt:
+          type: integer
+          description: Build options bitmask (debug use).
+        brand:
+          type: string
+          description: Always "WLED" for standard builds.
+        product:
+          type: string
+          description: Always "FOSS" for standard builds.
+        mac:
+          type: string
+          description: MAC address (lowercase, no colons).
+        ip:
+          type: string
+          description: Device IP address. Empty if not connected.
+
+    PaletteData:
+      type: object
+      properties:
+        m:
+          type: integer
+          description: Maximum page index.
+        p:
+          type: object
+          description: Map of palette ID (string key) to array of color stops.
+          additionalProperties:
+            type: array
+            description: Color stops. Each stop is [position(0-255), R, G, B] or `"r"` for random.
+            items:
+              oneOf:
+                - type: array
+                  items:
+                    type: integer
+                - type: string
+
+    NodeList:
+      type: object
+      properties:
+        nodes:
+          type: array
+          items:
+            type: object
+            properties:
+              name:
+                type: string
+              type:
+                type: integer
+                description: Node type ID.
+              ip:
+                type: string
+                description: Node IP address.
+              age:
+                type: integer
+                description: Seconds since last seen.
+              vid:
+                type: integer
+                description: Node build ID.
+
+    NetworkList:
+      type: object
+      properties:
+        networks:
+          type: array
+          items:
+            type: object
+            properties:
+              ssid:
+                type: string
+              rssi:
+                type: integer
+              bssid:
+                type: string
+              channel:
+                type: integer
+              enc:
+                type: integer
+                description: Encryption type.
+
+    LiveData:
+      type: object
+      description: Current raw LED color data snapshot.
+      properties:
+        leds:
+          type: array
+          description: Array of RGB color values per LED.
+          items:
+            type: string
+            description: Hex color string (e.g. "FF0000").
+        n:
+          type: integer
+          description: Total LED count.
+
+    PinInfo:
+      type: object
+      properties:
+        pins:
+          type: array
+          items:
+            type: object
+            properties:
+              p:
+                type: integer
+                description: GPIO pin number.
+              c:
+                type: integer
+                description: Pin capabilities bitmask (ADC, input-only, boot, bootstrap).
+              a:
+                type: boolean
+                description: Currently allocated.
+              o:
+                type: integer
+                description: Owner ID.
+              n:
+                type: string
+                description: Owner name.
+              m:
+                type: integer
+                description: "Mode. 0=input, 1=output."
+              t:
+                type: integer
+                description: Button type (if button pin).
+              s:
+                type: integer
+                description: Current state.
+              r:
+                type: integer
+                description: Raw ADC/touch reading (if applicable).
+
+    SuccessResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: integer
+          description: |
+            Error code:
+            - 2: Not connected
+            - 3: Buffer busy
+            - 8: Segment not found
+            - 9: JSON parse error
+          example: 9
